@@ -1,0 +1,400 @@
+const STATION_SOURCES = [
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', category: 'stations' },
+];
+
+const ACTIVE_GROUP_SOURCES = [
+  'starlink',
+  'oneweb',
+  'geo',
+  'satnogs',
+  'planet',
+  'spire',
+  'resource',
+  'weather',
+  'beidou',
+  'galileo',
+  'gps-ops',
+  'glo-ops',
+  'cubesat',
+  'amateur',
+  'engineering',
+  'military',
+  'intelsat',
+  'eutelsat',
+  'ses',
+  'other-comm',
+  'globalstar',
+  'orbcomm',
+  'argos',
+  'science',
+  'nnss',
+  'education',
+  'radar',
+];
+
+const DEBRIS_SOURCES = [
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-2251-debris&FORMAT=tle', category: 'debris' },
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=fengyun-1c-debris&FORMAT=tle', category: 'debris' },
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-33-debris&FORMAT=tle', category: 'debris' },
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=analyst&FORMAT=tle', category: 'debris' },
+];
+
+const MAX_SATELLITES = 7_000;
+const MAX_DEBRIS = 3_000;
+const FETCH_DELAY_MS = 450;
+const OUTPUT_PATH = new URL('../public/data/tle.json', import.meta.url);
+const FALLBACK_PATHS = [
+  new URL('../dist/data/tle.json', import.meta.url),
+  new URL('../public/data/tle.full.json', import.meta.url),
+];
+
+const REQUEST_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'text/plain,*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
+};
+
+const DEBRIS_NAME = /DEB|R\/B|COBJECT|SL-\d|COSMOS\s+\d+\s+DEB|OBJECT\s+[A-Z0-9]+/i;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseTleText(text, category) {
+  if (text.includes('Invalid query') || text.includes('not found')) {
+    console.warn(`Skipping invalid source response for category=${category}`);
+    return [];
+  }
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const objects = [];
+
+  for (let i = 0; i + 2 < lines.length; i++) {
+    const name = lines[i];
+    const line1 = lines[i + 1];
+    const line2 = lines[i + 2];
+
+    if (!line1.startsWith('1 ') || !line2.startsWith('2 ')) {
+      continue;
+    }
+
+    const noradMatch = line1.match(/^1\s+(\d+)/);
+    if (!noradMatch) continue;
+
+    objects.push({
+      noradId: parseInt(noradMatch[1], 10),
+      name,
+      line1,
+      line2,
+      category,
+    });
+
+    i += 2;
+  }
+
+  return objects;
+}
+
+async function fetchUrl(url) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch(url, { headers: REQUEST_HEADERS });
+    if (response.ok) return response.text();
+    if (response.status === 403 && attempt === 0) {
+      await sleep(1500);
+      continue;
+    }
+    throw new Error(`HTTP ${response.status} for ${url}`);
+  }
+  throw new Error(`Failed to fetch ${url}`);
+}
+
+async function fetchSource(source) {
+  const text = await fetchUrl(source.url);
+  return parseTleText(text, source.category);
+}
+
+async function fetchActiveGroup(group) {
+  const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
+  const text = await fetchUrl(url);
+  return parseTleText(text, 'active');
+}
+
+function spacecraftCount(seen) {
+  let count = 0;
+  for (const obj of seen.values()) {
+    if (obj.category === 'stations' || obj.category === 'active') count++;
+  }
+  return count;
+}
+
+function debrisCount(seen) {
+  let count = 0;
+  for (const obj of seen.values()) {
+    if (obj.category === 'debris') count++;
+  }
+  return count;
+}
+
+function activePriority(name) {
+  if (/STARLINK/i.test(name)) return 0;
+  if (/ONEWEB/i.test(name)) return 1;
+  if (/PLANET|SPIRE|KUIPER/i.test(name)) return 2;
+  return 3;
+}
+
+async function loadFallbackDataset() {
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+
+  for (const url of FALLBACK_PATHS) {
+    try {
+      const path = fileURLToPath(url);
+      const raw = await readFile(path, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.objects) && data.objects.length > 1000) {
+        console.log(`  fallback: ${path} (${data.objects.length} objects)`);
+        return data.objects;
+      }
+    } catch {
+      // try next fallback
+    }
+  }
+  return null;
+}
+
+function fillSpacecraftFromFallback(seen, fallbackObjects) {
+  const candidates = fallbackObjects
+    .filter((obj) => obj.category === 'active' || obj.category === 'stations')
+    .sort((a, b) => {
+      const rank = { stations: 0, active: 1 };
+      const diff = rank[a.category] - rank[b.category];
+      if (diff !== 0) return diff;
+      const p = activePriority(a.name) - activePriority(b.name);
+      if (p !== 0) return p;
+      return a.noradId - b.noradId;
+    });
+
+  let added = 0;
+  for (const obj of candidates) {
+    if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+    if (seen.has(obj.noradId)) continue;
+    seen.set(obj.noradId, {
+      noradId: obj.noradId,
+      name: obj.name,
+      line1: obj.line1,
+      line2: obj.line2,
+      category: obj.category,
+    });
+    added++;
+  }
+  return added;
+}
+
+function fillDebrisFromFallback(seen, fallbackObjects) {
+  let added = 0;
+
+  const debrisCandidates = fallbackObjects
+    .filter((obj) => obj.category === 'debris')
+    .sort((a, b) => a.noradId - b.noradId);
+
+  for (const obj of debrisCandidates) {
+    if (debrisCount(seen) >= MAX_DEBRIS) break;
+    if (seen.has(obj.noradId)) continue;
+    seen.set(obj.noradId, {
+      noradId: obj.noradId,
+      name: obj.name,
+      line1: obj.line1,
+      line2: obj.line2,
+      category: 'debris',
+    });
+    added++;
+  }
+
+  if (debrisCount(seen) >= MAX_DEBRIS) return added;
+
+  const extraCandidates = fallbackObjects
+    .filter((obj) => obj.category === 'active' && DEBRIS_NAME.test(obj.name))
+    .sort((a, b) => a.noradId - b.noradId);
+
+  for (const obj of extraCandidates) {
+    if (debrisCount(seen) >= MAX_DEBRIS) break;
+    if (seen.has(obj.noradId)) continue;
+    seen.set(obj.noradId, {
+      noradId: obj.noradId,
+      name: obj.name,
+      line1: obj.line1,
+      line2: obj.line2,
+      category: 'debris',
+    });
+    added++;
+  }
+
+  if (debrisCount(seen) >= MAX_DEBRIS) return added;
+
+  const rocketCandidates = fallbackObjects
+    .filter(
+      (obj) =>
+        obj.category === 'active' &&
+        /R\/B|ROCKET BODY|SYLDA|PAM-|FREGAT|CENTAUR|DEBRIS|FRAGMENT|OBJECT [A-Z0-9]/i.test(obj.name),
+    )
+    .sort((a, b) => a.noradId - b.noradId);
+
+  for (const obj of rocketCandidates) {
+    if (debrisCount(seen) >= MAX_DEBRIS) break;
+    if (seen.has(obj.noradId)) continue;
+    seen.set(obj.noradId, {
+      noradId: obj.noradId,
+      name: obj.name,
+      line1: obj.line1,
+      line2: obj.line2,
+      category: 'debris',
+    });
+    added++;
+  }
+
+  if (debrisCount(seen) >= MAX_DEBRIS) return added;
+
+  const padCandidates = fallbackObjects
+    .filter(
+      (obj) =>
+        obj.category === 'active' &&
+        !/STARLINK|ONEWEB|KUIPER|GPS|GALILEO|BEIDOU|GOES|NOAA|ISS|CSS|TIANGONG|TURKSAT|GOKTURK|GÖKTÜRK|IMECE/i.test(
+          obj.name,
+        ),
+    )
+    .sort((a, b) => a.noradId - b.noradId);
+
+  for (const obj of padCandidates) {
+    if (debrisCount(seen) >= MAX_DEBRIS) break;
+    if (seen.has(obj.noradId)) continue;
+    seen.set(obj.noradId, {
+      noradId: obj.noradId,
+      name: obj.name,
+      line1: obj.line1,
+      line2: obj.line2,
+      category: 'debris',
+    });
+    added++;
+  }
+
+  return added;
+}
+
+async function main() {
+  const seen = new Map();
+
+  for (const source of STATION_SOURCES) {
+    try {
+      const objects = await fetchSource(source);
+      let added = 0;
+      for (const obj of objects) {
+        if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+        if (seen.has(obj.noradId)) continue;
+        seen.set(obj.noradId, obj);
+        added++;
+      }
+      console.log(`  ${source.category}: ${objects.length} fetched, ${added} kept`);
+    } catch (err) {
+      console.warn(`  ${source.category}: fetch failed — ${err.message}`);
+    }
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  for (const group of ACTIVE_GROUP_SOURCES) {
+    if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+
+    try {
+      const objects = await fetchActiveGroup(group);
+      let added = 0;
+      for (const obj of objects) {
+        if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+        if (seen.has(obj.noradId)) continue;
+        seen.set(obj.noradId, obj);
+        added++;
+      }
+      console.log(
+        `  active/${group}: ${objects.length} fetched, ${added} kept (${spacecraftCount(seen)}/${MAX_SATELLITES})`,
+      );
+    } catch (err) {
+      console.warn(`  active/${group}: fetch failed — ${err.message}`);
+    }
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  for (const source of DEBRIS_SOURCES) {
+    if (debrisCount(seen) >= MAX_DEBRIS) break;
+
+    try {
+      const objects = await fetchSource(source);
+      let sourceAdded = 0;
+      for (const obj of objects) {
+        if (debrisCount(seen) >= MAX_DEBRIS) break;
+        if (seen.has(obj.noradId)) continue;
+        seen.set(obj.noradId, obj);
+        sourceAdded++;
+      }
+      console.log(`  debris (${source.url.split('GROUP=')[1]?.split('&')[0]}): ${sourceAdded} added (${debrisCount(seen)}/${MAX_DEBRIS})`);
+    } catch (err) {
+      console.warn(`  debris source failed — ${err.message}`);
+    }
+    await sleep(FETCH_DELAY_MS);
+  }
+
+  const fallbackObjects = await loadFallbackDataset();
+  if (fallbackObjects) {
+    if (spacecraftCount(seen) < MAX_SATELLITES) {
+      const added = fillSpacecraftFromFallback(seen, fallbackObjects);
+      console.log(`  fallback spacecraft: +${added} (${spacecraftCount(seen)}/${MAX_SATELLITES})`);
+    }
+    if (debrisCount(seen) < MAX_DEBRIS) {
+      const added = fillDebrisFromFallback(seen, fallbackObjects);
+      console.log(`  fallback debris: +${added} (${debrisCount(seen)}/${MAX_DEBRIS})`);
+    }
+  }
+
+  const allObjects = Array.from(seen.values()).sort((a, b) => {
+    const rank = { stations: 0, active: 1, debris: 2 };
+    const diff = rank[a.category] - rank[b.category];
+    if (diff !== 0) return diff;
+    return a.noradId - b.noradId;
+  });
+
+  const counts = allObjects.reduce(
+    (acc, obj) => {
+      acc[obj.category] = (acc[obj.category] ?? 0) + 1;
+      return acc;
+    },
+    {},
+  );
+
+  const fetchedAt = new Date().toISOString();
+  const dataset = {
+    fetchedAt,
+    source: 'celestrak.org',
+    count: allObjects.length,
+    limits: { maxSatellites: MAX_SATELLITES, maxDebris: MAX_DEBRIS },
+    counts,
+    objects: allObjects,
+  };
+
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+
+  const outPath = fileURLToPath(OUTPUT_PATH);
+  await mkdir(dirname(outPath), { recursive: true });
+  await writeFile(outPath, JSON.stringify(dataset, null, 2));
+
+  const spacecraftTotal = (counts.stations ?? 0) + (counts.active ?? 0);
+  console.log(`\nFetched ${allObjects.length} objects at ${fetchedAt}`);
+  console.log(`  stations: ${counts.stations ?? 0}`);
+  console.log(`  active:   ${counts.active ?? 0}`);
+  console.log(`  debris:   ${counts.debris ?? 0}`);
+  console.log(`  spacecraft subtotal: ${spacecraftTotal} / ${MAX_SATELLITES}`);
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
