@@ -2,35 +2,55 @@ const STATION_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', category: 'stations' },
 ];
 
+/** MEO/GEO and regional highlights — fetched before bulk LEO constellations. */
 const ACTIVE_GROUP_SOURCES = [
-  'starlink',
-  'oneweb',
   'geo',
-  'satnogs',
-  'planet',
-  'spire',
-  'resource',
-  'weather',
-  'beidou',
-  'galileo',
   'gps-ops',
+  'galileo',
+  'beidou',
   'glo-ops',
-  'cubesat',
-  'amateur',
-  'engineering',
-  'military',
   'intelsat',
   'eutelsat',
   'ses',
+  'weather',
+  'resource',
+  'science',
+  'military',
+  'starlink',
+  'oneweb',
+  'satnogs',
+  'planet',
+  'spire',
+  'cubesat',
+  'amateur',
+  'engineering',
   'other-comm',
   'globalstar',
   'orbcomm',
   'argos',
-  'science',
   'nnss',
   'education',
   'radar',
 ];
+
+/** Keep in sync with src/data/objectMetadata.ts TURKISH_NORAD_IDS (+ iconic MEO/GEO). */
+const PRIORITY_NORAD_IDS = [
+  41875, // GÖKTÜRK-1
+  39030, // GÖKTÜRK-2
+  56178, // IMECE
+  47306, // Turksat 5A
+  50212, // Turksat 5B
+  60233, // Turksat 6A
+  20580, // Hubble
+  40367, // GOES-16
+  25994, // GPS IIF
+];
+
+/** Prevent one mega-constellation from filling the entire spacecraft budget. */
+const GROUP_CAPS = {
+  starlink: 4500,
+  oneweb: 600,
+};
 
 const DEBRIS_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-2251-debris&FORMAT=tle', category: 'debris' },
@@ -118,6 +138,28 @@ async function fetchActiveGroup(group) {
   const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${group}&FORMAT=tle`;
   const text = await fetchUrl(url);
   return parseTleText(text, 'active');
+}
+
+async function fetchNoradCatalog(noradId) {
+  const url = `https://celestrak.org/NORAD/elements/gp.php?CATNR=${noradId}&FORMAT=tle`;
+  const text = await fetchUrl(url);
+  const objects = parseTleText(text, 'active');
+  return objects[0] ?? null;
+}
+
+function groupNameFromObject(name) {
+  if (/STARLINK/i.test(name)) return 'starlink';
+  if (/ONEWEB/i.test(name)) return 'oneweb';
+  return null;
+}
+
+function groupCount(seen, group) {
+  let count = 0;
+  for (const obj of seen.values()) {
+    if (obj.category !== 'active' && obj.category !== 'stations') continue;
+    if (groupNameFromObject(obj.name) === group) count++;
+  }
+  return count;
 }
 
 function spacecraftCount(seen) {
@@ -301,14 +343,38 @@ async function main() {
     await sleep(FETCH_DELAY_MS);
   }
 
+  console.log('Fetching priority satellites by NORAD ID...');
+  for (const noradId of PRIORITY_NORAD_IDS) {
+    if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+    if (seen.has(noradId)) {
+      console.log(`  priority/${noradId}: already in dataset`);
+      continue;
+    }
+
+    try {
+      const obj = await fetchNoradCatalog(noradId);
+      if (obj) {
+        seen.set(obj.noradId, obj);
+        console.log(`  priority/${noradId}: ${obj.name}`);
+      } else {
+        console.warn(`  priority/${noradId}: no TLE returned`);
+      }
+    } catch (err) {
+      console.warn(`  priority/${noradId}: fetch failed — ${err.message}`);
+    }
+    await sleep(FETCH_DELAY_MS);
+  }
+
   for (const group of ACTIVE_GROUP_SOURCES) {
     if (spacecraftCount(seen) >= MAX_SATELLITES) break;
 
     try {
       const objects = await fetchActiveGroup(group);
+      const cap = GROUP_CAPS[group] ?? Infinity;
       let added = 0;
       for (const obj of objects) {
         if (spacecraftCount(seen) >= MAX_SATELLITES) break;
+        if (groupCount(seen, group) >= cap) break;
         if (seen.has(obj.noradId)) continue;
         seen.set(obj.noradId, obj);
         added++;
