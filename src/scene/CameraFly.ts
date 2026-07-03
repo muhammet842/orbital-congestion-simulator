@@ -1,15 +1,38 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getConjunctionCameraPose, getVisualConjunctionLayout } from '../orbital/visualConjunction';
+import { EARTH_RADIUS_KM } from '../types';
 
 const FLY_DURATION_MS = 1600;
+const GLOBE_FRAME_DURATION_MS = 900;
 const DEFAULT_FOV = 45;
 const DEFAULT_POSITION = new Vector3(0, 0, 4.5);
 const DEFAULT_TARGET = new Vector3(0, 0, 0);
 const TRACKING_SMOOTHING = 10;
 
+/** Camera distance from Earth center, scaled by orbital altitude. */
+function globeCameraRadiusFromAltitude(altitudeKm: number): number {
+  const orbitRadiusScene = 1 + Math.max(0, altitudeKm) / EARTH_RADIUS_KM;
+  return orbitRadiusScene * 1.35 + 1.55;
+}
+
+type MotionMode = 'linear' | 'globe-orbit';
+
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function slerpDirection(from: Vector3, to: Vector3, t: number, out: Vector3): void {
+  const dot = Math.min(1, Math.max(-1, from.dot(to)));
+  const omega = Math.acos(dot);
+  if (omega < 1e-5) {
+    out.copy(from);
+    return;
+  }
+  const sinOmega = Math.sin(omega);
+  const a = Math.sin((1 - t) * omega) / sinOmega;
+  const b = Math.sin(t * omega) / sinOmega;
+  out.copy(from).multiplyScalar(a).addScaledVector(to, b);
 }
 
 interface CameraSnapshot {
@@ -22,17 +45,23 @@ export class CameraFly {
   private active = false;
   private restoringGlobal = false;
   private conjunctionTracking = false;
+  private motionMode: MotionMode = 'linear';
   private startTime = 0;
   private fromPos = new Vector3();
   private toPos = new Vector3();
   private fromTarget = new Vector3();
   private toTarget = new Vector3();
+  private fromDir = new Vector3();
+  private toDir = new Vector3();
+  private fromOrbitRadius = DEFAULT_POSITION.length();
+  private toOrbitRadius = DEFAULT_POSITION.length();
   private fromFov = DEFAULT_FOV;
   private toFov = DEFAULT_FOV;
   private globalSnapshot: CameraSnapshot | null = null;
   private trackedMid = new Vector3();
   private trackingInitialized = false;
   private trackingOnComplete = false;
+  private durationMs = FLY_DURATION_MS;
 
   captureGlobalView(camera: PerspectiveCamera, controls: OrbitControls): void {
     if (this.globalSnapshot) return;
@@ -56,45 +85,63 @@ export class CameraFly {
     separationKm: number,
   ): void {
     const pose = getConjunctionCameraPose(posA, posB, separationKm);
-    this.beginFlight(camera, controls, pose.cameraPos, pose.target, pose.fov, true);
+    this.beginLinearMotion(
+      camera,
+      controls,
+      pose.cameraPos,
+      pose.target,
+      pose.fov,
+      FLY_DURATION_MS,
+      true,
+    );
     this.restoringGlobal = false;
     this.conjunctionTracking = false;
     this.trackingInitialized = false;
   }
 
-  /** Frame Earth and a selected spacecraft without shifting the orbit target off-world. */
-  flyToSelectedObject(
+  /**
+   * Rotate around Earth at global zoom so the sub-satellite ground point faces
+   * the camera — Earth stays centered like the default globe view.
+   */
+  frameSelectedOnGlobe(
     camera: PerspectiveCamera,
     controls: OrbitControls,
-    satellite: { x: number; y: number; z: number },
+    nadirWorld: { x: number; y: number; z: number },
     altitudeKm: number,
   ): void {
-    const sat = new Vector3(satellite.x, satellite.y, satellite.z);
-    const radial = sat.clone().normalize();
-    const orbitRadius = sat.length();
+    const nadir = new Vector3(nadirWorld.x, nadirWorld.y, nadirWorld.z).normalize();
+    const cameraDir = camera.position.clone().normalize();
+    const facing = nadir.dot(cameraDir);
+    const targetRadius = globeCameraRadiusFromAltitude(altitudeKm);
+    const currentRadius = camera.position.length();
 
-    const worldUp = new Vector3(0, 1, 0);
-    let side = new Vector3().crossVectors(radial, worldUp);
-    if (side.lengthSq() < 1e-4) {
-      side = new Vector3(1, 0, 0);
-    } else {
-      side.normalize();
+    controls.target.set(0, 0, 0);
+
+    if (facing > 0.88 && Math.abs(currentRadius - targetRadius) < 0.12) {
+      controls.update();
+      return;
     }
 
-    const up = new Vector3().crossVectors(side, radial).normalize();
-    const target = new Vector3(0, 0, 0);
-    const pullBack = Math.max(orbitRadius * 1.05 + 2.5, 7.5);
-    const cameraPos = radial
-      .clone()
-      .multiplyScalar(pullBack * 0.4)
-      .add(side.clone().multiplyScalar(pullBack * 0.75))
-      .add(up.clone().multiplyScalar(pullBack * 0.15));
-
-    const fov = altitudeKm > 20_000 ? 44 : altitudeKm > 5_000 ? 46 : DEFAULT_FOV;
-    this.beginFlight(camera, controls, cameraPos, target, fov, false);
+    this.motionMode = 'globe-orbit';
+    this.fromDir.copy(cameraDir);
+    this.toDir.copy(nadir);
+    this.fromOrbitRadius = currentRadius;
+    this.toOrbitRadius = targetRadius;
+    this.fromTarget.copy(controls.target);
+    this.toTarget.set(0, 0, 0);
+    this.fromPos.copy(camera.position);
+    this.toPos.copy(this.toDir).multiplyScalar(targetRadius);
+    this.fromFov = camera.fov;
+    this.toFov = camera.fov;
+    this.trackingOnComplete = false;
+    this.durationMs = GLOBE_FRAME_DURATION_MS;
     this.restoringGlobal = false;
     this.conjunctionTracking = false;
     this.trackingInitialized = false;
+
+    this.startTime = performance.now();
+    this.active = true;
+    controls.enabled = false;
   }
 
   flyToGlobalView(camera: PerspectiveCamera, controls: OrbitControls): void {
@@ -104,7 +151,15 @@ export class CameraFly {
       fov: DEFAULT_FOV,
     };
 
-    this.beginFlight(camera, controls, snap.position, snap.target, snap.fov, false);
+    this.beginLinearMotion(
+      camera,
+      controls,
+      snap.position,
+      snap.target,
+      snap.fov,
+      FLY_DURATION_MS,
+      false,
+    );
     this.restoringGlobal = true;
     this.conjunctionTracking = false;
     this.trackingInitialized = false;
@@ -145,16 +200,27 @@ export class CameraFly {
     if (!this.active) return false;
 
     const elapsed = now - this.startTime;
-    const progress = Math.min(1, elapsed / FLY_DURATION_MS);
+    const progress = Math.min(1, elapsed / this.durationMs);
     const eased = easeInOutCubic(progress);
 
-    camera.position.lerpVectors(this.fromPos, this.toPos, eased);
-    controls.target.lerpVectors(this.fromTarget, this.toTarget, eased);
+    if (this.motionMode === 'globe-orbit') {
+      const dir = new Vector3();
+      slerpDirection(this.fromDir, this.toDir, eased, dir);
+      const radius =
+        this.fromOrbitRadius + (this.toOrbitRadius - this.fromOrbitRadius) * eased;
+      camera.position.copy(dir.multiplyScalar(radius));
+      controls.target.lerpVectors(this.fromTarget, this.toTarget, eased);
+    } else {
+      camera.position.lerpVectors(this.fromPos, this.toPos, eased);
+      controls.target.lerpVectors(this.fromTarget, this.toTarget, eased);
+    }
+
     camera.fov = this.fromFov + (this.toFov - this.fromFov) * eased;
     camera.updateProjectionMatrix();
 
     if (progress >= 1) {
       this.active = false;
+      this.motionMode = 'linear';
       controls.enabled = true;
       controls.update();
 
@@ -183,14 +249,16 @@ export class CameraFly {
     return this.active;
   }
 
-  private beginFlight(
+  private beginLinearMotion(
     camera: PerspectiveCamera,
     controls: OrbitControls,
     toPos: Vector3,
     toTarget: Vector3,
     toFov: number,
+    durationMs: number,
     enableTrackingOnComplete: boolean,
   ): void {
+    this.motionMode = 'linear';
     this.fromPos.copy(camera.position);
     this.toPos.copy(toPos);
     this.fromTarget.copy(controls.target);
@@ -198,6 +266,7 @@ export class CameraFly {
     this.fromFov = camera.fov;
     this.toFov = toFov;
     this.trackingOnComplete = enableTrackingOnComplete;
+    this.durationMs = durationMs;
 
     this.startTime = performance.now();
     this.active = true;

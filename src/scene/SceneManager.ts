@@ -250,11 +250,11 @@ export class SceneManager {
         ? getSubSatelliteScenePoints(propagation.positionEci, propagation.altitudeKm)
         : null;
 
-      if (propagation && subSat && propagation.altitudeKm > 2_000) {
-        this.cameraFly.flyToSelectedObject(
+      if (propagation && subSat) {
+        this.cameraFly.frameSelectedOnGlobe(
           this.camera,
           this.controls,
-          subSat.satellite,
+          subSat.nadirWorld,
           propagation.altitudeKm,
         );
       }
