@@ -4,7 +4,6 @@ export const TURKEY_UTC_OFFSET_HOURS = 3;
 const SUN_DISTANCE = 15;
 /** Blue Marble on Three.js SphereGeometry — prime meridian subsolar at ~12:00 UTC. */
 const EARTH_TEXTURE_OFFSET = Math.PI;
-const SIDEREAL_FACTOR = 1.002737909;
 
 export interface DayNightState {
   earthRotationY: number;
@@ -41,6 +40,36 @@ function getSunDeclinationRad(date: Date): number {
 }
 
 /**
+ * Greenwich Mean Sidereal Time (radians) — IAU 1982 / Meeus low-precision
+ * formula, driven by the full Julian date (not just time-of-day).
+ *
+ * This is the piece that was previously missing: a solar day (24h, what
+ * `utcDecimalHours` tracks) and a sidereal day (Earth's true rotation
+ * period relative to the stars, ~23h56m4s) differ by ~3m56s. Computing the
+ * spin angle from `(utcDecimalHours / 24)` resets to the *same* angle every
+ * UTC midnight regardless of the date, silently discarding that drift.
+ * Since satellite ECI/TEME positions from SGP4 live in the true inertial
+ * frame, any days-long accumulated offset here shows up as the visible
+ * globe (continents) rotating out of sync with real satellite longitudes —
+ * a GEO satellite parked over a fixed real-world longitude will appear to
+ * have drifted to a completely different part of the globe.
+ */
+function getGmstRad(date: Date): number {
+  const jd = toJulianDate(date);
+  const daysSinceJ2000 = jd - 2_451_545.0;
+  const centuriesSinceJ2000 = daysSinceJ2000 / 36525;
+
+  let gmstDeg =
+    280.46061837 +
+    360.98564736629 * daysSinceJ2000 +
+    0.000387933 * centuriesSinceJ2000 * centuriesSinceJ2000 -
+    (centuriesSinceJ2000 * centuriesSinceJ2000 * centuriesSinceJ2000) / 38_710_000;
+
+  gmstDeg = ((gmstDeg % 360) + 360) % 360;
+  return gmstDeg * (Math.PI / 180);
+}
+
+/**
  * UTC-accurate day/night: Earth spins with simulated UTC; sun stays in inertial space
  * (seasonal declination only). Do not rotate sun with Earth — that cancels the terminator.
  */
@@ -48,8 +77,7 @@ export function getDayNightState(date: Date): DayNightState {
   const utcDecimalHours = getUtcDecimalHours(date);
   const declination = getSunDeclinationRad(date);
 
-  const earthRotationY =
-    (utcDecimalHours / 24) * Math.PI * 2 * SIDEREAL_FACTOR + EARTH_TEXTURE_OFFSET;
+  const earthRotationY = getGmstRad(date) + EARTH_TEXTURE_OFFSET;
 
   const cosDec = Math.cos(declination);
   const sinDec = Math.sin(declination);
