@@ -140,7 +140,7 @@ export class SceneManager {
     this.orbitTrail = new OrbitTrail();
     this.scene.add(this.orbitTrail.group);
 
-    this.satelliteFootprint = new SatelliteFootprint(this.earth.mesh);
+    this.satelliteFootprint = new SatelliteFootprint();
     this.scene.add(this.satelliteFootprint.group);
 
     this.conjunctionVerification = new ConjunctionVerification();

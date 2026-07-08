@@ -1,70 +1,100 @@
 import {
+  BufferAttribute,
+  BufferGeometry,
   ConeGeometry,
   DoubleSide,
   Group,
-  Matrix4,
+  Line,
+  LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
-  Object3D,
-  RingGeometry,
   Vector3,
 } from 'three';
-import { getSubSatelliteScenePoints } from '../orbital/coordinates';
+import { getSubSatelliteScenePoints, SURFACE_LIFT } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
 import type { TrackedObject } from '../types';
 
 const SWATH_COLOR = 0x22d3ee;
-const CONE_OPACITY = 0.15;
+const CONE_OPACITY = 0.18;
+const RING_OPACITY = 0.72;
+
+/** Unit cone (height = 1, radius = 1) with apex at local origin, body opening along −Y. */
+const UNIT_CONE_HEIGHT = 1;
+
+const scratchSatPos = new Vector3();
+const scratchToEarth = new Vector3();
+const scratchNadir = new Vector3();
+const scratchU = new Vector3();
+const scratchV = new Vector3();
+const scratchPoint = new Vector3();
+const APEX_TO_BASE = new Vector3(0, -1, 0);
 
 function usesFootprint(obj: TrackedObject): boolean {
   return obj.category === 'active' || obj.category === 'stations';
 }
 
+function horizonRingSegments(thetaRad: number): number {
+  return Math.min(128, Math.max(36, Math.ceil((thetaRad * 180) / Math.PI)));
+}
+
 /**
- * ConeGeometry: tip at +Y/2, wide base at -Y/2 (local space).
- * Midpoint sits between nadir and satellite so tip = satellite, base = surface.
+ * Cone pivot at the tip: default ConeGeometry is Y-centred; shift so apex = (0,0,0).
+ * translate(0, -height/2, 0) moves tip from +Y/2 down to the origin.
  */
-function placeCoverageCone(
-  cone: Mesh,
-  apex: Vector3,
-  nadir: Vector3,
-  footprintRadius: number,
-  coneHeight: number,
+function createApexPivotedConeGeometry(): ConeGeometry {
+  const geometry = new ConeGeometry(1, UNIT_CONE_HEIGHT, 32, 1, true);
+  geometry.translate(0, -UNIT_CONE_HEIGHT / 2, 0);
+  return geometry;
+}
+
+function writeHorizonRingPositions(
+  positions: Float32Array,
+  nadirUnit: Vector3,
+  thetaRad: number,
+  sphereRadius: number,
 ): void {
-  if (coneHeight < 1e-4) {
-    cone.visible = false;
-    return;
+  const segments = positions.length / 3 - 1;
+  const sinT = Math.sin(thetaRad);
+  const cosT = Math.cos(thetaRad);
+
+  scratchNadir.copy(nadirUnit).normalize();
+  const refAxis = Math.abs(scratchNadir.y) < 0.9 ? scratchPoint.set(0, 1, 0) : scratchPoint.set(1, 0, 0);
+  scratchU.crossVectors(refAxis, scratchNadir).normalize();
+  scratchV.crossVectors(scratchNadir, scratchU).normalize();
+
+  for (let i = 0; i <= segments; i++) {
+    const az = (i / segments) * Math.PI * 2;
+    const cosAz = Math.cos(az);
+    const sinAz = Math.sin(az);
+
+    scratchPoint
+      .copy(scratchNadir)
+      .multiplyScalar(cosT)
+      .addScaledVector(scratchU, sinT * cosAz)
+      .addScaledVector(scratchV, sinT * sinAz)
+      .multiplyScalar(sphereRadius);
+
+    const offset = i * 3;
+    positions[offset] = scratchPoint.x;
+    positions[offset + 1] = scratchPoint.y;
+    positions[offset + 2] = scratchPoint.z;
   }
-
-  const axis = apex.clone().normalize();
-  const mid = apex.clone().add(nadir).multiplyScalar(0.5);
-
-  cone.position.copy(mid);
-  cone.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), axis);
-  cone.scale.set(footprintRadius, coneHeight, footprintRadius);
-  cone.visible = true;
 }
 
 export class SatelliteFootprint {
   readonly group: Group;
   private readonly cone: Mesh;
-  private readonly surfaceRing: Mesh;
-  private readonly earthMesh: Object3D;
-  private readonly apex = new Vector3();
-  private readonly nadirWorld = new Vector3();
-  private readonly nadirLocal = new Vector3();
-  private readonly surfaceNormal = new Vector3();
-  private readonly invEarthMatrix = new Matrix4();
+  private readonly horizonRing: Line;
+  private ringPositions: Float32Array;
+  private ringSegmentCount = 0;
 
-  constructor(earthMesh: Object3D) {
-    this.earthMesh = earthMesh;
-
+  constructor() {
     this.group = new Group();
-    this.group.renderOrder = 1;
     this.group.name = 'satellite-footprint';
+    this.group.renderOrder = 1;
 
     this.cone = new Mesh(
-      new ConeGeometry(1, 1, 48, 1, true),
+      createApexPivotedConeGeometry(),
       new MeshBasicMaterial({
         color: SWATH_COLOR,
         transparent: true,
@@ -75,80 +105,105 @@ export class SatelliteFootprint {
       }),
     );
     this.cone.frustumCulled = false;
+    this.cone.name = 'footprint-cone';
 
-    this.surfaceRing = new Mesh(
-      new RingGeometry(0.88, 1, 64),
-      new MeshBasicMaterial({
+    this.ringSegmentCount = 64;
+    this.ringPositions = new Float32Array((this.ringSegmentCount + 1) * 3);
+    const ringGeometry = new BufferGeometry();
+    ringGeometry.setAttribute('position', new BufferAttribute(this.ringPositions, 3));
+
+    this.horizonRing = new Line(
+      ringGeometry,
+      new LineBasicMaterial({
         color: SWATH_COLOR,
         transparent: true,
-        opacity: 0.55,
-        side: DoubleSide,
+        opacity: RING_OPACITY,
         depthWrite: false,
         toneMapped: false,
       }),
     );
-    this.surfaceRing.frustumCulled = false;
-    this.surfaceRing.renderOrder = 2;
+    this.horizonRing.frustumCulled = false;
+    this.horizonRing.name = 'footprint-horizon-ring';
+    this.horizonRing.renderOrder = 2;
 
-    this.group.add(this.cone);
-    this.earthMesh.add(this.surfaceRing);
+    this.group.add(this.cone, this.horizonRing);
     this.group.visible = false;
-    this.surfaceRing.visible = false;
   }
 
+  private syncRingBuffer(thetaRad: number): void {
+    const needed = horizonRingSegments(thetaRad);
+    if (needed === this.ringSegmentCount) return;
+
+    this.ringSegmentCount = needed;
+    this.ringPositions = new Float32Array((needed + 1) * 3);
+    this.horizonRing.geometry.dispose();
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new BufferAttribute(this.ringPositions, 3));
+    this.horizonRing.geometry = geometry;
+  }
+
+  /** Frame-synced from SceneManager.tick — position, orientation, and scale every frame. */
   update(selectedIndex: number | null, objects: TrackedObject[], date: Date): void {
     if (selectedIndex == null) {
       this.group.visible = false;
-      this.surfaceRing.visible = false;
+      this.cone.visible = false;
       return;
     }
 
     const obj = objects[selectedIndex];
     if (!obj || !usesFootprint(obj)) {
       this.group.visible = false;
-      this.surfaceRing.visible = false;
+      this.cone.visible = false;
       return;
     }
 
     const propagation = propagateObject(obj.satrec, date);
     if (!propagation) {
       this.group.visible = false;
-      this.surfaceRing.visible = false;
+      this.cone.visible = false;
       return;
     }
 
-    const subSat = getSubSatelliteScenePoints(propagation.positionEci, propagation.altitudeKm);
+    const subSat = getSubSatelliteScenePoints(
+      propagation.positionEci,
+      propagation.altitudeKm,
+    );
     if (!subSat) {
       this.group.visible = false;
-      this.surfaceRing.visible = false;
+      this.cone.visible = false;
       return;
     }
 
-    this.apex.set(subSat.satellite.x, subSat.satellite.y, subSat.satellite.z);
-    this.nadirWorld.set(subSat.nadirWorld.x, subSat.nadirWorld.y, subSat.nadirWorld.z);
+    scratchSatPos.set(subSat.satellite.x, subSat.satellite.y, subSat.satellite.z);
 
-    placeCoverageCone(
-      this.cone,
-      this.apex,
-      this.nadirWorld,
-      subSat.footprintRadiusScene,
-      subSat.coneHeightScene,
-    );
+    const orbitRadius = scratchSatPos.length();
+    const height = orbitRadius - SURFACE_LIFT;
+    const baseRadius =
+      SURFACE_LIFT * Math.sin(Math.acos(Math.min(1, SURFACE_LIFT / orbitRadius)));
+    const theta = subSat.thetaRad;
 
-    this.earthMesh.updateMatrixWorld(true);
-    this.invEarthMatrix.copy(this.earthMesh.matrixWorld).invert();
-    this.nadirLocal.copy(this.nadirWorld).applyMatrix4(this.invEarthMatrix);
-    this.surfaceRing.position.copy(this.nadirLocal);
-    this.surfaceNormal.copy(this.nadirLocal).normalize();
-    this.surfaceRing.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), this.surfaceNormal);
-    this.surfaceRing.scale.set(
-      subSat.footprintRadiusScene,
-      subSat.footprintRadiusScene,
-      1,
-    );
+    if (height < 1e-4 || baseRadius < 1e-6) {
+      this.group.visible = false;
+      this.cone.visible = false;
+      return;
+    }
+
+    // 1. Apex locked to satellite world position
+    this.cone.position.copy(scratchSatPos);
+
+    // 2. Orient: local −Y (apex → base) aligns with vector toward Earth centre
+    scratchToEarth.copy(scratchSatPos).normalize().negate();
+    this.cone.quaternion.setFromUnitVectors(APEX_TO_BASE, scratchToEarth);
+
+    // 3. Scale unit geometry to physical horizon proportions (no geometry rebuild)
+    this.cone.scale.set(baseRadius, height, baseRadius);
+    this.cone.visible = true;
+
+    this.syncRingBuffer(theta);
+    writeHorizonRingPositions(this.ringPositions, scratchSatPos, theta, SURFACE_LIFT);
+    (this.horizonRing.geometry.getAttribute('position') as BufferAttribute).needsUpdate = true;
 
     this.group.visible = true;
-    this.surfaceRing.visible = true;
   }
 }
 

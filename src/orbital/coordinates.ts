@@ -28,35 +28,48 @@ export function eciVectorToScene(
 
 export const SURFACE_LIFT = 1.001;
 
-/** GEO reference altitude for footprint scaling (km). */
-const GEO_REFERENCE_ALTITUDE_KM = 35786;
-/** Minimum geocentric angular radius on the unit sphere (~3.5°). */
-const MIN_FOOTPRINT_ALPHA = 0.06;
+export interface FootprintHorizonMetrics {
+  /** Geocentric half-angle (rad) to the line-of-sight horizon: θ = arccos(R / (R + h)). */
+  thetaRad: number;
+  /** Satellite altitude above the lifted surface (scene units). */
+  coneHeightScene: number;
+  /** Radius of the horizon circle on the sphere (scene units): R · sin(θ). */
+  baseRadiusScene: number;
+  orbitRadiusScene: number;
+}
 
-/**
- * Geocentric angular radius (radians) of the coverage disc on the unit sphere.
- * LEO footprints stay small/local; MEO/GEO grow toward the horizon limit.
- */
-export function footprintAngularRadiusFromAltitude(altitudeKm: number): number {
+/** Horizon metrics from altitude in km (SGP4 geodetic height). */
+export function footprintHorizonFromAltitude(altitudeKm: number): FootprintHorizonMetrics {
   const h = Math.max(0, altitudeKm);
-  const maxHorizon = Math.acos(Math.min(1, EARTH_RADIUS_KM / (EARTH_RADIUS_KM + h)));
-  const altitudeRatio = Math.min(1, h / GEO_REFERENCE_ALTITUDE_KM);
-  const t = Math.pow(altitudeRatio, 0.55);
-  return MIN_FOOTPRINT_ALPHA + t * (maxHorizon - MIN_FOOTPRINT_ALPHA);
+  const orbitRadiusScene = 1 + h / EARTH_RADIUS_KM;
+  const thetaRad = Math.acos(Math.min(1, EARTH_RADIUS_KM / (EARTH_RADIUS_KM + h)));
+  const coneHeightScene = orbitRadiusScene - SURFACE_LIFT;
+  const baseRadiusScene = SURFACE_LIFT * Math.sin(thetaRad);
+  return { thetaRad, coneHeightScene, baseRadiusScene, orbitRadiusScene };
+}
+
+/** Horizon metrics from propagated scene position (keeps ECI geometry self-consistent). */
+export function footprintHorizonFromOrbitRadius(orbitRadiusScene: number): FootprintHorizonMetrics {
+  const r = Math.max(SURFACE_LIFT, orbitRadiusScene);
+  const thetaRad = Math.acos(Math.min(1, SURFACE_LIFT / r));
+  const coneHeightScene = r - SURFACE_LIFT;
+  const baseRadiusScene = SURFACE_LIFT * Math.sin(thetaRad);
+  return { thetaRad, coneHeightScene, baseRadiusScene, orbitRadiusScene: r };
 }
 
 export interface SubSatelliteScenePoints {
   satellite: { x: number; y: number; z: number };
   nadirWorld: { x: number; y: number; z: number };
   orbitRadiusScene: number;
-  footprintRadiusScene: number;
+  thetaRad: number;
+  baseRadiusScene: number;
   coneHeightScene: number;
 }
 
 /** Sub-satellite geometry in inertial scene space (Earth radius = 1). */
 export function getSubSatelliteScenePoints(
   positionEci: { x: number; y: number; z: number },
-  altitudeKm: number,
+  altitudeKm?: number,
 ): SubSatelliteScenePoints | null {
   const satellite = eciToScene(positionEci.x, positionEci.y, positionEci.z);
   const orbitRadiusScene = Math.hypot(satellite.x, satellite.y, satellite.z);
@@ -69,12 +82,18 @@ export function getSubSatelliteScenePoints(
     z: satellite.z * scale,
   };
 
+  const horizon =
+    altitudeKm != null && Number.isFinite(altitudeKm)
+      ? footprintHorizonFromAltitude(altitudeKm)
+      : footprintHorizonFromOrbitRadius(orbitRadiusScene);
+
   return {
     satellite,
     nadirWorld,
     orbitRadiusScene,
-    footprintRadiusScene: footprintAngularRadiusFromAltitude(altitudeKm),
-    coneHeightScene: orbitRadiusScene - SURFACE_LIFT,
+    thetaRad: horizon.thetaRad,
+    baseRadiusScene: horizon.baseRadiusScene,
+    coneHeightScene: horizon.coneHeightScene,
   };
 }
 
