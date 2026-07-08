@@ -1,5 +1,8 @@
 import {
   Box3,
+  BoxGeometry,
+  CylinderGeometry,
+  ConeGeometry,
   Group,
   IcosahedronGeometry,
   Mesh,
@@ -144,20 +147,148 @@ class SatelliteModelLoader {
   }
 
   private createFallbackScene(key: ModelAssetKey): Group {
-    const group = new Group();
-    group.add(
-      new Mesh(
-        new IcosahedronGeometry(1, 1),
-        new MeshStandardMaterial({
-          color: FALLBACK_COLORS[key],
-          roughness: 0.65,
-          metalness: 0.25,
-          toneMapped: false,
-        }),
-      ),
-    );
-    return group;
+    return buildFallbackShape(key);
   }
+}
+
+/**
+ * No GLB assets are bundled (see public/models/), so every satellite is rendered
+ * through this fallback path. Rather than reusing one generic shape for every
+ * type, each key gets a distinct low-poly silhouette so ISS-class stations,
+ * cargo capsules, cubesats, debris and generic LEO satellites read as visually
+ * different objects at a glance. Dropping real .glb files at the paths in
+ * `modelResolver.ts` will automatically take priority over these primitives.
+ */
+function buildFallbackShape(key: ModelAssetKey): Group {
+  switch (key) {
+    case 'iss':
+      return buildStationShape();
+    case 'cargo_capsule':
+      return buildCapsuleShape();
+    case 'cubesat':
+      return buildCubesatShape();
+    case 'debris':
+      return buildDebrisShape();
+    case 'sat_leo':
+    default:
+      return buildGenericSatelliteShape(key);
+  }
+}
+
+function fallbackMaterial(key: ModelAssetKey): MeshStandardMaterial {
+  return new MeshStandardMaterial({
+    color: FALLBACK_COLORS[key],
+    roughness: 0.65,
+    metalness: 0.25,
+    toneMapped: false,
+  });
+}
+
+function panelMaterial(): MeshStandardMaterial {
+  return new MeshStandardMaterial({
+    color: 0x1c3a5e,
+    roughness: 0.35,
+    metalness: 0.55,
+    toneMapped: false,
+  });
+}
+
+/** ISS-style station: habitat truss with a pair of large solar array wings. */
+function buildStationShape(): Group {
+  const group = new Group();
+  const body = fallbackMaterial('iss');
+  const panels = panelMaterial();
+
+  const truss = new Mesh(new CylinderGeometry(0.18, 0.18, 2.6, 8), body);
+  truss.rotation.z = Math.PI / 2;
+  group.add(truss);
+
+  const module = new Mesh(new CylinderGeometry(0.32, 0.32, 0.9, 8), body);
+  module.rotation.z = Math.PI / 2;
+  group.add(module);
+
+  for (const side of [-1, 1]) {
+    const wing = new Mesh(new BoxGeometry(0.06, 1.5, 0.6), panels);
+    wing.position.set(side * 1.5, 0, 0);
+    group.add(wing);
+  }
+
+  return group;
+}
+
+/** Cargo/crew capsule: cylindrical service module with a tapered nose cone. */
+function buildCapsuleShape(): Group {
+  const group = new Group();
+  const body = fallbackMaterial('cargo_capsule');
+
+  const service = new Mesh(new CylinderGeometry(0.4, 0.4, 1.1, 12), body);
+  group.add(service);
+
+  const nose = new Mesh(new ConeGeometry(0.4, 0.6, 12), body);
+  nose.position.y = 0.85;
+  group.add(nose);
+
+  return group;
+}
+
+/** Cubesat: compact rectangular bus, optionally with small deployed panels. */
+function buildCubesatShape(): Group {
+  const group = new Group();
+  const body = fallbackMaterial('cubesat');
+  const panels = panelMaterial();
+
+  group.add(new Mesh(new BoxGeometry(0.7, 1.0, 0.7), body));
+
+  for (const side of [-1, 1]) {
+    const wing = new Mesh(new BoxGeometry(0.05, 0.9, 0.35), panels);
+    wing.position.set(side * 0.6, 0, 0);
+    group.add(wing);
+  }
+
+  return group;
+}
+
+/** Generic satellite bus: boxy body with a pair of solar panel wings. */
+function buildGenericSatelliteShape(key: ModelAssetKey): Group {
+  const group = new Group();
+  const body = fallbackMaterial(key);
+  const panels = panelMaterial();
+
+  group.add(new Mesh(new BoxGeometry(0.8, 0.8, 1.1), body));
+
+  for (const side of [-1, 1]) {
+    const wing = new Mesh(new BoxGeometry(0.08, 1.6, 0.6), panels);
+    wing.position.set(side * 1.1, 0, 0);
+    group.add(wing);
+  }
+
+  const dish = new Mesh(new ConeGeometry(0.35, 0.3, 12, 1, true), panels);
+  dish.rotation.x = Math.PI;
+  dish.position.z = 0.75;
+  group.add(dish);
+
+  return group;
+}
+
+/** Irregular fragment: jittered icosahedron vertices read as tumbling debris. */
+function buildDebrisShape(): Group {
+  const group = new Group();
+  const geometry = new IcosahedronGeometry(1, 0);
+  const position = geometry.attributes.position;
+
+  for (let i = 0; i < position.count; i++) {
+    // Deterministic per-vertex jitter (no Math.random) so the shape is stable
+    // across re-instantiation instead of changing every reload.
+    const seed = Math.sin(i * 12.9898) * 43758.5453;
+    const jitter = 0.28 * (seed - Math.floor(seed) - 0.5);
+    position.setX(i, position.getX(i) * (1 + jitter));
+    position.setY(i, position.getY(i) * (1 + jitter * 0.8));
+    position.setZ(i, position.getZ(i) * (1 + jitter * 1.2));
+  }
+  geometry.computeVertexNormals();
+
+  group.add(new Mesh(geometry, fallbackMaterial('debris')));
+  return group;
 }
 
 function centerAtOrigin(root: Group): void {

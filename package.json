@@ -7,12 +7,15 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "fetch-tle": "node scripts/fetch-tle.mjs"
+    "fetch-tle": "node scripts/fetch-tle.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/three": "^0.170.0",
     "typescript": "~5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "satellite.js": "^5.0.0",
