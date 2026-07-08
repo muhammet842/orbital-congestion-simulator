@@ -9,7 +9,7 @@ import {
   MeshStandardMaterial,
   Vector3,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTFLoader as GLTFLoaderType } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { TrackedObject } from '../types';
 import {
   modelPathForKey,
@@ -28,8 +28,8 @@ const FALLBACK_COLORS: Record<ModelAssetKey, number> = {
   debris: 0x886655,
 };
 
-/** Shared GLB used when a type-specific model file is missing. */
-const SHARED_MODEL_PATH = '/models/sat_leo.glb';
+/** Shared model key used when a type-specific GLB file is missing. */
+const SHARED_MODEL_KEY: ModelAssetKey = 'sat_leo';
 
 interface ModelPrototype {
   scene: Group;
@@ -37,11 +37,38 @@ interface ModelPrototype {
 }
 
 class SatelliteModelLoader {
-  private readonly loader = new GLTFLoader();
+  private loaderPromise: Promise<GLTFLoaderType> | null = null;
   private readonly cache = new Map<ModelAssetKey, ModelPrototype>();
   private readonly loading = new Map<ModelAssetKey, Promise<ModelPrototype>>();
-  private sharedGltf: ModelPrototype | null = null;
-  private sharedGltfLoading: Promise<ModelPrototype | null> | null = null;
+
+  /**
+   * GLTFLoader pulls in a fair amount of parsing logic that's only needed
+   * once a model actually starts loading — importing it lazily keeps it out
+   * of the main entry chunk so the app shell (globe, controls, UI) doesn't
+   * wait on its parse/eval cost.
+   */
+  private async getLoader(): Promise<GLTFLoaderType> {
+    if (!this.loaderPromise) {
+      this.loaderPromise = import('three/examples/jsm/loaders/GLTFLoader.js').then(
+        (mod) => new mod.GLTFLoader(),
+      );
+    }
+    return this.loaderPromise;
+  }
+
+  /**
+   * Warms the model cache without blocking the caller. Used for the initial
+   * app boot: the 3D scene should render immediately from instanced points,
+   * not wait on network round-trips for GLB files that only matter once an
+   * object is actually selected.
+   */
+  warmCache(keys: ModelAssetKey[]): void {
+    for (const key of keys) {
+      void this.ensureLoaded(key).catch((err) => {
+        console.warn(`[SatelliteModelLoader] Warm-up failed for "${key}".`, err);
+      });
+    }
+  }
 
   async preloadForObjects(objects: TrackedObject[]): Promise<void> {
     const keys = new Set<ModelAssetKey>();
@@ -98,13 +125,22 @@ class SatelliteModelLoader {
     const path = modelPathForKey(key);
 
     try {
-      return this.parseGltf(await this.loader.loadAsync(path));
+      const loader = await this.getLoader();
+      return this.parseGltf(await loader.loadAsync(path));
     } catch (err) {
-      console.warn(`[SatelliteModelLoader] Missing ${path} — trying ${SHARED_MODEL_PATH}.`, err);
+      console.warn(`[SatelliteModelLoader] Missing ${path}.`, err);
 
-      if (path !== SHARED_MODEL_PATH) {
-        const shared = await this.loadSharedGltf();
-        if (shared) return shared;
+      // Reuses ensureLoaded's own cache/in-flight dedup instead of a
+      // separate ad-hoc "shared model" cache, so N objects whose specific
+      // GLB is missing only ever trigger one shared-model request, not one
+      // each.
+      if (key !== SHARED_MODEL_KEY) {
+        try {
+          console.warn(`[SatelliteModelLoader] Falling back to shared model for "${key}".`);
+          return await this.ensureLoaded(SHARED_MODEL_KEY);
+        } catch {
+          // Shared model unavailable either — fall through to the primitive.
+        }
       }
 
       console.warn(`[SatelliteModelLoader] Using primitive fallback for "${key}".`);
@@ -112,27 +148,6 @@ class SatelliteModelLoader {
       centerAtOrigin(scene);
       return { scene, normalizedScale: measureTargetScale(scene) };
     }
-  }
-
-  private async loadSharedGltf(): Promise<ModelPrototype | null> {
-    if (this.sharedGltf) return this.sharedGltf;
-    if (this.sharedGltfLoading) return this.sharedGltfLoading;
-
-    this.sharedGltfLoading = this.loader
-      .loadAsync(SHARED_MODEL_PATH)
-      .then((gltf) => {
-        this.sharedGltf = this.parseGltf(gltf);
-        return this.sharedGltf;
-      })
-      .catch((err) => {
-        console.warn(`[SatelliteModelLoader] Shared model not found at ${SHARED_MODEL_PATH}.`, err);
-        return null;
-      })
-      .finally(() => {
-        this.sharedGltfLoading = null;
-      });
-
-    return this.sharedGltfLoading;
   }
 
   private parseGltf(gltf: { scene: Group }): ModelPrototype {

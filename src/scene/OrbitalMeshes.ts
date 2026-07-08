@@ -56,12 +56,6 @@ export class OrbitalMeshes {
   }
 
   static async create(objects: TrackedObject[]): Promise<OrbitalMeshes> {
-    await Promise.all([
-      satelliteModelLoader.ensureLoaded('iss'),
-      satelliteModelLoader.ensureLoaded('sat_leo'),
-      satelliteModelLoader.ensureLoaded('cargo_capsule'),
-    ]);
-
     const meshes = new OrbitalMeshes(objects);
     meshes.updatePositions(objects, objects.map((obj) => propagateObject(obj.satrec, new Date())), null, null, {
       LEO: true,
@@ -69,6 +63,14 @@ export class OrbitalMeshes {
       GEO: true,
       HEO: true,
     }, '', { x: 0, y: 0, z: 4.5 }, Date.now());
+
+    // Instanced points (built above) are all the first frame needs — the
+    // globe should render immediately instead of blocking on GLTF network
+    // round-trips for detail models that only matter once something is
+    // actually selected. Warm the most common ones in the background so
+    // that first selection doesn't show a bare point while it loads.
+    satelliteModelLoader.warmCache(['iss', 'sat_leo', 'cargo_capsule']);
+
     return meshes;
   }
 

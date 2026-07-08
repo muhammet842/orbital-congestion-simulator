@@ -450,7 +450,10 @@ async function main() {
 
   const outPath = fileURLToPath(OUTPUT_PATH);
   await mkdir(dirname(outPath), { recursive: true });
-  await writeFile(outPath, JSON.stringify(dataset, null, 2));
+  // Compact (no indentation): this file is fetched by the browser, not
+  // hand-edited, and pretty-printing ~10k objects adds ~500 KB of pure
+  // whitespace for zero benefit.
+  await writeFile(outPath, JSON.stringify(dataset));
 
   const spacecraftTotal = (counts.stations ?? 0) + (counts.active ?? 0);
   console.log(`\nFetched ${allObjects.length} objects at ${fetchedAt}`);
