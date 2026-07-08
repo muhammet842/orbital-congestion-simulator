@@ -176,10 +176,8 @@ export class SatelliteFootprint {
 
     scratchSatPos.set(subSat.satellite.x, subSat.satellite.y, subSat.satellite.z);
 
-    const orbitRadius = scratchSatPos.length();
-    const height = orbitRadius - SURFACE_LIFT;
-    const baseRadius =
-      SURFACE_LIFT * Math.sin(Math.acos(Math.min(1, SURFACE_LIFT / orbitRadius)));
+    const height = subSat.coneHeightScene;
+    const baseRadius = subSat.baseRadiusScene;
     const theta = subSat.thetaRad;
 
     if (height < 1e-4 || baseRadius < 1e-6) {
