@@ -268,11 +268,22 @@ function renderStats(container: HTMLElement): void {
       })
     : '—';
 
+  const tleAgeDays = stats.fetchedAt
+    ? (Date.now() - new Date(stats.fetchedAt).getTime()) / 86_400_000
+    : 0;
+
+  const tleStaleHtml = tleAgeDays > 7
+    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ TLE data is ${Math.floor(tleAgeDays)} days old — LEO positions may be off by hundreds of km. Run <code>npm run fetch-tle</code>.</div>`
+    : tleAgeDays > 3
+    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ TLE data is ${Math.floor(tleAgeDays)} days old — LEO accuracy degrading. Run <code>npm run fetch-tle</code>.</div>`
+    : '';
+
   const liveEl = container.querySelector('#live-stats')!;
   const modeClass = isLive ? 'stat-value--live' : 'stat-value--historical';
   const timeLabel = isLive ? 'UTC time' : 'Simulated time (UTC)';
 
   liveEl.innerHTML = `
+    ${tleStaleHtml}
     <div class="stat-row"><dt>Mode</dt><dd class="${modeClass}">${getTimeModeLabel(time.mode)}</dd></div>
     <div class="stat-row"><dt>${timeLabel}</dt><dd id="live-stat-time">${formatUtcDateTime(simTime)}</dd></div>
     <div class="stat-row"><dt>Total objects</dt><dd>${stats.total.toLocaleString()}</dd></div>

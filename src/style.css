@@ -535,6 +535,33 @@ body {
   line-height: 1.5;
 }
 
+.tle-stale-banner {
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  border: 1px solid;
+}
+
+.tle-stale-banner code {
+  font-family: monospace;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
+.tle-stale-banner--warn {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.35);
+  color: var(--warning);
+}
+
+.tle-stale-banner--critical {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--danger);
+}
+
 .detail-header {
   margin-bottom: 12px;
 }
