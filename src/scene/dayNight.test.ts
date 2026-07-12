@@ -17,10 +17,11 @@ function angleDiffDeg(aRad: number, bRad: number): number {
 }
 
 describe('getDayNightState earthRotationY (sidereal Earth spin)', () => {
-  it('matches the known GMST at the J2000.0 epoch (280.46061837 deg + texture offset)', () => {
+  it('matches the known GMST at the J2000.0 epoch (280.46061837 deg)', () => {
     // J2000.0 = JD 2451545.0 = 2000-01-01T12:00:00Z, by definition of the epoch.
+    // earthRotationY = GMST only (no extra texture offset).
     const state = getDayNightState(new Date('2000-01-01T12:00:00Z'));
-    const expectedDeg = ((280.46061837 + 180) % 360 + 360) % 360; // + PI texture offset
+    const expectedDeg = 280.46061837;
     const actualDeg = (normalizeRad(state.earthRotationY) * 180) / Math.PI;
     expect(actualDeg).toBeCloseTo(expectedDeg, 3);
   });
@@ -66,6 +67,36 @@ describe('getDayNightState earthRotationY (sidereal Earth spin)', () => {
       expect(stepDeg).toBeLessThan(16);
       previous = current;
     }
+  });
+
+  it('GEO satellite nadir correctly decodes as its true geodetic longitude', () => {
+    // Analytical proof: with earthRotationY = GMST and a GEO satellite at longitude λ,
+    // the Three.js SphereGeometry UV formula decodes the nadir hit to exactly λ.
+    // If EARTH_TEXTURE_OFFSET were π the result would be λ − 180° instead.
+    const date = new Date('2026-07-12T13:51:50Z');
+    const state = getDayNightState(date);
+    const gmstRad = state.earthRotationY; // = GMST, no offset
+
+    // Known GEO satellite longitude: 42 °E.
+    // Nadir direction in scene = (cos(GMST+42°), 0, −sin(GMST+42°)) (ECI→scene mapping)
+    const satLonRad = 42 * DEG;
+    const eciAngle = gmstRad + satLonRad;
+    const nadirX = Math.cos(eciAngle);
+    const nadirZ = -Math.sin(eciAngle);
+
+    // Invert the Three.js R_Y(earthRotationY) rotation to get local sphere coords.
+    const c = Math.cos(gmstRad);
+    const s = Math.sin(gmstRad);
+    const lx = c * nadirX - s * nadirZ;
+    const lz = s * nadirX + c * nadirZ;
+
+    // SphereGeometry UV: phi = atan2(lz, −lx), u = phi / (2π)
+    let phi = Math.atan2(lz, -lx);
+    if (phi < 0) phi += Math.PI * 2;
+    const uv_lon = phi / (Math.PI * 2) * 360 - 180;
+
+    // Must decode to 42 °E within 0.1 °
+    expect(uv_lon).toBeCloseTo(42, 1);
   });
 
   it('accumulates across many elapsed days instead of only within a single day', () => {

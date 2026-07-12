@@ -2,8 +2,6 @@
 export const TURKEY_UTC_OFFSET_HOURS = 3;
 
 const SUN_DISTANCE = 15;
-/** Blue Marble on Three.js SphereGeometry — prime meridian subsolar at ~12:00 UTC. */
-const EARTH_TEXTURE_OFFSET = Math.PI;
 
 export interface DayNightState {
   earthRotationY: number;
@@ -26,17 +24,33 @@ function toJulianDate(date: Date): number {
   return date.getTime() / 86_400_000 + 2_440_587.5;
 }
 
-/** Solar declination (radians) — simplified mean-sun model. */
-function getSunDeclinationRad(date: Date): number {
+/**
+ * Sun direction as a unit vector in ECI (TEME-compatible) frame.
+ * Uses the same low-precision solar longitude as before, but now also
+ * computes the right ascension so we can place the sun correctly in the
+ * inertial scene (ECI X → scene X, ECI Z → scene Y, −ECI Y → scene Z).
+ * This makes the day/night terminator consistent with GMST-aligned Earth
+ * texture and SGP4-propagated satellite positions.
+ */
+function getSunEci(date: Date): { x: number; y: number; z: number } {
   const jd = toJulianDate(date);
   const n = jd - 2_451_545.0;
   const meanLongitudeDeg = (280.46 + 0.9856474 * n) % 360;
   const meanAnomalyRad = ((357.528 + 0.9856003 * n) % 360) * (Math.PI / 180);
-  const eclipticLongitudeRad =
+  const lambdaRad =
     (meanLongitudeDeg + 1.915 * Math.sin(meanAnomalyRad) + 0.02 * Math.sin(2 * meanAnomalyRad)) *
     (Math.PI / 180);
   const obliquityRad = (23.439 - 0.0000004 * n) * (Math.PI / 180);
-  return Math.asin(Math.sin(obliquityRad) * Math.sin(eclipticLongitudeRad));
+  const sinLambda = Math.sin(lambdaRad);
+  const cosLambda = Math.cos(lambdaRad);
+  const cosObl = Math.cos(obliquityRad);
+  const sinObl = Math.sin(obliquityRad);
+  // ECI (vernal-equinox frame)
+  return {
+    x: cosLambda,
+    y: cosObl * sinLambda,
+    z: sinObl * sinLambda,
+  };
 }
 
 /**
@@ -75,22 +89,31 @@ function getGmstRad(date: Date): number {
  */
 export function getDayNightState(date: Date): DayNightState {
   const utcDecimalHours = getUtcDecimalHours(date);
-  const declination = getSunDeclinationRad(date);
 
-  const earthRotationY = getGmstRad(date) + EARTH_TEXTURE_OFFSET;
+  // earthRotationY = GMST (no extra offset).  Proof: at GMST θ, the Three.js
+  // SphereGeometry UV formula puts texture-longitude λ at world direction
+  // (cos θ · cos λ_local − sin θ · sin λ_local, …), which equals the scene
+  // projection of the ECEF unit vector at longitude λ only when θ = GMST.
+  const earthRotationY = getGmstRad(date);
 
-  const cosDec = Math.cos(declination);
-  const sinDec = Math.sin(declination);
+  // Full ECI sun direction (right-ascension + declination), then mapped to
+  // scene space: ECI X → scene X, ECI Z → scene Y, −ECI Y → scene Z.
+  const sunEci = getSunEci(date);
+  const sunScene = {
+    x: sunEci.x,
+    y: sunEci.z,   // ECI Z → scene Y
+    z: -sunEci.y,  // −ECI Y → scene Z
+  };
   const sunPosition = {
-    x: cosDec * SUN_DISTANCE,
-    y: sinDec * SUN_DISTANCE,
-    z: 0,
+    x: sunScene.x * SUN_DISTANCE,
+    y: sunScene.y * SUN_DISTANCE,
+    z: sunScene.z * SUN_DISTANCE,
   };
 
   return {
     earthRotationY,
     sunPosition,
-    sunDirection: { x: cosDec, y: sinDec, z: 0 },
+    sunDirection: sunScene,
     utcDecimalHours,
   };
 }
