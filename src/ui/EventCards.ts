@@ -84,9 +84,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 86.4, ascending: false },
     approachB: { inclinationDeg: 74.0, ascending: true },
     info: {
-      title: 'Tarihteki İlk Büyük Uydu Çarpışması',
-      reason: 'Tamamen kazara gerçekleşti. Biri aktif (Iridium 33), diğeri işlevsiz (Cosmos 2251) iki uydu, birbirinden habersiz olarak aynı yörünge düzlemini aşırı yüksek hızla (yaklaşık 11,6 km/s göreli hız) kesti.',
-      outcome: 'Kontrolsüz uzay çöplerinin ve aktif uyduların takibinin ne kadar kritik olduğunu dünyaya gösteren, uzay çağının en büyük dönüm noktası kazasıdır. Oluşan ~2.000 takip edilebilir enkaz parçası onlarca yıl boyunca alçak Dünya yörüngesini tehdit etmeye devam etti.',
+      title: 'The First Major Satellite Collision in History',
+      reason: 'Entirely accidental. One active (Iridium 33) and one defunct (Cosmos 2251) satellite crossed the same orbital plane at hypervelocity — roughly 11.6 km/s relative speed — with neither party aware of the impending impact.',
+      outcome: 'A defining turning point of the space age that demonstrated how critical tracking of active satellites and uncontrolled debris truly is. The ~2,000 trackable fragments generated continued to threaten low Earth orbit for decades after the event.',
     },
     objectA: {
       name: 'IRIDIUM 33',
@@ -119,9 +119,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 98.8, ascending: true },
     approachB: null,
     info: {
-      title: 'Çin Anti-Uydu Füze Testi',
-      reason: 'Çin Halk Kurtuluş Ordusu\'nun yerden fırlatılan kinetik sistemlerle (SC-19 / KT-2 füzesi) alçak yörüngedeki uyduları imha etme kapasitesini test etmek amacıyla bilerek planlandı.',
-      outcome: 'Tarihin en büyük yapay uzay çöpü bulutunu oluşturan olaydır. 3.000\'den fazla büyük boyutlu enkaz parçası hâlâ yörüngede dolaşmakta ve diğer uyduları aktif olarak tehdit etmektedir. Olay, uluslararası toplumun ASAT testlerine karşı ciddi tepkisine yol açtı.',
+      title: 'Chinese Anti-Satellite Missile Test',
+      reason: 'Deliberately planned by the People\'s Liberation Army to demonstrate the capability of its ground-launched kinetic interceptor (SC-19 / KT-2 missile) to destroy satellites in low Earth orbit.',
+      outcome: 'Created the largest artificial debris cloud in history. More than 3,000 large trackable fragments continue to orbit and actively threaten operational spacecraft. The event provoked strong international condemnation and renewed calls for an ASAT test ban.',
     },
     objectA: {
       name: 'FENGYUN-1C',
@@ -149,9 +149,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 82.6, ascending: true },
     approachB: null,
     info: {
-      title: 'Rusya Anti-Uydu Füze Testi',
-      reason: 'Rusya\'nın kendi geliştirdiği A-235 Nudol (PL-19) balistik füze savunma sisteminin alçak Dünya yörüngesindeki uyduları kinetik olarak vurma yeteneğini test etmek amacıyla bilerek planlandı.',
-      outcome: 'Oluşan enkaz bulutu, Uluslararası Uzay İstasyonu\'nun yörüngesini doğrudan kesti; mürettebat saatler boyunca sığınak kapsüllerine geçmek zorunda kaldı. Olay, uluslararası arenada büyük kınama ve ASAT testlerinin yasaklanması yönünde baskılara neden oldu.',
+      title: 'Russian Anti-Satellite Missile Test',
+      reason: 'Deliberately planned to demonstrate the capability of Russia\'s A-235 Nudol (PL-19) ballistic missile defence system to kinetically intercept and destroy satellites in low Earth orbit.',
+      outcome: 'The debris cloud crossed directly through the International Space Station\'s orbital altitude, forcing the crew to shelter in escape capsules for several hours. The test drew widespread international condemnation and intensified pressure to ban destructive ASAT tests.',
     },
     objectA: {
       name: 'COSMOS 1408',
@@ -178,9 +178,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 58.5, ascending: false },
     approachB: null,
     info: {
-      title: 'Burnt Frost Operasyonu',
-      reason: 'ABD Ulusal Keşif Ofisi\'ne ait arızalı NRO casus uydusunun kontrolsüzce Dünya\'ya düşmesini önlemek ve içindeki yaklaşık 450 kg toksik hidrazin yakıt tankının kalabalık bölgelere zarar vermeden yörüngede imha edilmesi amacıyla bilerek planlandı.',
-      outcome: 'Deniz kuvvetlerine ait USS Lake Erie kruvazöründen fırlatılan SM-3 füzesi, uyduyu 247 km irtifada başarıyla vurdu. Alçak irtifada gerçekleştiği için oluşan enkaz parçalarının büyük çoğunluğu birkaç hafta içinde atmosferde yanarak yok oldu.',
+      title: 'Operation Burnt Frost',
+      reason: 'Deliberately executed to prevent the uncontrolled re-entry of a failed NRO reconnaissance satellite over populated areas and to destroy its approximately 450 kg toxic hydrazine propellant tank before it could reach the ground.',
+      outcome: 'An SM-3 missile fired from the USS Lake Erie cruiser successfully intercepted the satellite at 247 km altitude. Because of the low intercept altitude, the vast majority of the debris fragments re-entered the atmosphere and burned up within weeks, leaving minimal long-term debris.',
     },
     objectA: {
       name: 'USA 193',
@@ -208,9 +208,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // Ariane debris from a different SSO pass — descending (heading south) for head-on crossing
     approachB: { inclinationDeg: 98.6, ascending: false },
     info: {
-      title: 'İlk Tescilli Uzay Çöpü Çarpışması',
-      reason: 'Tamamen kazara gerçekleşti. Aktif Fransız askeri istihbarat uydusu Cerise, fırlatılmasının üzerinden 9 yıl geçmiş ve artık takip edilmeyen bir Ariane 3 roketinin üst katmanından kopan başıboş bir enkaz parçasıyla yörüngede karşılaştı.',
-      outcome: 'Uzay tarihinde, bir uydunun kataloglanmış insan yapımı bir uzay çöpüyle çarpışmasının resmi olarak tescillendiği ilk olaydır. Çarpışma sonucu Cerise\'in yerçekimi gradyan stabilizasyon anteni koptu. Bu olay, uzay çöpü tehlikesini uluslararası kamuoyunun gündemine taşıdı.',
+      title: 'First Confirmed Debris-on-Satellite Collision',
+      reason: 'Entirely accidental. The active French military microsatellite Cerise encountered a piece of debris — a fragment of the Ariane 3 H-10 upper stage launched nine years earlier — that was still drifting untracked in the same orbital shell.',
+      outcome: 'The first officially confirmed collision between an operational satellite and a catalogued piece of man-made space debris. The impact severed Cerise\'s gravity-gradient stabilisation boom. The event became a landmark case in raising international awareness of the orbital debris hazard.',
     },
     objectA: {
       name: 'CERISE',
@@ -243,9 +243,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 0.2, ascending: true },
     approachB: { inclinationDeg: 0.1, ascending: false },
     info: {
-      title: 'Yörüngede Güvenli Kenetlenme',
-      reason: 'Yakıtı tükenmek üzere olan ancak elektronik sistemleri hâlâ çalışır durumda bulunan Intelsat 901 haberleşme uydusunun servis ömrünü uzatmak için ticari bir yörüngede servis aracı (MEV-1) tarafından arkadan yavaşça kenetlendi.',
-      outcome: 'Uzay tarihindeki ilk başarılı ticari "yörüngede servis ve kenetleme" operasyonudur. Sıfır patlama, sıfır enkaz. Kenetlenen ikili daha sonra birlikte yeni bir GEO slotuna taşındı ve Intelsat 901\'in operasyonel ömrü 5 yıl daha uzatıldı.',
+      title: 'First Commercial In-Space Docking',
+      reason: 'A commercial servicing vehicle (MEV-1) was deliberately sent to slowly approach and dock with Intelsat 901 — a communications satellite that had nearly exhausted its propellant but whose electronics remained fully functional — in order to extend its operational life.',
+      outcome: 'The first successful commercial on-orbit servicing and life-extension mission in spaceflight history. Zero explosions, zero debris. After docking, the combined stack was repositioned to a new GEO slot, adding five years to Intelsat 901\'s operational lifetime.',
     },
     objectA: {
       name: 'MEV-1',
@@ -277,9 +277,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 64.9, ascending: true },
     approachB: null,
     info: {
-      title: 'Gizemli Yörünge Dağılması',
-      reason: 'Dışarıdan herhangi bir etki (füze veya çarpışma) olmaksızın, uydunun yörüngede ilerlerken büyük ihtimalle bir batarya veya yakıt tankı arızasından kaynaklanan iç basınç nedeniyle aniden parçalandığı değerlendirilmektedir. Rusya resmi bir açıklama yapmadı.',
-      outcome: 'Rusya\'nın gizli manevra uyduları programının bir parçası olan araç, aniden düzinelerce parçaya ayrılarak arkasında takibi güç bir enkaz bulutu bıraktı. Olay, uzayda manevra yapabilen "kinetik silah" uydularına yönelik kaygıları yeniden alevlendirdi.',
+      title: 'Mysterious Orbital Fragmentation',
+      reason: 'Without any external impact or missile strike, the satellite suddenly broke apart on orbit — most likely due to an internal pressure failure, such as a battery or propellant tank rupture. Russia made no official statement explaining the cause.',
+      outcome: 'Part of Russia\'s classified manoeuvring satellite programme, the vehicle abruptly split into dozens of pieces, leaving behind a difficult-to-track debris cloud. The event reignited concerns about on-orbit manoeuvrable "inspector" or co-orbital weapon satellites and their fragmentation risk.',
     },
     objectA: {
       name: 'KOSMOS 2499',

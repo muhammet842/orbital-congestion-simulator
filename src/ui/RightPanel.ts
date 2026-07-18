@@ -374,11 +374,11 @@ function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
         <span class="eic__badge">${escapeHtml(title)}</span>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">Neden Yaşandı?</h4>
+        <h4 class="eic__heading">Why Did It Happen?</h4>
         <p class="eic__text">${escapeHtml(reason)}</p>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">Sonuç ve Etkileri</h4>
+        <h4 class="eic__heading">Outcome &amp; Impact</h4>
         <p class="eic__text">${escapeHtml(outcome)}</p>
       </div>
     </div>
