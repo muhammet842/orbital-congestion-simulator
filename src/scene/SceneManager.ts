@@ -12,6 +12,7 @@ import {
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { getConjunctions, conjunctionSessionKey } from '../orbital/conjunction';
 import { getDebrisUpdateStride, getPropagationResults } from '../orbital/propagationBatch';
+import { PropagationWorkerBridge } from '../orbital/PropagationWorkerBridge';
 import { eciToScene } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
 import { getVisualConjunctionLayout } from '../orbital/visualConjunction';
@@ -54,6 +55,7 @@ export class SceneManager {
   readonly earth: Earth;
   readonly sunLight: DirectionalLight;
   private orbitalMeshes: OrbitalMeshes | null = null;
+  private propWorker: PropagationWorkerBridge;
   private selectionMarker: SelectionMarker;
   private orbitTrail: OrbitTrail;
   private satelliteFootprint: SatelliteFootprint;
@@ -171,6 +173,8 @@ export class SceneManager {
 
     this.eventReplayLabels = new EventReplayLabels(container);
 
+    this.propWorker = new PropagationWorkerBridge();
+
     this.raycaster.params.Points = { threshold: 0.015 };
 
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
@@ -186,6 +190,7 @@ export class SceneManager {
   async initOrbitalMeshes(objects: TrackedObject[]): Promise<void> {
     this.orbitalMeshes = await OrbitalMeshes.create(objects);
     this.scene.add(this.orbitalMeshes.group);
+    this.propWorker.init(objects);
   }
 
   start(): void {
@@ -466,7 +471,14 @@ export class SceneManager {
 
     this.applyDayNight(simTime);
 
-    const propagations = getPropagationResults(currentState.objects, simTime, timeSpeed);
+    // Fire async request to the Worker for the next frame's data.
+    // The Worker result arrives via message handler and is buffered.
+    // Falls back to synchronous propagation only on the very first frame
+    // before the Worker has replied (null → synchronous).
+    this.propWorker.request(simTime.getTime(), timeSpeed);
+    const propagations =
+      this.propWorker.getLatestResults() ??
+      getPropagationResults(currentState.objects, simTime, timeSpeed);
     const debrisStride = getDebrisUpdateStride(timeSpeed);
     const skipPointsUpdate = this.debrisFrameCounter++ % debrisStride !== 0;
 
