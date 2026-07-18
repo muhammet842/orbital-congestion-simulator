@@ -210,6 +210,12 @@ export class SceneManager {
           this.eventReplayVisuals.setup(event, collisionTimeMs);
           this.cameraFly.captureGlobalView(this.camera, this.controls);
 
+          // Clear any satellite selection visuals immediately so the footprint
+          // cone and orbit trail don't linger while the replay loads.
+          this.satelliteFootprint.update(null, objects, new Date());
+          this.selectionMarker.update(null, objects, new Date());
+          this.orbitTrail.update(false, null, objects, new Date());
+
           // Hide all catalog satellite dots so only the 2 historical objects
           // are visible. Modern TLEs extrapolated 15+ years backwards produce
           // garbage positions that scatter across the scene.
