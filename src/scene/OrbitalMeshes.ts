@@ -83,9 +83,16 @@ export class OrbitalMeshes {
     searchQuery: string,
     cameraPosition: { x: number; y: number; z: number },
     pulseTimeMs: number,
-    options?: { skipPointsUpdate?: boolean; colorByFunction?: boolean },
+    options?: {
+      skipPointsUpdate?: boolean;
+      colorByFunction?: boolean;
+      altitudeFilter?: { minKm: number; maxKm: number } | null;
+      inclinationFilter?: { minDeg: number; maxDeg: number } | null;
+    },
   ): void {
     const colorByFunction = options?.colorByFunction ?? false;
+    const altitudeFilter = options?.altitudeFilter ?? null;
+    const inclinationFilter = options?.inclinationFilter ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
     const gltfDetailIndices = this.resolveGltfDetailIndices(
@@ -97,28 +104,14 @@ export class OrbitalMeshes {
 
     if (!options?.skipPointsUpdate) {
       this.spacecraftPoints.updatePositions(
-        objects,
-        propagations,
-        selectedIndex,
-        conjunctionHighlight,
-        layerFilters,
-        searchQuery,
-        cameraPosition,
-        pulseTimeMs,
-        gltfDetailIndices,
-        colorByFunction,
+        objects, propagations, selectedIndex, conjunctionHighlight,
+        layerFilters, searchQuery, cameraPosition, pulseTimeMs,
+        gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
       );
       this.debrisPoints.updatePositions(
-        objects,
-        propagations,
-        selectedIndex,
-        conjunctionHighlight,
-        layerFilters,
-        searchQuery,
-        cameraPosition,
-        pulseTimeMs,
-        gltfDetailIndices,
-        colorByFunction,
+        objects, propagations, selectedIndex, conjunctionHighlight,
+        layerFilters, searchQuery, cameraPosition, pulseTimeMs,
+        gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
       );
     }
 

@@ -44,6 +44,10 @@ export interface AppState {
   eventReplay: EventReplayState | null;
   searchQuery: string;
   layerFilters: Record<OrbitLayer, boolean>;
+  /** Optional altitude band filter applied to the list and 3-D scene. */
+  altitudeFilter: { minKm: number; maxKm: number } | null;
+  /** Optional inclination band filter applied to the list and 3-D scene. */
+  inclinationFilter: { minDeg: number; maxDeg: number } | null;
   time: TimeState;
   stats: AppStats;
   conjunctions: ConjunctionEvent[];
@@ -73,6 +77,8 @@ let state: AppState = {
   eventReplay: null,
   searchQuery: '',
   layerFilters: { ...defaultLayerFilters },
+  altitudeFilter: null,
+  inclinationFilter: null,
   time: {
     mode: 'live',
     current: new Date(),
@@ -164,8 +170,16 @@ export function enterHistoricalMode(updates: Partial<TimeState> = {}): void {
 export function setState(partial: Partial<AppState>): void {
   state = { ...state, ...partial };
 
-  if (partial.layerFilters !== undefined || partial.searchQuery !== undefined) {
-    state.filteredIndices = computeFilteredIndices(state.objects, state.layerFilters, state.searchQuery);
+  if (
+    partial.layerFilters !== undefined ||
+    partial.searchQuery !== undefined ||
+    partial.altitudeFilter !== undefined ||
+    partial.inclinationFilter !== undefined
+  ) {
+    state.filteredIndices = computeFilteredIndices(
+      state.objects, state.layerFilters, state.searchQuery,
+      state.altitudeFilter, state.inclinationFilter,
+    );
   }
 
   listeners.forEach((fn) => fn());
@@ -180,12 +194,17 @@ export function computeFilteredIndices(
   objects: TrackedObject[],
   layerFilters: Record<OrbitLayer, boolean>,
   searchQuery = '',
+  altitudeFilter: { minKm: number; maxKm: number } | null = null,
+  inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
 ): number[] {
   const q = searchQuery.trim().toLowerCase();
   const indices: number[] = [];
   for (let i = 0; i < objects.length; i++) {
-    if (!layerFilters[objects[i].layer]) continue;
-    if (q && !objectMatchesQuery(objects[i], q)) continue;
+    const obj = objects[i];
+    if (!layerFilters[obj.layer]) continue;
+    if (q && !objectMatchesQuery(obj, q)) continue;
+    if (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) continue;
+    if (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) continue;
     indices.push(i);
   }
   return indices;
@@ -389,6 +408,18 @@ export function setColorByFunction(enabled: boolean): void {
   setState({ colorByFunction: enabled });
 }
 
+export function setAltitudeFilter(filter: { minKm: number; maxKm: number } | null): void {
+  setState({ altitudeFilter: filter });
+}
+
+export function setInclinationFilter(filter: { minDeg: number; maxDeg: number } | null): void {
+  setState({ inclinationFilter: filter });
+}
+
+export function resetAdvancedFilters(): void {
+  setState({ altitudeFilter: null, inclinationFilter: null });
+}
+
 export function setConjunctions({ alerts, hiddenCount }: ConjunctionScanResult): void {
   const prev = state.conjunctions;
   if (
@@ -427,6 +458,8 @@ export function initState(
     verificationTime: null,
     eventReplay: null,
     searchQuery: '',
+    altitudeFilter: null,
+    inclinationFilter: null,
     conjunctions: [],
     conjunctionHiddenCount: 0,
     showOrbitTrail: false,

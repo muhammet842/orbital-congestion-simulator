@@ -30,6 +30,13 @@ const en: Translations = {
   'ui.live_stats':        'Live Stats',
   'ui.close_approach':    'Close Approach Alerts',
   'ui.historical_events': 'Historical Events',
+  'ui.advanced_filters':  'Advanced Filters',
+
+  // ── Advanced filters ──────────────────────────────────────────────────
+  'filter.altitude':      'Altitude',
+  'filter.inclination':   'Inclination',
+  'filter.reset':         'Reset Filters',
+  'filter.objects_shown': '{n} objects shown',
 
   // ── Live stats ────────────────────────────────────────────────────────
   'stats.mode':         'Mode',
@@ -157,7 +164,11 @@ const tr: Translations = {
   'ui.object_categories': 'Nesne Kategorileri',
   'ui.live_stats':        'Canlı İstatistikler',
   'ui.close_approach':    'Yakın Geçiş Uyarıları',
-  'ui.historical_events': 'Tarihsel Olaylar',
+  'ui.advanced_filters':  'Gelişmiş Filtreler',
+  'filter.altitude':      'İrtifa',
+  'filter.inclination':   'Eğim Açısı',
+  'filter.reset':         'Filtreleri Sıfırla',
+  'filter.objects_shown': '{n} nesne gösteriliyor',
 
   'stats.mode':        'Mod',
   'stats.utc_time':    'UTC saati',
@@ -276,7 +287,11 @@ const de: Translations = {
   'ui.object_categories': 'Objektkategorien',
   'ui.live_stats':        'Live-Statistiken',
   'ui.close_approach':    'Nahflug-Warnungen',
-  'ui.historical_events': 'Historische Ereignisse',
+  'ui.advanced_filters':  'Erweiterte Filter',
+  'filter.altitude':      'Höhe',
+  'filter.inclination':   'Neigung',
+  'filter.reset':         'Filter zurücksetzen',
+  'filter.objects_shown': '{n} Objekte angezeigt',
 
   'stats.mode':        'Modus',
   'stats.utc_time':    'UTC-Zeit',
@@ -395,7 +410,11 @@ const ru: Translations = {
   'ui.object_categories': 'Категории объектов',
   'ui.live_stats':        'Статистика в реальном времени',
   'ui.close_approach':    'Предупреждения о сближении',
-  'ui.historical_events': 'Исторические события',
+  'ui.advanced_filters':  'Расширенные фильтры',
+  'filter.altitude':      'Высота',
+  'filter.inclination':   'Наклонение',
+  'filter.reset':         'Сбросить фильтры',
+  'filter.objects_shown': 'Показано объектов: {n}',
 
   'stats.mode':        'Режим',
   'stats.utc_time':    'Время UTC',
@@ -514,7 +533,11 @@ const zh: Translations = {
   'ui.object_categories': '对象类别',
   'ui.live_stats':        '实时统计',
   'ui.close_approach':    '近距离接近警报',
-  'ui.historical_events': '历史事件',
+  'ui.advanced_filters':  '高级筛选',
+  'filter.altitude':      '高度',
+  'filter.inclination':   '轨道倾角',
+  'filter.reset':         '重置筛选',
+  'filter.objects_shown': '显示{n}个对象',
 
   'stats.mode':        '模式',
   'stats.utc_time':    'UTC时间',

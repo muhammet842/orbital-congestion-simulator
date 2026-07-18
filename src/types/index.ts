@@ -28,6 +28,10 @@ export interface TrackedObject extends TleRecord {
   layer: OrbitLayer;
   color: [number, number, number];
   functionGroup: ObjectFunctionGroup;
+  /** Mean orbital altitude in km, derived from TLE mean motion (fast, no propagation). */
+  meanAltitudeKm: number;
+  /** Orbital inclination in degrees from TLE. */
+  inclinationDeg: number;
 }
 
 export interface ObjectSnapshot {

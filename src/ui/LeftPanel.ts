@@ -15,6 +15,9 @@ import {
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
+  setAltitudeFilter,
+  setInclinationFilter,
+  resetAdvancedFilters,
 } from '../state/appState';
 import { initEventCards } from './EventCards';
 import { t, applyTranslations, onLangChange } from '../i18n/i18n';
@@ -58,6 +61,9 @@ export function initLeftPanel(container: HTMLElement): void {
 
     <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts</h2>
     <div class="conjunction-list" id="conjunction-list"></div>
+
+    <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
+    <div class="advanced-filters" id="advanced-filters"></div>
   `;
 
   initSearchAndList(container);
@@ -66,6 +72,7 @@ export function initLeftPanel(container: HTMLElement): void {
   renderStats(container);
   renderConjunctions(container);
   initEventCards(container);
+  initAdvancedFilters(container);
 
   container.addEventListener('click', (e) => {
     const card = (e.target as HTMLElement).closest<HTMLButtonElement>(
@@ -96,6 +103,7 @@ export function initLeftPanel(container: HTMLElement): void {
     renderDisplayOptions(container);
     renderStats(container);
     renderConjunctions(container);
+    renderAdvancedFilters(container);
   });
 
   let lastListKey = '';
@@ -344,3 +352,120 @@ function renderConjunctions(container: HTMLElement): void {
 }
 
 let previousAlertKeys = new Set<string>();
+
+// ── Advanced Filters ──────────────────────────────────────────────────────────
+
+const ALT_MIN_DEFAULT  =     0;
+const ALT_MAX_DEFAULT  = 36000;
+const INCL_MIN_DEFAULT =     0;
+const INCL_MAX_DEFAULT =   180;
+
+function renderAdvancedFilters(container: HTMLElement): void {
+  const el = container.querySelector('#advanced-filters');
+  if (!el) return;
+
+  const state = getState();
+  const af   = state.altitudeFilter;
+  const incf = state.inclinationFilter;
+
+  const altMin  = af?.minKm    ?? ALT_MIN_DEFAULT;
+  const altMax  = af?.maxKm    ?? ALT_MAX_DEFAULT;
+  const inclMin = incf?.minDeg ?? INCL_MIN_DEFAULT;
+  const inclMax = incf?.maxDeg ?? INCL_MAX_DEFAULT;
+
+  const hasFilter = af !== null || incf !== null;
+  const shown = state.filteredIndices.length;
+
+  const altPctMin  = (altMin  / ALT_MAX_DEFAULT)  * 100;
+  const altPctMax  = (altMax  / ALT_MAX_DEFAULT)  * 100;
+  const inclPctMin = (inclMin / INCL_MAX_DEFAULT) * 100;
+  const inclPctMax = (inclMax / INCL_MAX_DEFAULT) * 100;
+
+  el.innerHTML = `
+    <div class="af-group">
+      <div class="af-label-row">
+        <span class="af-label" data-i18n="filter.altitude">${t('filter.altitude')}</span>
+        <span class="af-values">${altMin.toLocaleString()} km — ${altMax.toLocaleString()} km</span>
+      </div>
+      <div class="dual-range">
+        <div class="dual-range-track">
+          <div class="dual-range-fill"
+               style="left:${altPctMin.toFixed(1)}%;width:${(altPctMax - altPctMin).toFixed(1)}%"></div>
+        </div>
+        <input type="range" class="dr-input dr-min" id="af-alt-min"
+               min="${ALT_MIN_DEFAULT}" max="${ALT_MAX_DEFAULT}" step="50" value="${altMin}">
+        <input type="range" class="dr-input dr-max" id="af-alt-max"
+               min="${ALT_MIN_DEFAULT}" max="${ALT_MAX_DEFAULT}" step="50" value="${altMax}">
+      </div>
+    </div>
+
+    <div class="af-group">
+      <div class="af-label-row">
+        <span class="af-label" data-i18n="filter.inclination">${t('filter.inclination')}</span>
+        <span class="af-values">${inclMin}° — ${inclMax}°</span>
+      </div>
+      <div class="dual-range">
+        <div class="dual-range-track">
+          <div class="dual-range-fill"
+               style="left:${inclPctMin.toFixed(1)}%;width:${(inclPctMax - inclPctMin).toFixed(1)}%"></div>
+        </div>
+        <input type="range" class="dr-input dr-min" id="af-incl-min"
+               min="${INCL_MIN_DEFAULT}" max="${INCL_MAX_DEFAULT}" step="1" value="${inclMin}">
+        <input type="range" class="dr-input dr-max" id="af-incl-max"
+               min="${INCL_MIN_DEFAULT}" max="${INCL_MAX_DEFAULT}" step="1" value="${inclMax}">
+      </div>
+    </div>
+
+    <div class="af-footer">
+      <span class="af-count muted">${t('filter.objects_shown').replace('{n}', shown.toLocaleString())}</span>
+      <button type="button" id="af-reset" class="btn-af-reset${hasFilter ? '' : ' btn-af-reset--dim'}"
+              data-i18n="filter.reset" ${hasFilter ? '' : 'disabled'}>${t('filter.reset')}</button>
+    </div>
+  `;
+}
+
+function initAdvancedFilters(container: HTMLElement): void {
+  renderAdvancedFilters(container);
+
+  container.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    const id = target.id;
+    if (!['af-alt-min', 'af-alt-max', 'af-incl-min', 'af-incl-max'].includes(id)) return;
+
+    const el = container.querySelector('#advanced-filters')!;
+
+    if (id === 'af-alt-min' || id === 'af-alt-max') {
+      const minEl = el.querySelector<HTMLInputElement>('#af-alt-min')!;
+      const maxEl = el.querySelector<HTMLInputElement>('#af-alt-max')!;
+      let minVal = Number(minEl.value);
+      let maxVal = Number(maxEl.value);
+      if (minVal > maxVal) {
+        if (id === 'af-alt-min') { minVal = maxVal; minEl.value = String(minVal); }
+        else                     { maxVal = minVal; maxEl.value = String(maxVal); }
+      }
+      const isDefault = minVal === ALT_MIN_DEFAULT && maxVal === ALT_MAX_DEFAULT;
+      setAltitudeFilter(isDefault ? null : { minKm: minVal, maxKm: maxVal });
+    }
+
+    if (id === 'af-incl-min' || id === 'af-incl-max') {
+      const minEl = el.querySelector<HTMLInputElement>('#af-incl-min')!;
+      const maxEl = el.querySelector<HTMLInputElement>('#af-incl-max')!;
+      let minVal = Number(minEl.value);
+      let maxVal = Number(maxEl.value);
+      if (minVal > maxVal) {
+        if (id === 'af-incl-min') { minVal = maxVal; minEl.value = String(minVal); }
+        else                      { maxVal = minVal; maxEl.value = String(maxVal); }
+      }
+      const isDefault = minVal === INCL_MIN_DEFAULT && maxVal === INCL_MAX_DEFAULT;
+      setInclinationFilter(isDefault ? null : { minDeg: minVal, maxDeg: maxVal });
+    }
+  });
+
+  container.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).id === 'af-reset') {
+      resetAdvancedFilters();
+    }
+  });
+
+  subscribe(() => renderAdvancedFilters(container));
+}

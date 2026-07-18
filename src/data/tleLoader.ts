@@ -29,12 +29,22 @@ export function createTrackedObjects(dataset: TleDataset, date = new Date()): Tr
         continue;
       }
 
+      // Derive mean altitude and inclination directly from satrec (no propagation needed).
+      // satrec.no is mean motion in rad/min; satrec.inclo is inclination in radians.
+      const GM_KM3_S2 = 398600.4418;
+      const nRadS = satrec.no / 60; // rad/s
+      const semiMajorKm = Math.cbrt(GM_KM3_S2 / (nRadS * nRadS));
+      const meanAltitudeKm = Math.max(0, semiMajorKm - 6371);
+      const inclinationDeg = satrec.inclo * (180 / Math.PI);
+
       tracked.push({
         ...enriched,
         satrec,
         layer: propagation.layer,
         color: getCategoryColor(enriched.category, propagation.layer, enriched.country),
         functionGroup: inferFunctionGroup(enriched.name, enriched.category),
+        meanAltitudeKm,
+        inclinationDeg,
       });
     } catch (err) {
       console.warn(`Skipping invalid TLE for ${record.name}:`, err);

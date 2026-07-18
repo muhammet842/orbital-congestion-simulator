@@ -70,6 +70,8 @@ export class InstancedOrbitalPoints {
     pulseTimeMs: number,
     gltfDetailIndices: ReadonlySet<number>,
     colorByFunction: boolean,
+    altitudeFilter: { minKm: number; maxKm: number } | null = null,
+    inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
   ): void {
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
@@ -111,7 +113,12 @@ export class InstancedOrbitalPoints {
       if (
         !isSelected &&
         !isConjunction &&
-        (!layerFilters[obj.layer] || !matchesSearch(obj, searchQuery))
+        (
+          !layerFilters[obj.layer] ||
+          !matchesSearch(obj, searchQuery) ||
+          (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) ||
+          (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg))
+        )
       ) {
         this.matrix.makeScale(0, 0, 0);
         this.mesh.setMatrixAt(i, this.matrix);

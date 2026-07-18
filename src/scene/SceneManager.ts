@@ -474,7 +474,12 @@ export class SceneManager {
         currentState.searchQuery,
         this.camera.position,
         simTime.getTime(),
-        { skipPointsUpdate, colorByFunction: currentState.colorByFunction },
+        {
+          skipPointsUpdate,
+          colorByFunction: currentState.colorByFunction,
+          altitudeFilter: currentState.altitudeFilter,
+          inclinationFilter: currentState.inclinationFilter,
+        },
       );
     }
 

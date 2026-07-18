@@ -7,12 +7,15 @@ import {
   LineDashedMaterial,
   Mesh,
   MeshBasicMaterial,
+  Points,
+  PointsMaterial,
   SphereGeometry,
   Vector3,
 } from 'three';
 import { eciToScene } from '../orbital/coordinates';
 import { getGmstRad } from './dayNight';
 import type { HistoricalEvent } from '../ui/EventCards';
+import type { EventType } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
 /** Glow sphere radius in scene units (same scale as Earth radius = 1). */
@@ -48,6 +51,8 @@ interface ParsedObjects {
    * Used to drive the separation counter in the right panel.
    */
   initialSeparationKm: number;
+  /** Visual/behavioural category of the event. */
+  eventType: EventType;
 }
 
 /**
@@ -208,6 +213,105 @@ function buildApproachArc(from: Vector3, to: Vector3, segments = 48): BufferGeom
   return geo;
 }
 
+// ── Debris cloud ──────────────────────────────────────────────────────────────
+const DEBRIS_COUNT = 140;
+/** How far in replay-ms the cloud stays visible after T=0 (15× speed → ~3s real). */
+const DEBRIS_FADE_MS = 45_000;
+/** Max tangential spread speed in scene-units per replay-second. */
+const DEBRIS_SPREAD = 0.0018;
+
+class DebrisCloud {
+  readonly points: Points;
+  private readonly positions: Float32Array;
+  private readonly velocities: Vector3[];
+  /** collisionTimeMs stored at spawn(); used to compute elapsed replay time. */
+  private collisionMs: number | null = null;
+  private originRadius = 1;
+
+  constructor(color: number) {
+    this.positions = new Float32Array(DEBRIS_COUNT * 3);
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new BufferAttribute(this.positions, 3));
+    const mat = new PointsMaterial({
+      color,
+      size: 0.0028,
+      transparent: true,
+      opacity: 0,
+      blending: AdditiveBlending,
+      toneMapped: false,
+      depthWrite: false,
+      sizeAttenuation: true,
+    });
+    this.points = new Points(geo, mat);
+    this.points.visible = false;
+
+    // Pre-generate random tangential velocity directions.
+    // Keep a mix of orbital-direction and cross-track components.
+    this.velocities = Array.from({ length: DEBRIS_COUNT }, () => {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      const speed = DEBRIS_SPREAD * (0.25 + Math.random() * 0.75);
+      return new Vector3(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.sin(phi) * Math.sin(theta) * speed,
+        Math.cos(phi) * speed,
+      );
+    });
+  }
+
+  spawn(origin: Vector3, collisionTimeMs: number): void {
+    this.collisionMs  = collisionTimeMs;
+    this.originRadius = origin.length();
+    for (let i = 0; i < DEBRIS_COUNT; i++) {
+      this.positions[i * 3]     = origin.x;
+      this.positions[i * 3 + 1] = origin.y;
+      this.positions[i * 3 + 2] = origin.z;
+    }
+    (this.points.geometry.attributes.position as BufferAttribute).needsUpdate = true;
+    this.points.visible = true;
+  }
+
+  tick(origin: Vector3, simTimeMs: number): void {
+    if (this.collisionMs === null) return;
+    const elapsed = simTimeMs - this.collisionMs; // replay-ms
+    if (elapsed < 0) { this.points.visible = false; return; }
+
+    const t = elapsed / 1000; // replay-seconds
+    const r = this.originRadius;
+
+    for (let i = 0; i < DEBRIS_COUNT; i++) {
+      const vel = this.velocities[i];
+      // Spread in velocity direction, then project back onto the orbital sphere
+      const px = origin.x + vel.x * t;
+      const py = origin.y + vel.y * t;
+      const pz = origin.z + vel.z * t;
+      const len = Math.sqrt(px * px + py * py + pz * pz);
+      const s   = r / len;
+      this.positions[i * 3]     = px * s;
+      this.positions[i * 3 + 1] = py * s;
+      this.positions[i * 3 + 2] = pz * s;
+    }
+    (this.points.geometry.attributes.position as BufferAttribute).needsUpdate = true;
+
+    const fade = 1 - Math.min(1, elapsed / DEBRIS_FADE_MS);
+    (this.points.material as PointsMaterial).opacity = fade * 0.9;
+    this.points.visible = fade > 0.005;
+  }
+
+  reset(): void {
+    this.collisionMs = null;
+    this.points.visible = false;
+    (this.points.material as PointsMaterial).opacity = 0;
+  }
+
+  dispose(): void {
+    this.points.geometry.dispose();
+    (this.points.material as PointsMaterial).dispose();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class EventReplayVisuals {
   readonly group: Group;
 
@@ -216,6 +320,8 @@ export class EventReplayVisuals {
   private readonly dotA: Mesh;
   private readonly dotB: Mesh;
   private readonly dotImpact: Mesh;
+  private readonly debrisCloud: DebrisCloud;
+  private debrisTriggered = false;
 
   private parsed: ParsedObjects | null = null;
   private activeEventId = '';
@@ -291,6 +397,11 @@ export class EventReplayVisuals {
     );
 
     this.group.add(this.trailA, this.trailB, this.dotA, this.dotB, this.dotImpact);
+
+    // Debris cloud — colour set per-event in setup()
+    this.debrisCloud = new DebrisCloud(0xff7722);
+    this.group.add(this.debrisCloud.points);
+
     this.group.visible = false;
   }
 
@@ -373,7 +484,17 @@ export class EventReplayVisuals {
       collisionScene,
       startTimeMs,
       initialSeparationKm,
+      eventType: eType,
     };
+
+    // Reset debris from any previous replay
+    this.debrisTriggered = false;
+    this.debrisCloud.reset();
+
+    // Adjust debris colour: orange-white for collisions/asat/breakup, teal for docking
+    (this.debrisCloud.points.material as PointsMaterial).color.setHex(
+      eType === 'docking' ? 0x44ffcc : 0xff7722,
+    );
 
     // ── Build curved arc approach geometry ───────────────────────────────
     // The trail follows the great-circle (slerp) path from the initial
@@ -469,6 +590,22 @@ export class EventReplayVisuals {
       this.dotImpact.visible = false;
     }
 
+    // ── Debris cloud ──────────────────────────────────────────────────────
+    // Spawn once on impact (skip for docking events which have no debris).
+    if (msAfterCollision >= 0 && this.parsed.eventType !== 'docking') {
+      if (!this.debrisTriggered) {
+        this.debrisTriggered = true;
+        this.debrisCloud.spawn(posA, collisionTimeMs);
+      }
+      this.debrisCloud.tick(posA, simTime.getTime());
+    } else if (msAfterCollision < 0) {
+      // Reset if replay is rewound back before T=0
+      if (this.debrisTriggered) {
+        this.debrisTriggered = false;
+        this.debrisCloud.reset();
+      }
+    }
+
     return { posA, posB, impactFlash };
   }
 
@@ -492,6 +629,8 @@ export class EventReplayVisuals {
     this.trailA.geometry = new BufferGeometry();
     this.trailB.geometry.dispose();
     this.trailB.geometry = new BufferGeometry();
+    this.debrisCloud.reset();
+    this.debrisTriggered = false;
     this.parsed = null;
     this.activeEventId = '';
     this.group.visible = false;
