@@ -395,6 +395,10 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
       <div class="era-impact-text">💥 COLLISION</div>
     </div>
 
+    <div class="era-completed-banner" data-field="era-completed" hidden>
+      Replay complete — press ↺ to restart
+    </div>
+
     <div class="era-controls">
       <button type="button" id="btn-replay-restart" class="btn-era-ctrl" title="Restart">↺</button>
       <button type="button" id="btn-replay-play" class="btn-era-ctrl btn-era-play" data-field="era-play-btn">⏸</button>
@@ -472,15 +476,16 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
           const dz = propA.positionEci.z - propB.positionEci.z;
           let distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-          // Mirror the 3D convergence blend: reduce displayed distance over the
-          // full replay window (ease-in² same as EventReplayVisuals).
-          const msToImpact = collisionTimeMs - eventReplay.currentMs;
-          if (msToImpact >= 0 && msToImpact <= EVENT_REPLAY_REWIND_MS) {
-            const t = 1 - msToImpact / EVENT_REPLAY_REWIND_MS;
-            const blendFactor = t * t;
-            distKm = distKm * (1 - blendFactor);
-          } else if (msToImpact < 0) {
+          // Mirror the 3D convergence blend: only apply in the last 2 min,
+          // using the same ease-in³ curve as EventReplayVisuals.
+          const msToImpact2 = collisionTimeMs - eventReplay.currentMs;
+          const BLEND_WINDOW_MS = 2 * 60 * 1000;
+          if (msToImpact2 <= 0) {
             distKm = 0;
+          } else if (msToImpact2 < BLEND_WINDOW_MS) {
+            const t = 1 - msToImpact2 / BLEND_WINDOW_MS;
+            const blendFactor = t * t * t;
+            distKm = distKm * (1 - blendFactor);
           }
 
           _replayDistCached = distKm < 1
@@ -495,13 +500,16 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
   // Impact banner — show for 30 s after T=0
   if (impactEl) {
     const msAfter = -msToImpact;
-    if (msAfter >= 0 && msAfter < 30_000) {
-      impactEl.hidden = false;
-      impactEl.classList.add('era-impact--active');
-    } else {
-      impactEl.hidden = true;
-      impactEl.classList.remove('era-impact--active');
-    }
+    const active = msAfter >= 0 && msAfter < 30_000;
+    impactEl.hidden = !active;
+    impactEl.classList.toggle('era-impact--active', active);
+  }
+
+  // "Replay complete" label when auto-paused
+  const completedEl = container.querySelector<HTMLElement>('[data-field="era-completed"]');
+  if (completedEl) {
+    const completed = -msToImpact > 30_000;
+    completedEl.hidden = !completed;
   }
 }
 

@@ -38,6 +38,7 @@ import {
   advanceEventReplayTime,
   startEventReplay,
   stopEventReplay,
+  setEventReplayPartial,
   subscribe,
 } from '../state/appState';
 import { EventReplayVisuals } from './EventReplayVisuals';
@@ -363,6 +364,12 @@ export class SceneManager {
         simTime,
         currentState.eventReplay.collisionTimeMs,
       );
+
+      // Auto-pause 30 s after collision — prevents post-impact Earth rotation
+      // from making dots appear to "float" over wrong geographic regions.
+      if (replayResult?.replayComplete && currentState.eventReplay.playing) {
+        setEventReplayPartial({ playing: false });
+      }
 
       if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
         this._eventReplayStarted = true;
