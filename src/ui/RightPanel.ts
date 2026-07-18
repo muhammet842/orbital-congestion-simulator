@@ -8,7 +8,6 @@ import {
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
 import { propagateObject, toObjectSnapshot } from '../orbital/propagator';
-import { twoline2satrec } from 'satellite.js';
 import type { ConjunctionEvent } from '../types';
 import {
   formatUtcDateTime,
@@ -21,13 +20,55 @@ import {
   subscribe,
   EVENT_REPLAY_REWIND_MS,
 } from '../state/appState';
+import type { HistoricalEvent } from './EventCards';
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
 
 /**
+ * Compute the 3-D separation in km between the two collision objects at T-5min,
+ * using the same orbital back-tracking geometry as EventReplayVisuals.setup().
+ * This mirrors the slerp model so the displayed distance decreases to 0 at T=0.
+ */
+function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): number {
+  if (!event.approachB) return 0;
+  const { collisionGeo, approachA, approachB } = event;
+  const GM = 398600;
+  const R = 6371 + collisionGeo.altKm;
+  const v = Math.sqrt(GM / R);
+  const arcRad = (v * EVENT_REPLAY_REWIND_MS / 1000) / R;
+  const DEG = Math.PI / 180;
+
+  function backtrack(
+    incl: number,
+    asc: boolean,
+  ): [number, number] { // [latRad, lonRad] at startMs
+    const lat1 = collisionGeo.latDeg * DEG;
+    const lon1 = collisionGeo.lonDeg * DEG;
+    const sinAz = Math.min(1, Math.abs(Math.cos(incl * DEG) / Math.cos(lat1)));
+    const az = Math.asin(sinAz);
+    const prograde = incl <= 90;
+    let bearing: number;
+    if (asc) { bearing = prograde ? az : -az; }
+    else      { bearing = prograde ? Math.PI - az : Math.PI + az; }
+    const back = bearing + Math.PI;
+    const lat2 = Math.asin(Math.sin(lat1)*Math.cos(arcRad) + Math.cos(lat1)*Math.sin(arcRad)*Math.cos(back));
+    const lon2 = lon1 + Math.atan2(Math.sin(back)*Math.sin(arcRad)*Math.cos(lat1), Math.cos(arcRad)-Math.sin(lat1)*Math.sin(lat2));
+    return [lat2, lon2];
+  }
+
+  const [latA, lonA] = backtrack(approachA.inclinationDeg, approachA.ascending);
+  const [latB, lonB] = backtrack(approachB.inclinationDeg, approachB.ascending);
+
+  // Haversine between start positions
+  const dLat = latB - latA;
+  const dLon = lonB - lonA;
+  const a = Math.sin(dLat/2)**2 + Math.cos(latA)*Math.cos(latB)*Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
  * Cache for event replay initial separation values.
  * Key = eventId, value = initial separation in km at T-5min.
- * Computed once from TLE propagation when the event is first displayed.
  */
 const replayInitialSepCache: Map<string, number> = new Map();
 
@@ -453,26 +494,17 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance — mirrors the 3D linear lerp in EventReplayVisuals.
-  // separation(progress) = (1 − progress) × initialSeparationKm
-  // This guarantees the display shows 0.00 km exactly when progress = 1 (T=0).
+  // Distance — computed from the same linear slerp model used in EventReplayVisuals.
+  // separation(progress) = (1 − progress) × initialSeparationKm  → 0 at T=0.
   if (distEl) {
     const event = getHistoricalEvent(eventId);
-    if (event?.objectB) {
-      // Compute initialSeparationKm once and cache it.
-      if (!replayInitialSepCache.has(eventId) && event.objectA && event.objectB) {
-        const satrecA = twoline2satrec(event.objectA.line1, event.objectA.line2);
-        const satrecB = twoline2satrec(event.objectB.line1, event.objectB.line2);
+    if (event?.approachB) {
+      // Compute initialSeparationKm once: 3-D distance between the two backtracked
+      // start positions. Uses the same geometry as EventReplayVisuals.setup().
+      if (!replayInitialSepCache.has(eventId)) {
         const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
-        const startDate = new Date(startMs);
-        const pA = propagateObject(satrecA, startDate);
-        const pB = propagateObject(satrecB, startDate);
-        if (pA && pB) {
-          const dx = pA.positionEci.x - pB.positionEci.x;
-          const dy = pA.positionEci.y - pB.positionEci.y;
-          const dz = pA.positionEci.z - pB.positionEci.z;
-          replayInitialSepCache.set(eventId, Math.sqrt(dx * dx + dy * dy + dz * dz));
-        }
+        const sep = computeInitialSeparationKm(event, startMs);
+        replayInitialSepCache.set(eventId, sep);
       }
       const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
       const progress = Math.max(0, Math.min(1,

@@ -203,13 +203,7 @@ export class SceneManager {
         if (this.lastEventReplayId !== selectedEventId) {
           this.lastEventReplayId = selectedEventId;
           startEventReplay(selectedEventId, collisionTimeMs);
-          this.eventReplayVisuals.setup(
-            selectedEventId,
-            event.objectA,
-            event.objectB,
-            collisionTimeMs,
-            event.collisionGeo ?? null,
-          );
+          this.eventReplayVisuals.setup(event, collisionTimeMs);
           this.cameraFly.captureGlobalView(this.camera, this.controls);
 
           // Hide all catalog satellite dots so only the 2 historical objects

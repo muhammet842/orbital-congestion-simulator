@@ -10,11 +10,9 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import { twoline2satrec } from 'satellite.js';
 import { eciToScene } from '../orbital/coordinates';
-import { propagateObject } from '../orbital/propagator';
 import { getGmstRad } from './dayNight';
-import type { HistoricalEventTLE } from '../ui/EventCards';
+import type { HistoricalEvent } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
 /** Glow sphere radius in scene units (same scale as Earth radius = 1). */
@@ -60,11 +58,11 @@ function geoToScene(
   latDeg: number,
   lonDeg: number,
   altKm: number,
-  collisionDate: Date,
+  date: Date,
 ): Vector3 {
   const DEG = Math.PI / 180;
   const r = 6371 + altKm;
-  const gmst = getGmstRad(collisionDate);
+  const gmst = getGmstRad(date);
   const eciLonRad = lonDeg * DEG + gmst;
   const latRad = latDeg * DEG;
   const eciX = r * Math.cos(latRad) * Math.cos(eciLonRad);
@@ -72,6 +70,80 @@ function geoToScene(
   const eciZ = r * Math.sin(latRad);
   const scene = eciToScene(eciX, eciY, eciZ);
   return new Vector3(scene.x, scene.y, scene.z);
+}
+
+/**
+ * Compute where a satellite was `rewindMs` milliseconds BEFORE the collision
+ * by back-tracking along its great-circle orbital arc.
+ *
+ * Inputs:
+ *   collisionGeo  – verified collision location (lat/lon/alt in km)
+ *   inclinationDeg – orbital inclination (0°=equatorial, 90°=polar, >90°=retrograde)
+ *   ascending     – true if the satellite was heading south→north at collision
+ *   rewindMs      – how far back to trace (default = EVENT_REPLAY_REWIND_MS = 5 min)
+ *   startDate     – Date object at T-5min (used for GMST → ECI conversion)
+ *
+ * Algorithm:
+ *   1. Compute orbital speed v = √(GM/(R+h)) and arc length in `rewindMs`.
+ *   2. From the inclination, derive the heading azimuth at the collision latitude
+ *      using sin(az) = cos(I)/cos(lat).
+ *   3. Reverse the heading to get the back-track bearing.
+ *   4. Apply the spherical haversine formula to get the start lat/lon.
+ *   5. Convert to ECI scene coordinates at `startDate`.
+ *
+ * This produces a physically reasonable starting position that lies on the
+ * real orbital great-circle, ~5 min of flight behind the collision point.
+ */
+function orbitalBacktrack(
+  collisionGeo: { latDeg: number; lonDeg: number; altKm: number },
+  inclinationDeg: number,
+  ascending: boolean,
+  rewindMs: number,
+  startDate: Date,
+): Vector3 {
+  const DEG = Math.PI / 180;
+  const GM = 398600; // km³/s²
+  const R = 6371 + collisionGeo.altKm;
+  const v = Math.sqrt(GM / R);          // km/s
+  const arcRad = (v * rewindMs / 1000) / R; // arc in radians on the orbit
+
+  const lat1 = collisionGeo.latDeg * DEG;
+  const lon1 = collisionGeo.lonDeg * DEG;
+  const I    = inclinationDeg * DEG;
+
+  // Azimuth of travel at this latitude for the given inclination.
+  // sin(az) = cos(I) / cos(lat)  — derived from spherical triangle of the orbit.
+  const sinAz = Math.min(1, Math.abs(Math.cos(I) / Math.cos(lat1)));
+  const azimuth = Math.asin(sinAz); // positive = eastward component
+
+  // For a retrograde orbit (I > 90°), cos(I) < 0 → satellite moves westward.
+  // `ascending` = latitude is increasing (heading toward higher latitudes).
+  // Bearing (from North, clockwise):
+  //   Ascending  + prograde  (I<90°): NE  → bearing = +azimuth
+  //   Ascending  + retrograde(I>90°): NW  → bearing = -azimuth (= 360-azimuth)
+  //   Descending + prograde  (I<90°): SE  → bearing = π - azimuth
+  //   Descending + retrograde(I>90°): SW  → bearing = π + azimuth
+  const prograde = inclinationDeg <= 90;
+  let bearing: number;
+  if (ascending) {
+    bearing = prograde ? azimuth : -azimuth;
+  } else {
+    bearing = prograde ? Math.PI - azimuth : Math.PI + azimuth;
+  }
+  // Back-track: reverse the bearing
+  const backBearing = bearing + Math.PI;
+
+  // Haversine great-circle displacement
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(arcRad) +
+    Math.cos(lat1) * Math.sin(arcRad) * Math.cos(backBearing),
+  );
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(backBearing) * Math.sin(arcRad) * Math.cos(lat1),
+    Math.cos(arcRad) - Math.sin(lat1) * Math.sin(lat2),
+  );
+
+  return geoToScene(lat2 / DEG, lon2 / DEG, collisionGeo.altKm, startDate);
 }
 
 /**
@@ -217,74 +289,73 @@ export class EventReplayVisuals {
   }
 
   /**
-   * Parse TLEs, capture initial positions at T-5min, and build approach-line
-   * geometry. Call once per event selection.
+   * Initialise visuals for the given historical event.
+   *
+   * Initial positions are computed by orbital back-tracking (not TLE propagation)
+   * so the starting dots are always physically reasonable and near the correct
+   * geographic region — 5 minutes of flight before the verified collision point.
+   *
+   * Call once per event selection.
    */
   setup(
-    eventId: string,
-    tleA: HistoricalEventTLE,
-    tleB: HistoricalEventTLE | null,
+    event: HistoricalEvent,
     collisionTimeMs: number,
-    collisionGeo: { latDeg: number; lonDeg: number; altKm: number } | null,
   ): void {
+    const eventId = event.id;
     if (this.activeEventId === eventId) return;
     this.dispose();
 
-    const satrecA = twoline2satrec(tleA.line1, tleA.line2);
-    const satrecB = tleB ? twoline2satrec(tleB.line1, tleB.line2) : null;
+    const { collisionGeo, approachA, approachB, objectB } = event;
 
-    // ── Collision scene position (required) ──────────────────────────────
+    // ── Collision scene position (ECI at impact time) ─────────────────────
     const collisionDate = new Date(collisionTimeMs);
-    const collisionScene: Vector3 | null = collisionGeo
-      ? geoToScene(collisionGeo.latDeg, collisionGeo.lonDeg, collisionGeo.altKm, collisionDate)
-      : null;
+    const collisionScene = geoToScene(
+      collisionGeo.latDeg,
+      collisionGeo.lonDeg,
+      collisionGeo.altKm,
+      collisionDate,
+    );
 
-    if (!collisionScene) {
-      // Without a known collision point we cannot run the interpolation model.
-      // Fall back silently — the group stays hidden.
-      return;
-    }
-
-    // ── Initial positions at T-5min ──────────────────────────────────────
+    // ── Initial positions via orbital back-tracking ───────────────────────
+    // We trace back EVENT_REPLAY_REWIND_MS milliseconds along the great-circle
+    // orbital path from the collision point. This gives a realistic starting
+    // position without TLE propagation drift.
     const startTimeMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
-    const startDate = new Date(startTimeMs);
+    const startDate   = new Date(startTimeMs);
 
-    const propAStart = propagateObject(satrecA, startDate);
-    const scA = propAStart
-      ? eciToScene(propAStart.positionEci.x, propAStart.positionEci.y, propAStart.positionEci.z)
-      : null;
-    const initialPosA = scA
-      ? new Vector3(scA.x, scA.y, scA.z)
-      : collisionScene.clone();
+    const initialPosA = orbitalBacktrack(
+      collisionGeo,
+      approachA.inclinationDeg,
+      approachA.ascending,
+      EVENT_REPLAY_REWIND_MS,
+      startDate,
+    );
 
     let initialPosB: Vector3 | null = null;
     let initialSeparationKm = 0;
 
-    if (satrecB) {
-      const propBStart = propagateObject(satrecB, startDate);
-      const scB = propBStart
-        ? eciToScene(propBStart.positionEci.x, propBStart.positionEci.y, propBStart.positionEci.z)
-        : null;
-      initialPosB = scB
-        ? new Vector3(scB.x, scB.y, scB.z)
-        : collisionScene.clone();
+    if (approachB && objectB) {
+      // Two-satellite event — back-track the second object
+      initialPosB = orbitalBacktrack(
+        collisionGeo,
+        approachB.inclinationDeg,
+        approachB.ascending,
+        EVENT_REPLAY_REWIND_MS,
+        startDate,
+      );
 
-      // Initial separation in km (scene unit = 1 / ORBIT_DISPLAY_SCALE km)
-      if (propAStart && propBStart) {
-        const dx = propAStart.positionEci.x - propBStart.positionEci.x;
-        const dy = propAStart.positionEci.y - propBStart.positionEci.y;
-        const dz = propAStart.positionEci.z - propBStart.positionEci.z;
-        initialSeparationKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      }
+      // 3-D separation in km at T-5min from scene-space distance
+      // (1 scene unit = Earth radius = 6371 km)
+      initialSeparationKm = initialPosA.distanceTo(initialPosB) * 6371;
     } else {
       // ASAT event: missile starts at the Earth-surface nadir of impact point
       initialPosB = collisionScene.clone().normalize(); // unit vector = surface
-      initialSeparationKm = 0; // no satellite-to-satellite separation for ASAT
+      initialSeparationKm = 0;
     }
 
     this.parsed = {
-      nameA: tleA.name,
-      nameB: tleB?.name ?? null,
+      nameA: event.objectA.name,
+      nameB: event.objectB?.name ?? null,
       initialPosA,
       initialPosB,
       collisionScene,
