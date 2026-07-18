@@ -1,4 +1,5 @@
 import type { PerspectiveCamera, Vector3, WebGLRenderer } from 'three';
+import type { EventType } from '../ui/EventCards';
 
 const GM = 398600;           // km³ s⁻²
 const EARTH_RADIUS_KM = 6371;
@@ -29,6 +30,13 @@ function altKmFromScenePos(pos: Vector3): number {
 function orbitalVelocityKmS(altKm: number): number {
   return Math.sqrt(GM / (EARTH_RADIUS_KM + altKm));
 }
+
+const EVENT_TYPE_META: Record<EventType, { typeA: string; typeB: string; iconA: string; iconB: string }> = {
+  collision: { typeA: 'Satellite', typeB: 'Satellite',    iconA: '🛰', iconB: '🛰' },
+  asat:      { typeA: 'Satellite', typeB: 'Interceptor',  iconA: '🛰', iconB: '⚡' },
+  docking:   { typeA: 'Spacecraft', typeB: 'Target',      iconA: '🚀', iconB: '🛰' },
+  breakup:   { typeA: 'Satellite', typeB: '',             iconA: '🛰', iconB: '' },
+};
 
 function buildPanelHTML(
   name: string,
@@ -110,7 +118,7 @@ export class EventReplayLabels {
    * @param posB      Current scene position of object B (satellite or missile).
    * @param nameA     Display name for object A.
    * @param nameB     Display name for object B, or null for ASAT missiles.
-   * @param isAsat    True when the event is an ASAT test (objectB is a missile).
+   * @param eventType  Visual category of the event (collision | asat | docking | breakup).
    * @param impactFlash  0..1 flash intensity — panels are hidden at full flash.
    */
   update(
@@ -118,7 +126,7 @@ export class EventReplayLabels {
     posB: Vector3 | null,
     nameA: string,
     nameB: string | null,
-    isAsat: boolean,
+    eventType: EventType,
     camera: PerspectiveCamera,
     renderer: WebGLRenderer,
     impactFlash: number,
@@ -136,9 +144,10 @@ export class EventReplayLabels {
 
     this.root.hidden = false;
 
+    const meta = EVENT_TYPE_META[eventType] ?? EVENT_TYPE_META.collision;
     const altA = altKmFromScenePos(posA);
     const velA = orbitalVelocityKmS(altA);
-    this.panelA.innerHTML = buildPanelHTML(nameA, '🛰', 'Satellite', altA, velA);
+    this.panelA.innerHTML = buildPanelHTML(nameA, meta.iconA, meta.typeA, altA, velA);
     this.panelA.hidden = false;
 
     // --- Position panel A to upper-left of its dot ---
@@ -161,11 +170,13 @@ export class EventReplayLabels {
       const screenB = projectToScreen(posB, camera, renderer);
       if (screenB.visible) {
         const altB = altKmFromScenePos(posB);
-        const type   = isAsat ? 'Interceptor' : 'Satellite';
-        const icon   = isAsat ? '⚡' : '🛰';
-        // ASAT missiles travel faster than orbital velocity (~9 km/s)
-        const velB   = isAsat ? Math.min(9.5, orbitalVelocityKmS(altB) * 1.2) : orbitalVelocityKmS(altB);
-        const label  = nameB ?? 'ASAT MISSILE';
+        const type   = meta.typeB;
+        const icon   = meta.iconB;
+        // ASAT interceptors travel faster than orbital speed (~9 km/s)
+        const velB   = eventType === 'asat'
+          ? Math.min(9.5, orbitalVelocityKmS(altB) * 1.2)
+          : orbitalVelocityKmS(altB);
+        const label  = nameB ?? (eventType === 'asat' ? 'ASAT MISSILE' : 'OBJECT B');
 
         this.panelB.innerHTML = buildPanelHTML(label, icon, type, altB, velB);
         this.panelB.hidden = false;

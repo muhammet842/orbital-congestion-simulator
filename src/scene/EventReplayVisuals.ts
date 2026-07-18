@@ -276,7 +276,8 @@ export class EventReplayVisuals {
       }),
     );
 
-    /** Expanding ring that marks the collision flash at T=0 */
+    /** Expanding sphere that marks the terminal flash at T=0.
+     *  Color is updated per-event in setup() — red for collisions, green for docking. */
     this.dotImpact = new Mesh(
       new SphereGeometry(DOT_RADIUS * 1.4, 12, 8),
       new MeshBasicMaterial({
@@ -339,8 +340,10 @@ export class EventReplayVisuals {
     let initialPosB: Vector3 | null = null;
     let initialSeparationKm = 0;
 
+    const eType = event.eventType ?? 'collision';
+
     if (approachB && objectB) {
-      // Two-satellite event — back-track the second object
+      // Two-satellite event (collision or docking) — back-track the second object
       initialPosB = orbitalBacktrack(
         collisionGeo,
         approachB.inclinationDeg,
@@ -352,9 +355,13 @@ export class EventReplayVisuals {
       // 3-D separation in km at T-5min from scene-space distance
       // (1 scene unit = Earth radius = 6371 km)
       initialSeparationKm = initialPosA.distanceTo(initialPosB) * 6371;
-    } else {
-      // ASAT event: missile starts at the Earth-surface nadir of impact point
+    } else if (eType === 'asat') {
+      // ASAT event: missile rises from Earth surface toward collision point
       initialPosB = collisionScene.clone().normalize(); // unit vector = surface
+      initialSeparationKm = 0;
+    } else {
+      // Breakup / single-object event: only one object animates
+      initialPosB = null;
       initialSeparationKm = 0;
     }
 
@@ -387,6 +394,11 @@ export class EventReplayVisuals {
     } else {
       this.trailB.visible = false;
     }
+
+    // Tint the impact flash: green for docking, red/orange for everything else
+    (this.dotImpact.material as MeshBasicMaterial).color.setHex(
+      eType === 'docking' ? 0x44ff88 : 0xff4422,
+    );
 
     this.activeEventId = eventId;
     this.group.visible = true;

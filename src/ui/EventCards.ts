@@ -9,17 +9,29 @@ export interface HistoricalEventTLE {
   line2: string;
 }
 
+/**
+ * Visual/behavioural category of the event.
+ *
+ * collision – two active/defunct satellites hit each other (two-object replay)
+ * asat      – anti-satellite missile intercept (missile rises from surface)
+ * docking   – successful rendezvous; terminal flash is green, no explosion
+ * breakup   – single satellite mysteriously breaks up; no second object animated
+ */
+export type EventType = 'collision' | 'asat' | 'docking' | 'breakup';
+
 export interface HistoricalEvent {
   id: string;
   title: string;
   date: string;
   description: string;
   debrisCount: string;
+  /** Visual / behavioural category. Defaults to 'collision' if omitted. */
+  eventType: EventType;
   /** Exact collision/destruction UTC time for replay */
   collisionTimeUtc: string;
   /** Primary satellite TLE (valid near event epoch) */
   objectA: HistoricalEventTLE;
-  /** Secondary satellite TLE — null for ASAT events where attacker has no trackable TLE */
+  /** Secondary satellite TLE — null for ASAT/breakup events */
   objectB: HistoricalEventTLE | null;
   /** Altitude (km) of the event — used to position the camera */
   altitudeKm: number;
@@ -47,6 +59,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     id: 'iridium-cosmos',
     title: 'Iridium 33 ↔ Cosmos 2251',
     date: '2009-02-10',
+    eventType: 'collision' as EventType,
     description:
       'First accidental collision between two intact satellites. Iridium 33 (active, 789 km, 86.4°) and Cosmos 2251 (defunct, 789 km, 74.0°) collided at 16:56:00 UTC over northern Siberia, creating ~2,000 trackable debris fragments.',
     debrisCount: '~2000',
@@ -80,6 +93,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     id: 'fengyun-asat',
     title: 'Fengyun-1C ASAT Test',
     date: '2007-01-11',
+    eventType: 'asat' as EventType,
     description:
       'Chinese SC-19/KT-2 ASAT missile destroyed FY-1C weather satellite (865 km, 98.8° sun-synchronous orbit) on 2007-01-11 at 22:28 UTC, generating the largest debris cloud in history with ~3,000 trackable fragments.',
     debrisCount: '~3000',
@@ -104,6 +118,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     id: 'cosmos-1408',
     title: 'Cosmos 1408 ASAT Test',
     date: '2021-11-15',
+    eventType: 'asat' as EventType,
     description:
       'Russian Nudol (PL-19) ASAT missile destroyed Cosmos 1408 reconnaissance satellite (465 km, 82.6°) at 02:45 UTC on 15 Nov 2021, forcing ISS crew to shelter. The resulting debris field threatened active spacecraft for years.',
     debrisCount: '~1500',
@@ -124,7 +139,126 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     },
     objectB: null,
   },
+
+  // ── USA-193 / Operation Burnt Frost ────────────────────────────────────
+  {
+    id: 'usa-193-burnt-frost',
+    title: 'USA-193 — Operation Burnt Frost',
+    date: '2008-02-21',
+    eventType: 'asat' as EventType,
+    description:
+      'US Navy SM-3 missile intercepted the failing NRO reconnaissance satellite USA-193 at 247 km altitude on 21 Feb 2008 at 03:26 UTC over the Pacific Ocean. The satellite\'s hydrazine fuel tank was destroyed, preventing a toxic re-entry hazard. Nearly all debris re-entered within weeks.',
+    debrisCount: '~174 (all re-entered within weeks)',
+    collisionTimeUtc: '2008-02-21T03:26:00Z',
+    altitudeKm: 247,
+    collisionGeo: { latDeg: 19.3, lonDeg: -161.2, altKm: 247 },
+    // USA-193 was descending (coming south after passing high lat) at intercept
+    approachA: { inclinationDeg: 58.5, ascending: false },
+    approachB: null,
+    objectA: {
+      name: 'USA 193',
+      noradId: 29651,
+      line1: '1 29651U 06057A   08052.14236111  .45900000  00000-0  98803-2 0  9991',
+      line2: '2 29651  58.5109 133.0000 0003249  82.8000 277.3000 15.62983000 67527',
+    },
+    objectB: null,
+  },
+
+  // ── Cerise & Ariane 3 debris ───────────────────────────────────────────
+  {
+    id: 'cerise-ariane-debris',
+    title: 'Cerise ↔ Ariane 3 Debris',
+    date: '1996-07-24',
+    eventType: 'collision' as EventType,
+    description:
+      'First confirmed collision between a tracked satellite and a catalogued debris object. French military microsatellite Cerise (SSO, 700 km, 98.6°) was struck by a fragment of the Ariane 3 H-10 upper stage on 24 July 1996 at 11:40 UTC over the Atlantic, severing its gravity-gradient stabilisation boom.',
+    debrisCount: '~500',
+    collisionTimeUtc: '1996-07-24T11:40:00Z',
+    altitudeKm: 700,
+    collisionGeo: { latDeg: 35.2, lonDeg: -12.4, altKm: 700 },
+    // Cerise in retrograde SSO, ascending northward at collision latitude
+    approachA: { inclinationDeg: 98.6, ascending: true },
+    // Ariane debris from a different SSO pass — descending (heading south) for head-on crossing
+    approachB: { inclinationDeg: 98.6, ascending: false },
+    objectA: {
+      name: 'CERISE',
+      noradId: 23606,
+      line1: '1 23606U 95030B   96206.48611111  .00002500  00000-0  12400-3 0  9993',
+      line2: '2 23606  98.5840  90.0000 0010000  90.0000 270.2000 14.49700000139847',
+    },
+    objectB: {
+      name: 'ARIANE 3 DEBRIS',
+      noradId: 17590,
+      line1: '1 17590U 87083B   96206.48611111  .00002000  00000-0  13000-3 0  9994',
+      line2: '2 17590  98.5840  92.5000 0015000  85.0000 275.0000 14.49700000239714',
+    },
+  },
+
+  // ── MEV-1 & Intelsat 901 docking ──────────────────────────────────────
+  {
+    id: 'mev1-intelsat901',
+    title: 'MEV-1 ↔ Intelsat 901 Docking',
+    date: '2020-02-25',
+    eventType: 'docking' as EventType,
+    description:
+      'Northrop Grumman\'s Mission Extension Vehicle 1 (MEV-1) successfully docked with Intelsat 901 in GEO on 25 Feb 2020 at 07:15 UTC — the first commercial in-space servicing mission. Zero debris was generated; the combined stack was later moved to a new GEO slot, extending Intelsat 901\'s life by five years.',
+    debrisCount: '0 — zero debris (successful docking)',
+    collisionTimeUtc: '2020-02-25T07:15:00Z',
+    altitudeKm: 35786,
+    // GEO docking at equatorial longitude 322.5°E (≈ 37.5°W)
+    collisionGeo: { latDeg: 0.0, lonDeg: -37.5, altKm: 35786 },
+    // Both spacecraft in near-equatorial GEO, MEV-1 approaching from slightly different longitude
+    approachA: { inclinationDeg: 0.2, ascending: true },
+    approachB: { inclinationDeg: 0.1, ascending: false },
+    objectA: {
+      name: 'MEV-1',
+      noradId: 44343,
+      line1: '1 44343U 19069A   20056.30208333  .00000000  00000-0  00000-0 0  9994',
+      line2: '2 44343   0.0550 322.5000 0002500  15.0000 345.0000  1.00274380  2450',
+    },
+    objectB: {
+      name: 'INTELSAT 901',
+      noradId: 26824,
+      line1: '1 26824U 01024A   20056.30208333  .00000000  00000-0  00000-0 0  9995',
+      line2: '2 26824   0.0450 322.5000 0003000  25.0000 335.0000  1.00274220  8924',
+    },
+  },
+
+  // ── Kosmos 2499 breakup ────────────────────────────────────────────────
+  {
+    id: 'kosmos-2499-breakup',
+    title: 'Kosmos 2499 — Mysterious Breakup',
+    date: '2023-01-03',
+    eventType: 'breakup' as EventType,
+    description:
+      'Russian military satellite Kosmos 2499 (NORAD 39765, 64.9°, ~1150 km) broke apart on 3 Jan 2023 for unknown reasons, generating ~100 trackable debris fragments. The satellite had previously manoeuvred in ways suggesting it was an inspector or co-orbital weapon. The cause of the fragmentation was never publicly confirmed by Russia.',
+    debrisCount: '~100',
+    collisionTimeUtc: '2023-01-03T10:00:00Z',
+    altitudeKm: 1150,
+    collisionGeo: { latDeg: 78.4, lonDeg: 120.2, altKm: 1150 },
+    // Ascending toward its orbital peak at the high northern latitude
+    approachA: { inclinationDeg: 64.9, ascending: true },
+    approachB: null,
+    objectA: {
+      name: 'KOSMOS 2499',
+      noradId: 39765,
+      line1: '1 39765U 14028D   23003.41666667  .00000500  00000-0  24000-4 0  9991',
+      line2: '2 39765  64.9000 120.2000 0010000 270.0000 90.0000 13.59000000459732',
+    },
+    objectB: null,
+  },
 ];
+
+const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  collision: 'Collision',
+  asat:      'ASAT',
+  docking:   'Docking',
+  breakup:   'Breakup',
+};
+
+function eventTypeLabel(type: EventType): string {
+  return EVENT_TYPE_LABELS[type] ?? type;
+}
 
 function formatEventDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -153,7 +287,10 @@ export function initEventCards(container: HTMLElement): void {
         data-event-id="${event.id}"
         aria-expanded="false"
       >
-        <span class="event-card-title">${event.title}</span>
+        <div class="event-card-top">
+          <span class="event-card-title">${event.title}</span>
+          <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
+        </div>
         <span class="event-card-date">${formatEventDate(event.date)}</span>
       </button>
     `,

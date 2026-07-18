@@ -391,14 +391,35 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   `;
 }
 
+const REPLAY_PANEL_META = {
+  collision: { heading: 'Collision Replay', ttiLabel: 'Time to Impact', impactLabel: '💥 COLLISION', showSep: true  },
+  asat:      { heading: 'ASAT Replay',      ttiLabel: 'Time to Impact', impactLabel: '💥 INTERCEPT', showSep: false },
+  docking:   { heading: 'Docking Replay',   ttiLabel: 'Time to Dock',   impactLabel: '🔗 DOCKED',    showSep: true  },
+  breakup:   { heading: 'Breakup Replay',   ttiLabel: 'Time to Event',  impactLabel: '💥 BREAKUP',   showSep: false },
+} as const;
+
 function renderEventReplayPanel(detailEl: Element, eventId: string): void {
   const event = getHistoricalEvent(eventId);
   if (!event) return;
 
-  const isASAT = event.objectB === null;
+  const eType = event.eventType ?? 'collision';
+  const meta  = REPLAY_PANEL_META[eType] ?? REPLAY_PANEL_META.collision;
+
+  const objectBHtml = (() => {
+    if (event.objectB) {
+      return `<div class="era-sat era-sat--b" title="${escapeHtml(event.objectB.name)}">
+                <span class="era-dot era-dot--b"></span>
+                <span class="era-label">${escapeHtml(event.objectB.name)}</span>
+              </div>`;
+    }
+    if (eType === 'asat') {
+      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">ASAT Missile</span></div>`;
+    }
+    return '';
+  })();
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading panel-heading--alert">Collision Replay</h2>
+    <h2 class="panel-heading panel-heading--alert">${escapeHtml(meta.heading)}</h2>
     <div class="event-replay-title">${escapeHtml(event.title)}</div>
 
     <div class="event-replay-approach">
@@ -406,13 +427,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
         <span class="era-dot era-dot--a"></span>
         <span class="era-label">${escapeHtml(event.objectA.name)}</span>
       </div>
-      ${isASAT
-        ? `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">ASAT Missile</span></div>`
-        : `<div class="era-sat era-sat--b" title="${escapeHtml(event.objectB!.name)}">
-             <span class="era-dot era-dot--b"></span>
-             <span class="era-label">${escapeHtml(event.objectB!.name)}</span>
-           </div>`
-      }
+      ${objectBHtml}
     </div>
 
     <div class="era-timeline">
@@ -421,14 +436,14 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
       </div>
       <div class="era-timeline-labels">
         <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
-        <span>IMPACT</span>
+        <span>${eType === 'docking' ? 'DOCK' : 'IMPACT'}</span>
       </div>
     </div>
 
     <dl class="detail-list era-stats">
       <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>
-      <div class="detail-row"><dt>Time to Impact</dt><dd data-field="era-tti">—</dd></div>
-      ${!isASAT
+      <div class="detail-row"><dt>${escapeHtml(meta.ttiLabel)}</dt><dd data-field="era-tti">—</dd></div>
+      ${meta.showSep
         ? `<div class="detail-row"><dt>Separation</dt><dd data-field="era-dist">—</dd></div>`
         : ''
       }
@@ -436,7 +451,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
 
     <div class="era-impact-banner" data-field="era-impact" hidden>
       <div class="era-impact-ring"></div>
-      <div class="era-impact-text">💥 COLLISION</div>
+      <div class="era-impact-text">${escapeHtml(meta.impactLabel)}</div>
     </div>
 
     <div class="era-completed-banner" data-field="era-completed" hidden>
@@ -452,7 +467,6 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
       Return to Global View
     </button>
   `;
-
 }
 
 function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisionTimeMs: number): void {

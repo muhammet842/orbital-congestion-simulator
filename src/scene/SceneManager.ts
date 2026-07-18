@@ -427,7 +427,7 @@ export class SceneManager {
           replayResult.posB,
           names?.nameA ?? 'OBJECT A',
           names?.nameB ?? null,
-          event?.objectB === null,          // isAsat when there is no second satellite
+          (event?.eventType ?? 'collision'),   // visual category drives label behaviour
           this.camera,
           this.renderer,
           replayResult.impactFlash,
