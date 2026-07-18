@@ -7,7 +7,6 @@ import {
   Raycaster,
   Scene,
   Vector2,
-  Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -205,11 +204,12 @@ export class SceneManager {
           startEventReplay(selectedEventId, collisionTimeMs);
           this.eventReplayVisuals.setup(selectedEventId, event.objectA, event.objectB, collisionTimeMs);
           this.cameraFly.captureGlobalView(this.camera, this.controls);
-          // Camera positioning happens in tick() once we have live positions
+          // Camera positioning happens in tick() once we have live satellite positions
         }
 
-        this.earth.mesh.visible = false;
-        this.canvasContainer.classList.add('scene-container--conjunction-focus');
+        // Keep Earth visible — event replay is an "overlay" on the globe view,
+        // not a close-up zoom like conjunction verification.
+        this.earth.mesh.visible = true;
         return;
       }
     }
@@ -221,8 +221,6 @@ export class SceneManager {
       this.eventReplayVisuals.dispose();
       stopEventReplay();
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
-      this.earth.mesh.visible = true;
-      this.canvasContainer.classList.remove('scene-container--conjunction-focus');
     }
 
     if (selectedConjunction) {
@@ -348,6 +346,9 @@ export class SceneManager {
     //    (they have modern TLEs; propagating them to 2007/2009/2021 is extremely
     //    slow and produces garbage results). Only run the two historical satrecs.
     if (currentState.eventReplay) {
+      // Keep Earth day/night shader in sync with the replay time
+      this.applyDayNight(simTime);
+
       const flying = this.cameraFly.update(this.camera, this.controls, now);
       if (!flying) this.controls.update();
       this.camera.updateMatrixWorld();
@@ -358,31 +359,19 @@ export class SceneManager {
       );
 
       if (replayResult) {
-        const { posA, posB } = replayResult;
-        const midPoint = posB
-          ? new Vector3().addVectors(posA, posB).multiplyScalar(0.5)
-          : posA.clone();
+        const { posA } = replayResult;
 
-        if (!this.cameraFly.isActive()) {
-          if (!this._eventReplayStarted) {
-            this._eventReplayStarted = true;
-            // Initial fly-in: use a large fictitious separation so the camera
-            // backs off enough to see both trail lines clearly.
-            const distKm = posB ? posA.distanceTo(posB) * 6371 * 4 + 200 : 500;
-            this.cameraFly.flyToConjunctionPair(
-              this.camera,
-              this.controls,
-              posA,
-              posB ?? posA,
-              distKm,
-            );
-          } else if (!flying) {
-            // Smooth-follow midpoint each frame
-            const alpha = 1 - Math.exp(-(deltaMs / 1000) * 2);
-            const delta = midPoint.clone().sub(this.controls.target).multiplyScalar(alpha);
-            this.controls.target.add(delta);
-            this.camera.position.add(delta);
-          }
+        if (!this._eventReplayStarted && !this.cameraFly.isActive()) {
+          this._eventReplayStarted = true;
+          // Fly camera so Earth is centred and the satellite region faces us —
+          // same as clicking a satellite in the normal view.
+          const event = getHistoricalEvent(currentState.eventReplay.eventId);
+          this.cameraFly.frameSelectedOnGlobe(
+            this.camera,
+            this.controls,
+            { x: posA.x, y: posA.y, z: posA.z },
+            event?.altitudeKm ?? 800,
+          );
         }
       }
 

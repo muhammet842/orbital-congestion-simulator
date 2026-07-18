@@ -30,6 +30,10 @@ interface ParsedObjects {
   satrecB: SatRec | null;
   nameA: string;
   nameB: string | null;
+  /** For ASAT events: Earth-surface launch point of the missile (unit vector). */
+  missileOrigin: Vector3 | null;
+  /** For ASAT events: satellite scene position at the moment of impact. */
+  impactPos: Vector3 | null;
 }
 
 function buildTrailGeometry(
@@ -152,11 +156,26 @@ export class EventReplayVisuals {
     const satrecA = twoline2satrec(tleA.line1, tleA.line2);
     const satrecB = tleB ? twoline2satrec(tleB.line1, tleB.line2) : null;
 
+    // For ASAT events compute missile approach geometry from Earth surface
+    let missileOrigin: Vector3 | null = null;
+    let impactPos: Vector3 | null = null;
+    if (!satrecB) {
+      const propImpact = propagateObject(satrecA, new Date(collisionTimeMs));
+      if (propImpact) {
+        const sc = eciToScene(propImpact.positionEci.x, propImpact.positionEci.y, propImpact.positionEci.z);
+        impactPos = new Vector3(sc.x, sc.y, sc.z);
+        // Launch point = point on Earth surface directly below the impact (nadir)
+        missileOrigin = impactPos.clone().normalize(); // magnitude 1 = Earth surface
+      }
+    }
+
     this.parsed = {
       satrecA,
       satrecB,
       nameA: tleA.name,
       nameB: tleB?.name ?? null,
+      missileOrigin,
+      impactPos,
     };
 
     this.trailA.geometry.dispose();
@@ -169,7 +188,21 @@ export class EventReplayVisuals {
       this.trailB.computeLineDistances();
       this.trailB.visible = true;
     } else {
-      this.trailB.visible = false;
+      // Draw a short dashed "missile path" line from surface to impact point
+      if (missileOrigin && impactPos) {
+        const pts = new Float32Array([
+          missileOrigin.x, missileOrigin.y, missileOrigin.z,
+          impactPos.x, impactPos.y, impactPos.z,
+        ]);
+        const geo = new BufferGeometry();
+        geo.setAttribute('position', new BufferAttribute(pts, 3));
+        this.trailB.geometry.dispose();
+        this.trailB.geometry = geo;
+        this.trailB.computeLineDistances();
+        this.trailB.visible = true;
+      } else {
+        this.trailB.visible = false;
+      }
     }
 
     this.activeEventId = eventId;
@@ -196,12 +229,28 @@ export class EventReplayVisuals {
 
     let posB: Vector3 | null = null;
     if (satrecB) {
+      // Two-satellite event: propagate second object normally
       const propB = propagateObject(satrecB, simTime);
       if (propB) {
         const sceneB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
         posB = new Vector3(sceneB.x, sceneB.y, sceneB.z);
         this.dotB.position.copy(posB);
         this.dotB.visible = true;
+      }
+    } else if (this.parsed.missileOrigin && this.parsed.impactPos) {
+      // ASAT event: animate missile from Earth surface to impact point
+      const rewindMs = EVENT_REPLAY_REWIND_MS;
+      const msToImpact = collisionTimeMs - simTime.getTime();
+      // progress 0 = T−5min (on ground), progress 1 = T=0 (impact)
+      const progress = Math.max(0, Math.min(1, 1 - msToImpact / rewindMs));
+
+      if (progress < 1) {
+        posB = this.parsed.missileOrigin.clone().lerp(this.parsed.impactPos, progress);
+        this.dotB.position.copy(posB);
+        this.dotB.visible = true;
+      } else {
+        // Past impact — hide missile
+        this.dotB.visible = false;
       }
     } else {
       this.dotB.visible = false;
