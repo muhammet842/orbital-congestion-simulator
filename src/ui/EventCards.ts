@@ -56,9 +56,13 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // Verified collision location: Taymyr Peninsula, northern Siberia
     // (Kelso 2009, CelesTrak collision analysis)
     collisionGeo: { latDeg: 72.2, lonDeg: 101.8, altKm: 789 },
-    // Iridium 33 ascending northward; Cosmos 2251 descending southward → head-on
-    approachA: { inclinationDeg: 86.4, ascending: true },
-    approachB: { inclinationDeg: 74.0, ascending: false },
+    // Iridium 33 was descending (came from near the North Pole heading SSE).
+    // Cosmos 2251 was ascending (came from SW Siberia heading NNE).
+    // Crossing angle: |168.2° − 63.7°| ≈ 104.5° ≈ the measured 102.2°.
+    // This config makes the trails clearly show two distinct polar-orbit arcs
+    // crossing rather than one nearly-horizontal path.
+    approachA: { inclinationDeg: 86.4, ascending: false },
+    approachB: { inclinationDeg: 74.0, ascending: true },
     objectA: {
       name: 'IRIDIUM 33',
       noradId: 24946,

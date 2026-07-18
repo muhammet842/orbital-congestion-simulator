@@ -51,8 +51,11 @@ function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): n
     if (asc) { bearing = prograde ? az : -az; }
     else      { bearing = prograde ? Math.PI - az : Math.PI + az; }
     const back = bearing + Math.PI;
-    const lat2 = Math.asin(Math.sin(lat1)*Math.cos(arcRad) + Math.cos(lat1)*Math.sin(arcRad)*Math.cos(back));
-    const lon2 = lon1 + Math.atan2(Math.sin(back)*Math.sin(arcRad)*Math.cos(lat1), Math.cos(arcRad)-Math.sin(lat1)*Math.sin(lat2));
+    const sinLat2 = Math.sin(lat1)*Math.cos(arcRad) + Math.cos(lat1)*Math.sin(arcRad)*Math.cos(back);
+    const lat2 = Math.asin(Math.max(-Math.sin(incl*DEG), Math.min(Math.sin(incl*DEG), sinLat2)));
+    const n = Math.sin(back)*Math.sin(arcRad)*Math.cos(lat1);
+    const d = Math.cos(arcRad)-Math.sin(lat1)*Math.sin(lat2);
+    const lon2 = (Math.abs(d) < 1e-9 && Math.abs(n) < 1e-9) ? lon1 : lon1 + Math.atan2(n, d);
     return [lat2, lon2];
   }
 

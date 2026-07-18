@@ -134,14 +134,19 @@ function orbitalBacktrack(
   const backBearing = bearing + Math.PI;
 
   // Haversine great-circle displacement
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(arcRad) +
-    Math.cos(lat1) * Math.sin(arcRad) * Math.cos(backBearing),
-  );
-  const lon2 = lon1 + Math.atan2(
-    Math.sin(backBearing) * Math.sin(arcRad) * Math.cos(lat1),
-    Math.cos(arcRad) - Math.sin(lat1) * Math.sin(lat2),
-  );
+  const sinLat2 = Math.sin(lat1) * Math.cos(arcRad) +
+                  Math.cos(lat1) * Math.sin(arcRad) * Math.cos(backBearing);
+  // Clamp to ±sin(inclination) — a satellite can't exceed its orbital inclination.
+  const clampedSinLat2 = Math.max(-Math.sin(I), Math.min(Math.sin(I), sinLat2));
+  const lat2 = Math.asin(clampedSinLat2);
+
+  // When the start position is very close to the orbital peak (lat ≈ inclination),
+  // the atan2 denominator can be near-zero. Use a stable fallback.
+  const atan2Num = Math.sin(backBearing) * Math.sin(arcRad) * Math.cos(lat1);
+  const atan2Den = Math.cos(arcRad) - Math.sin(lat1) * Math.sin(lat2);
+  const lon2 = Math.abs(atan2Den) < 1e-9 && Math.abs(atan2Num) < 1e-9
+    ? lon1  // satellite at/near the pole — keep the collision longitude
+    : lon1 + Math.atan2(atan2Num, atan2Den);
 
   return geoToScene(lat2 / DEG, lon2 / DEG, collisionGeo.altKm, startDate);
 }
