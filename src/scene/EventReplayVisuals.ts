@@ -14,6 +14,7 @@ import type { SatRec } from 'satellite.js';
 import { twoline2satrec } from 'satellite.js';
 import { eciToScene } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
+import { getGmstRad } from './dayNight';
 import type { HistoricalEventTLE } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
@@ -34,6 +35,35 @@ interface ParsedObjects {
   missileOrigin: Vector3 | null;
   /** For ASAT events: satellite scene position at the moment of impact. */
   impactPos: Vector3 | null;
+  /**
+   * Known collision/impact ECI scene position, if geographic coords were provided.
+   * Used to blend the animated dots toward this point in the final 2 minutes so
+   * the satellites visually converge regardless of TLE propagation error.
+   */
+  collisionScene: Vector3 | null;
+}
+
+/**
+ * Convert geographic coordinates + altitude to a scene-space Vector3.
+ * Uses GMST to rotate from geographic (ECEF) to ECI, then eciToScene.
+ */
+function geoToScene(
+  latDeg: number,
+  lonDeg: number,
+  altKm: number,
+  collisionDate: Date,
+): Vector3 {
+  const DEG = Math.PI / 180;
+  const r = 6371 + altKm; // km from Earth centre
+  const gmst = getGmstRad(collisionDate);
+  // Geographic → ECI: add GMST to geographic longitude
+  const eciLonRad = lonDeg * DEG + gmst;
+  const latRad = latDeg * DEG;
+  const eciX = r * Math.cos(latRad) * Math.cos(eciLonRad);
+  const eciY = r * Math.cos(latRad) * Math.sin(eciLonRad);
+  const eciZ = r * Math.sin(latRad);
+  const scene = eciToScene(eciX, eciY, eciZ);
+  return new Vector3(scene.x, scene.y, scene.z);
 }
 
 function buildTrailGeometry(
@@ -149,6 +179,7 @@ export class EventReplayVisuals {
     tleA: HistoricalEventTLE,
     tleB: HistoricalEventTLE | null,
     collisionTimeMs: number,
+    collisionGeo: { latDeg: number; lonDeg: number; altKm: number } | null,
   ): void {
     if (this.activeEventId === eventId) return;
     this.dispose();
@@ -156,14 +187,27 @@ export class EventReplayVisuals {
     const satrecA = twoline2satrec(tleA.line1, tleA.line2);
     const satrecB = tleB ? twoline2satrec(tleB.line1, tleB.line2) : null;
 
+    // Compute the ECI scene position of the collision/impact point
+    const collisionDate = new Date(collisionTimeMs);
+    const collisionScene: Vector3 | null = collisionGeo
+      ? geoToScene(collisionGeo.latDeg, collisionGeo.lonDeg, collisionGeo.altKm, collisionDate)
+      : null;
+
     // For ASAT events compute missile approach geometry from Earth surface
     let missileOrigin: Vector3 | null = null;
     let impactPos: Vector3 | null = null;
     if (!satrecB) {
-      const propImpact = propagateObject(satrecA, new Date(collisionTimeMs));
-      if (propImpact) {
-        const sc = eciToScene(propImpact.positionEci.x, propImpact.positionEci.y, propImpact.positionEci.z);
-        impactPos = new Vector3(sc.x, sc.y, sc.z);
+      // Use the known collision point if available, else fall back to SGP4 position
+      if (collisionScene) {
+        impactPos = collisionScene.clone();
+      } else {
+        const propImpact = propagateObject(satrecA, collisionDate);
+        if (propImpact) {
+          const sc = eciToScene(propImpact.positionEci.x, propImpact.positionEci.y, propImpact.positionEci.z);
+          impactPos = new Vector3(sc.x, sc.y, sc.z);
+        }
+      }
+      if (impactPos) {
         // Launch point = point on Earth surface directly below the impact (nadir)
         missileOrigin = impactPos.clone().normalize(); // magnitude 1 = Earth surface
       }
@@ -176,6 +220,7 @@ export class EventReplayVisuals {
       nameB: tleB?.name ?? null,
       missileOrigin,
       impactPos,
+      collisionScene,
     };
 
     this.trailA.geometry.dispose();
@@ -224,7 +269,27 @@ export class EventReplayVisuals {
     if (!propA) return null;
 
     const sceneA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
-    const posA = new Vector3(sceneA.x, sceneA.y, sceneA.z);
+    let posA = new Vector3(sceneA.x, sceneA.y, sceneA.z);
+
+    // Convergence blend: in the final 2 min smoothly pull dots toward the
+    // known collision ECI scene point so they visually meet at T=0,
+    // compensating for TLE propagation error (±hundreds of km at epoch+17h).
+    const { collisionScene } = this.parsed;
+    const BLEND_WINDOW_MS = 2 * 60 * 1000;
+    const msToImpact = collisionTimeMs - simTime.getTime();
+    let blendFactor = 0;
+    if (collisionScene && msToImpact >= 0 && msToImpact < BLEND_WINDOW_MS) {
+      // ease-in curve: starts slow, accelerates toward impact
+      const t = 1 - msToImpact / BLEND_WINDOW_MS;
+      blendFactor = t * t;
+    } else if (collisionScene && msToImpact < 0) {
+      // Past impact: hold at collision point
+      blendFactor = 1;
+    }
+
+    if (collisionScene && blendFactor > 0) {
+      posA = posA.clone().lerp(collisionScene, blendFactor);
+    }
     this.dotA.position.copy(posA);
 
     let posB: Vector3 | null = null;
@@ -234,6 +299,10 @@ export class EventReplayVisuals {
       if (propB) {
         const sceneB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
         posB = new Vector3(sceneB.x, sceneB.y, sceneB.z);
+        // Apply same convergence blend to object B
+        if (collisionScene && blendFactor > 0) {
+          posB = posB.clone().lerp(collisionScene, blendFactor);
+        }
         this.dotB.position.copy(posB);
         this.dotB.visible = true;
       }

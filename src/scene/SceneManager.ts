@@ -202,7 +202,13 @@ export class SceneManager {
         if (this.lastEventReplayId !== selectedEventId) {
           this.lastEventReplayId = selectedEventId;
           startEventReplay(selectedEventId, collisionTimeMs);
-          this.eventReplayVisuals.setup(selectedEventId, event.objectA, event.objectB, collisionTimeMs);
+          this.eventReplayVisuals.setup(
+            selectedEventId,
+            event.objectA,
+            event.objectB,
+            collisionTimeMs,
+            event.collisionGeo ?? null,
+          );
           this.cameraFly.captureGlobalView(this.camera, this.controls);
           // Camera positioning happens in tick() once we have live satellite positions
         }

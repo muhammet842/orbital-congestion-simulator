@@ -23,6 +23,11 @@ export interface HistoricalEvent {
   objectB: HistoricalEventTLE | null;
   /** Altitude (km) of the event — used to position the camera */
   altitudeKm: number;
+  /**
+   * Known geographic location of the collision/destruction at collisionTimeUtc.
+   * Used to compute the ECI convergence target so the dots actually meet.
+   */
+  collisionGeo: { latDeg: number; lonDeg: number; altKm: number } | null;
 }
 
 export const HISTORICAL_EVENTS: HistoricalEvent[] = [
@@ -35,6 +40,8 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     debrisCount: '~2000',
     collisionTimeUtc: '2009-02-10T16:55:59Z',
     altitudeKm: 789,
+    // Collision occurred over northern Siberia (Taymyr Peninsula region)
+    collisionGeo: { latDeg: 72.5, lonDeg: 97.9, altKm: 789 },
     objectA: {
       name: 'IRIDIUM 33',
       noradId: 24946,
@@ -57,6 +64,8 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     debrisCount: '~3000',
     collisionTimeUtc: '2007-01-11T22:28:00Z',
     altitudeKm: 865,
+    // FY-1C was in SSO; interception occurred approximately over Burma/Yunnan region
+    collisionGeo: { latDeg: 8.0, lonDeg: 97.0, altKm: 865 },
     objectA: {
       name: 'FENGYUN-1C',
       noradId: 25730,
@@ -74,6 +83,8 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     debrisCount: '~1500',
     collisionTimeUtc: '2021-11-15T02:47:00Z',
     altitudeKm: 485,
+    // Cosmos 1408 orbit passed over Arctic/Siberia at the time of the test
+    collisionGeo: { latDeg: 62.0, lonDeg: 97.0, altKm: 485 },
     objectA: {
       name: 'COSMOS 1408',
       noradId: 13552,

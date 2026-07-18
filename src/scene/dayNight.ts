@@ -68,7 +68,7 @@ function getSunEci(date: Date): { x: number; y: number; z: number } {
  * a GEO satellite parked over a fixed real-world longitude will appear to
  * have drifted to a completely different part of the globe.
  */
-function getGmstRad(date: Date): number {
+export function getGmstRad(date: Date): number {
   const jd = toJulianDate(date);
   const daysSinceJ2000 = jd - 2_451_545.0;
   const centuriesSinceJ2000 = daysSinceJ2000 / 36525;

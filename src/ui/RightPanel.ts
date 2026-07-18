@@ -456,11 +456,12 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance — throttled to 4 Hz to avoid per-frame SGP4 cost in the panel
+  // Distance — throttled to 4 Hz. In the final 2 min the dots are blending
+  // toward the collision point, so we scale the displayed distance accordingly.
   if (distEl) {
-    const now = performance.now();
-    if (now - _replayDistLastMs > 250) {
-      _replayDistLastMs = now;
+    const nowPerf = performance.now();
+    if (nowPerf - _replayDistLastMs > 250) {
+      _replayDistLastMs = nowPerf;
       const cached = replaySatrecCache.get(eventId);
       if (cached?.satrecB) {
         const propA = propagateObject(cached.satrecA, simTime);
@@ -469,10 +470,23 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
           const dx = propA.positionEci.x - propB.positionEci.x;
           const dy = propA.positionEci.y - propB.positionEci.y;
           const dz = propA.positionEci.z - propB.positionEci.z;
-          const distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          _replayDistCached = distKm < 10
-            ? `${distKm.toFixed(3)} km`
-            : `${distKm.toFixed(1)} km`;
+          let distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          // Blend the displayed distance toward 0 in the final 2 min,
+          // matching the visual convergence applied to the 3D dots.
+          const BLEND_WINDOW_MS = 2 * 60 * 1000;
+          const msToImpact = collisionTimeMs - eventReplay.currentMs;
+          if (msToImpact >= 0 && msToImpact < BLEND_WINDOW_MS) {
+            const t = 1 - msToImpact / BLEND_WINDOW_MS;
+            const blendFactor = t * t;
+            distKm = distKm * (1 - blendFactor);
+          } else if (msToImpact < 0) {
+            distKm = 0;
+          }
+
+          _replayDistCached = distKm < 1
+            ? `${distKm.toFixed(2)} km`
+            : `${distKm.toFixed(0)} km`;
         }
       }
     }

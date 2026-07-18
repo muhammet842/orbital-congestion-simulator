@@ -1095,6 +1095,9 @@ body {
   }
 }
 
+/* Ensure [hidden] always wins over component display rules */
+[hidden] { display: none !important; }
+
 /* ── Event Replay HUD ─────────────────────────────────────────────────── */
 
 .event-replay-title {
