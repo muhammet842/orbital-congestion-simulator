@@ -7,6 +7,21 @@ import {
 } from '../orbital/conjunction';
 import type { AppStats, ConjunctionEvent, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
 
+/** How far before the collision to start the replay (ms). */
+export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
+/** Playback multiplier for event replays. */
+export const EVENT_REPLAY_SPEED = 15;
+
+export interface EventReplayState {
+  eventId: string;
+  /** Collision/destruction moment (ms UTC). */
+  collisionTimeMs: number;
+  /** Current replay clock position (ms UTC). */
+  currentMs: number;
+  playing: boolean;
+  speed: number;
+}
+
 export interface VerificationTimeState {
   /** Immutable CPA instant from the alert card (ms UTC). */
   cpaTimeMs: number;
@@ -25,6 +40,8 @@ export interface AppState {
   selectedConjunctionSessionKey: string | null;
   conjunctionRevision: number;
   verificationTime: VerificationTimeState | null;
+  /** Active historical event replay clock — overrides global sim time when set. */
+  eventReplay: EventReplayState | null;
   searchQuery: string;
   layerFilters: Record<OrbitLayer, boolean>;
   time: TimeState;
@@ -53,6 +70,7 @@ let state: AppState = {
   selectedConjunctionSessionKey: null,
   conjunctionRevision: 0,
   verificationTime: null,
+  eventReplay: null,
   searchQuery: '',
   layerFilters: { ...defaultLayerFilters },
   time: {
@@ -80,10 +98,13 @@ export function getState(): AppState {
   return state;
 }
 
-/** Time used for SGP4 propagation — verification overlay, then live/historical global clock. */
+/** Time used for SGP4 propagation — verification overlay → event replay → live/historical global clock. */
 export function getSimulationTime(): Date {
   if (state.verificationTime) {
     return new Date(state.verificationTime.currentMs);
+  }
+  if (state.eventReplay) {
+    return new Date(state.eventReplay.currentMs);
   }
   return state.time.mode === 'live' ? new Date() : state.time.current;
 }
@@ -224,6 +245,7 @@ export function selectObject(index: number): void {
     selectedConjunction: null,
     selectedConjunctionSessionKey: null,
     verificationTime: null,
+    eventReplay: null,
     ...(wasVerifying ? { time: restoreGlobalLiveTime() } : {}),
   });
 }
@@ -242,9 +264,47 @@ export function selectHistoricalEvent(eventId: string): void {
     selectedConjunction: null,
     selectedConjunctionSessionKey: null,
     verificationTime: null,
+    eventReplay: null,
     showOrbitTrail: false,
     ...(wasVerifying ? { time: restoreGlobalLiveTime() } : {}),
   });
+}
+
+/** Start a timed replay of a historical event — sets a dedicated replay clock. */
+export function startEventReplay(eventId: string, collisionTimeMs: number): void {
+  const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
+  setState({
+    eventReplay: {
+      eventId,
+      collisionTimeMs,
+      currentMs: startMs,
+      playing: true,
+      speed: EVENT_REPLAY_SPEED,
+    },
+  });
+}
+
+export function setEventReplayPartial(
+  partial: Partial<Pick<EventReplayState, 'playing' | 'speed' | 'currentMs'>>,
+): void {
+  if (!state.eventReplay) return;
+  state.eventReplay = { ...state.eventReplay, ...partial };
+  listeners.forEach((fn) => fn());
+}
+
+export function stopEventReplay(): void {
+  if (!state.eventReplay) return;
+  setState({ eventReplay: null });
+}
+
+/** Advance event replay clock without triggering full re-render. */
+export function advanceEventReplayTime(deltaMs: number): void {
+  if (!state.eventReplay?.playing) return;
+  state.eventReplay.currentMs += deltaMs * state.eventReplay.speed;
+}
+
+export function getEventReplayState(): EventReplayState | null {
+  return state.eventReplay;
 }
 
 export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
@@ -362,6 +422,7 @@ export function initState(
     selectedConjunctionSessionKey: null,
     conjunctionRevision: 0,
     verificationTime: null,
+    eventReplay: null,
     searchQuery: '',
     conjunctions: [],
     conjunctionHiddenCount: 0,

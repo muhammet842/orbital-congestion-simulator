@@ -8,6 +8,8 @@ import {
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
 import { propagateObject, toObjectSnapshot } from '../orbital/propagator';
+import { twoline2satrec } from 'satellite.js';
+import type { SatRec } from 'satellite.js';
 import type { ConjunctionEvent } from '../types';
 import {
   formatUtcDateTime,
@@ -15,10 +17,16 @@ import {
   getState,
   exitConjunctionView,
   setShowOrbitTrail,
+  setEventReplayPartial,
+  stopEventReplay,
   subscribe,
+  EVENT_REPLAY_REWIND_MS,
 } from '../state/appState';
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
+
+/** Cached satrecs for event replay distance computation */
+const replaySatrecCache: Map<string, { satrecA: SatRec; satrecB: SatRec | null }> = new Map();
 
 function verificationRiskClass(status: string): string {
   if (status === 'COLLISION CONFIRMED') return 'conjunction-risk--confirmed';
@@ -35,7 +43,7 @@ export function initRightPanel(container: HTMLElement): void {
 
   const maybeRender = (): void => {
     const state = getState();
-    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.showOrbitTrail}`;
+    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.showOrbitTrail}|${state.eventReplay?.eventId ?? ''}`;
     if (key === renderKey) return;
     renderKey = key;
     render(container);
@@ -57,6 +65,34 @@ export function initRightPanel(container: HTMLElement): void {
     if (exitBtn) {
       e.preventDefault();
       exitConjunctionView();
+      return;
+    }
+
+    const replayPlayBtn = (e.target as HTMLElement).closest('#btn-replay-play');
+    if (replayPlayBtn) {
+      e.preventDefault();
+      const { eventReplay } = getState();
+      if (eventReplay) setEventReplayPartial({ playing: !eventReplay.playing });
+      return;
+    }
+
+    const replayRestartBtn = (e.target as HTMLElement).closest('#btn-replay-restart');
+    if (replayRestartBtn) {
+      e.preventDefault();
+      const { eventReplay } = getState();
+      if (eventReplay) {
+        setEventReplayPartial({
+          currentMs: eventReplay.collisionTimeMs - EVENT_REPLAY_REWIND_MS,
+          playing: true,
+        });
+      }
+      return;
+    }
+
+    const replayExitBtn = (e.target as HTMLElement).closest('#btn-replay-exit');
+    if (replayExitBtn) {
+      e.preventDefault();
+      stopEventReplay();
     }
   });
 
@@ -65,6 +101,11 @@ export function initRightPanel(container: HTMLElement): void {
 
     if (state.selectedConjunction) {
       refreshConjunctionVerification(container, state.selectedConjunction);
+      return;
+    }
+
+    if (state.eventReplay) {
+      refreshEventReplayHUD(container, state.eventReplay.eventId, state.eventReplay.collisionTimeMs);
       return;
     }
 
@@ -164,6 +205,12 @@ function render(container: HTMLElement): void {
   if (state.selectedConjunction) {
     renderConjunctionDetail(detailEl, state.selectedConjunction);
     refreshConjunctionVerification(container, state.selectedConjunction);
+    return;
+  }
+
+  if (state.eventReplay) {
+    renderEventReplayPanel(detailEl, state.eventReplay.eventId);
+    refreshEventReplayHUD(container, state.eventReplay.eventId, state.eventReplay.collisionTimeMs);
     return;
   }
 
@@ -294,6 +341,146 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
       </dl>
     </div>
   `;
+}
+
+function renderEventReplayPanel(detailEl: Element, eventId: string): void {
+  const event = getHistoricalEvent(eventId);
+  if (!event) return;
+
+  const isASAT = event.objectB === null;
+
+  detailEl.innerHTML = `
+    <h2 class="panel-heading panel-heading--alert">Collision Replay</h2>
+    <div class="event-replay-title">${escapeHtml(event.title)}</div>
+
+    <div class="event-replay-approach">
+      <div class="era-sat era-sat--a" title="${escapeHtml(event.objectA.name)}">
+        <span class="era-dot era-dot--a"></span>
+        <span class="era-label">${escapeHtml(event.objectA.name)}</span>
+      </div>
+      ${isASAT
+        ? `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">ASAT Missile</span></div>`
+        : `<div class="era-sat era-sat--b" title="${escapeHtml(event.objectB!.name)}">
+             <span class="era-dot era-dot--b"></span>
+             <span class="era-label">${escapeHtml(event.objectB!.name)}</span>
+           </div>`
+      }
+    </div>
+
+    <div class="era-timeline">
+      <div class="era-timeline-bar">
+        <div class="era-progress" data-field="era-progress" style="width:0%"></div>
+      </div>
+      <div class="era-timeline-labels">
+        <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
+        <span>IMPACT</span>
+      </div>
+    </div>
+
+    <dl class="detail-list era-stats">
+      <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>
+      <div class="detail-row"><dt>Time to Impact</dt><dd data-field="era-tti">—</dd></div>
+      ${!isASAT
+        ? `<div class="detail-row"><dt>Separation</dt><dd data-field="era-dist">—</dd></div>`
+        : ''
+      }
+    </dl>
+
+    <div class="era-impact-banner" data-field="era-impact" hidden>
+      <div class="era-impact-ring"></div>
+      <div class="era-impact-text">💥 COLLISION</div>
+    </div>
+
+    <div class="era-controls">
+      <button type="button" id="btn-replay-restart" class="btn-era-ctrl" title="Restart">↺</button>
+      <button type="button" id="btn-replay-play" class="btn-era-ctrl btn-era-play" data-field="era-play-btn">⏸</button>
+    </div>
+
+    <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
+      Return to Global View
+    </button>
+  `;
+
+  // Pre-cache satrecs for refresh
+  if (!replaySatrecCache.has(eventId)) {
+    replaySatrecCache.set(eventId, {
+      satrecA: twoline2satrec(event.objectA.line1, event.objectA.line2),
+      satrecB: event.objectB ? twoline2satrec(event.objectB.line1, event.objectB.line2) : null,
+    });
+  }
+}
+
+function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisionTimeMs: number): void {
+  const detailEl = container.querySelector('#object-detail');
+  if (!detailEl) return;
+
+  const { eventReplay } = getState();
+  if (!eventReplay) return;
+
+  const simTime = new Date(eventReplay.currentMs);
+  const msToImpact = collisionTimeMs - eventReplay.currentMs;
+  const totalWindow = EVENT_REPLAY_REWIND_MS;
+  const elapsed = totalWindow - msToImpact;
+  const progress = Math.max(0, Math.min(1, elapsed / totalWindow));
+
+  const simTimeEl = detailEl.querySelector('[data-field="era-simtime"]');
+  const ttiEl = detailEl.querySelector('[data-field="era-tti"]');
+  const distEl = detailEl.querySelector('[data-field="era-dist"]');
+  const progressEl = detailEl.querySelector<HTMLElement>('[data-field="era-progress"]');
+  const impactEl = detailEl.querySelector<HTMLElement>('[data-field="era-impact"]');
+  const playBtn = detailEl.querySelector<HTMLElement>('[data-field="era-play-btn"]');
+
+  if (simTimeEl) simTimeEl.textContent = formatUtcDateTime(simTime);
+
+  if (ttiEl) {
+    if (msToImpact > 0) {
+      const secs = Math.ceil(msToImpact / 1000);
+      ttiEl.textContent = secs >= 60
+        ? `T−${Math.floor(secs / 60)}m ${secs % 60}s`
+        : `T−${secs}s`;
+      ttiEl.className = '';
+    } else {
+      const secsPast = Math.abs(Math.floor(msToImpact / 1000));
+      ttiEl.textContent = `T+${secsPast}s`;
+      ttiEl.className = 'era-past-impact';
+    }
+  }
+
+  if (progressEl) progressEl.style.width = `${(progress * 100).toFixed(1)}%`;
+
+  if (playBtn) {
+    playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
+  }
+
+  // Distance between the two objects
+  if (distEl) {
+    const cached = replaySatrecCache.get(eventId);
+    if (cached?.satrecB) {
+      const propA = propagateObject(cached.satrecA, simTime);
+      const propB = propagateObject(cached.satrecB, simTime);
+      if (propA && propB) {
+        const dx = propA.positionEci.x - propB.positionEci.x;
+        const dy = propA.positionEci.y - propB.positionEci.y;
+        const dz = propA.positionEci.z - propB.positionEci.z;
+        const distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        distEl.textContent = distKm < 10
+          ? `${distKm.toFixed(3)} km`
+          : `${distKm.toFixed(1)} km`;
+      }
+    }
+  }
+
+  // Impact banner — show for 30 s after T=0
+  if (impactEl) {
+    const msAfter = -msToImpact;
+    if (msAfter >= 0 && msAfter < 30_000) {
+      impactEl.hidden = false;
+      impactEl.classList.add('era-impact--active');
+    } else {
+      impactEl.hidden = true;
+      impactEl.classList.remove('era-impact--active');
+    }
+  }
 }
 
 function escapeHtml(text: string): string {

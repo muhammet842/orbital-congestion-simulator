@@ -1094,3 +1094,172 @@ body {
     padding: 4px 0;
   }
 }
+
+/* ── Event Replay HUD ─────────────────────────────────────────────────── */
+
+.event-replay-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+
+/* Satellite indicator row */
+.event-replay-approach {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.era-sat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  max-width: 48%;
+  overflow: hidden;
+}
+
+.era-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.era-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.era-dot--a { background: #66ccff; box-shadow: 0 0 6px #66ccff; }
+.era-dot--b { background: #ffaa22; box-shadow: 0 0 6px #ffaa22; }
+
+.era-missile {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Timeline progress bar */
+.era-timeline {
+  margin-bottom: 14px;
+}
+
+.era-timeline-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.era-progress {
+  height: 100%;
+  background: linear-gradient(90deg, #66ccff, #ff3322);
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.era-timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+/* Stats */
+.era-stats {
+  margin-bottom: 12px;
+}
+
+.era-past-impact {
+  color: #ff6644;
+  font-weight: 600;
+}
+
+/* Controls */
+.era-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.btn-era-ctrl {
+  flex: 1;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.15s;
+}
+
+.btn-era-ctrl:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.btn-era-play {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Impact / Collision Banner ──────────────────────────────────────── */
+
+@keyframes era-ring-expand {
+  from { transform: translate(-50%, -50%) scale(0.3); opacity: 1; }
+  to   { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
+}
+
+@keyframes era-impact-flash {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.2; }
+}
+
+.era-impact-banner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(255, 50, 30, 0.4);
+  border-radius: 8px;
+  background: rgba(255, 50, 30, 0.08);
+  overflow: hidden;
+}
+
+.era-impact-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 60px;
+  height: 60px;
+  border: 3px solid rgba(255, 80, 40, 0.8);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.era-impact--active .era-impact-ring {
+  animation: era-ring-expand 1.2s ease-out infinite;
+}
+
+.era-impact-text {
+  position: relative;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #ff5533;
+}
+
+.era-impact--active .era-impact-text {
+  animation: era-impact-flash 0.6s ease-in-out infinite;
+}

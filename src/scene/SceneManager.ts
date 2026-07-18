@@ -7,6 +7,7 @@ import {
   Raycaster,
   Scene,
   Vector2,
+  Vector3,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -35,8 +36,13 @@ import {
   setConjunctions,
   advanceSimulationTime,
   advanceVerificationTime,
+  advanceEventReplayTime,
+  startEventReplay,
+  stopEventReplay,
   subscribe,
 } from '../state/appState';
+import { EventReplayVisuals } from './EventReplayVisuals';
+import { getHistoricalEvent } from '../ui/EventCards';
 
 export class SceneManager {
   readonly renderer: WebGLRenderer;
@@ -52,6 +58,9 @@ export class SceneManager {
   private conjunctionVerification: ConjunctionVerification;
   private conjunctionLabels: ConjunctionLabels;
   private cameraFly: CameraFly;
+  private eventReplayVisuals: EventReplayVisuals;
+  private lastEventReplayId: string | null = null;
+  private _eventReplayStarted = false;
   private raycaster = new Raycaster();
   private pointer = new Vector2();
   private lastFrameTime = performance.now();
@@ -150,6 +159,9 @@ export class SceneManager {
 
     this.cameraFly = new CameraFly();
 
+    this.eventReplayVisuals = new EventReplayVisuals();
+    this.scene.add(this.eventReplayVisuals.group);
+
     this.raycaster.params.Points = { threshold: 0.015 };
 
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
@@ -180,7 +192,38 @@ export class SceneManager {
   }
 
   private onStateChange(): void {
-    const { selectedConjunction, selectedIndex, objects, conjunctionRevision } = getState();
+    const { selectedConjunction, selectedIndex, selectedEventId, objects, conjunctionRevision } = getState();
+
+    // --- Historical event replay ---
+    if (selectedEventId && !selectedConjunction) {
+      const event = getHistoricalEvent(selectedEventId);
+      if (event && event.collisionTimeUtc && event.objectA) {
+        const collisionTimeMs = new Date(event.collisionTimeUtc).getTime();
+
+        if (this.lastEventReplayId !== selectedEventId) {
+          this.lastEventReplayId = selectedEventId;
+          startEventReplay(selectedEventId, collisionTimeMs);
+          this.eventReplayVisuals.setup(selectedEventId, event.objectA, event.objectB, collisionTimeMs);
+          this.cameraFly.captureGlobalView(this.camera, this.controls);
+          // Camera positioning happens in tick() once we have live positions
+        }
+
+        this.earth.mesh.visible = false;
+        this.canvasContainer.classList.add('scene-container--conjunction-focus');
+        return;
+      }
+    }
+
+    // Clear event replay when deselected
+    if (this.lastEventReplayId && !selectedEventId) {
+      this.lastEventReplayId = null;
+      this._eventReplayStarted = false;
+      this.eventReplayVisuals.dispose();
+      stopEventReplay();
+      this.cameraFly.flyToGlobalView(this.camera, this.controls);
+      this.earth.mesh.visible = true;
+      this.canvasContainer.classList.remove('scene-container--conjunction-focus');
+    }
 
     if (selectedConjunction) {
       const sessionKey = conjunctionSessionKey(selectedConjunction);
@@ -290,6 +333,8 @@ export class SceneManager {
 
     if (state.verificationTime?.playing) {
       advanceVerificationTime(deltaMs);
+    } else if (state.eventReplay?.playing) {
+      advanceEventReplayTime(deltaMs);
     } else if (state.time.mode === 'historical' && state.time.playing) {
       advanceSimulationTime(
         new Date(state.time.current.getTime() + deltaMs * state.time.speed),
@@ -393,6 +438,36 @@ export class SceneManager {
       getConjunctions(currentState.objects, simTime, timeSpeed, (fresh) => {
         setConjunctions(fresh);
       });
+    }
+
+    // --- Event replay tick ---
+    if (currentState.eventReplay) {
+      const replayResult = this.eventReplayVisuals.tick(simTime, currentState.eventReplay.collisionTimeMs);
+      if (replayResult && !flying) {
+        const { posA, posB } = replayResult;
+        const midPoint = posB
+          ? new Vector3().addVectors(posA, posB).multiplyScalar(0.5)
+          : posA.clone();
+
+        if (!this.cameraFly.isActive()) {
+          // On the very first frame of the replay, fly to the initial satellite positions
+          if (this.lastEventReplayId && !this._eventReplayStarted) {
+            this._eventReplayStarted = true;
+            const distKm = posB ? posA.distanceTo(posB) * 6371 : 500;
+            this.cameraFly.flyToConjunctionPair(this.camera, this.controls, posA, posB ?? posA, distKm);
+          } else {
+            // Smooth-follow midpoint each frame
+            const alpha = 1 - Math.exp(-(deltaMs / 1000) * 3);
+            this.controls.target.lerp(midPoint, alpha);
+            this.camera.position.addScaledVector(
+              midPoint.clone().sub(this.controls.target),
+              alpha,
+            );
+          }
+        }
+      }
+    } else {
+      this._eventReplayStarted = false;
     }
 
     this.renderer.render(this.scene, this.camera);
