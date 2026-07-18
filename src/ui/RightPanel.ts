@@ -23,6 +23,7 @@ import {
 import type { HistoricalEvent } from './EventCards';
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
+import { t, onLangChange } from '../i18n/i18n';
 
 /**
  * Compute the 3-D separation in km between the two collision objects at T-5min,
@@ -99,6 +100,12 @@ export function initRightPanel(container: HTMLElement): void {
 
   maybeRender();
   subscribe(maybeRender);
+
+  // Force re-render when language changes so all translated strings update
+  onLangChange(() => {
+    renderKey = '';
+    maybeRender();
+  });
 
   container.addEventListener('click', (e) => {
     const trailBtn = (e.target as HTMLElement).closest('#btn-orbit-trail');
@@ -366,19 +373,21 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
 
 function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
   if (!event?.info) return '';
-  const { title, reason, outcome } = event.info;
   const eType = event.eventType ?? 'collision';
+  const title   = t(`event.${event.id}.info.title`,   event.info.title);
+  const reason  = t(`event.${event.id}.info.reason`,  event.info.reason);
+  const outcome = t(`event.${event.id}.info.outcome`, event.info.outcome);
   return `
     <div class="eic eic--${escapeHtml(eType)}">
       <div class="eic__title">
         <span class="eic__badge">${escapeHtml(title)}</span>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">Why Did It Happen?</h4>
+        <h4 class="eic__heading">${t('detail.why')}</h4>
         <p class="eic__text">${escapeHtml(reason)}</p>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">Outcome &amp; Impact</h4>
+        <h4 class="eic__heading">${t('detail.outcome')}</h4>
         <p class="eic__text">${escapeHtml(outcome)}</p>
       </div>
     </div>
@@ -400,13 +409,13 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   });
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading">Historical Event</h2>
+    <h2 class="panel-heading">${t('detail.historical')}</h2>
     <div class="event-detail">
       <div class="event-detail-title">${escapeHtml(event.title)}</div>
       <div class="event-detail-date">${formattedDate}</div>
       <p class="event-detail-description">${escapeHtml(event.description)}</p>
       <dl class="detail-list">
-        <div class="detail-row"><dt>Debris generated</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
+        <div class="detail-row"><dt>${t('detail.debris')}</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
       </dl>
     </div>
     ${buildInfoCard(event)}
@@ -414,10 +423,10 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
 }
 
 const REPLAY_PANEL_META = {
-  collision: { heading: 'Collision Replay', ttiLabel: 'Time to Impact', impactLabel: '💥 COLLISION', showSep: true  },
-  asat:      { heading: 'ASAT Replay',      ttiLabel: 'Time to Impact', impactLabel: '💥 INTERCEPT', showSep: false },
-  docking:   { heading: 'Docking Replay',   ttiLabel: 'Time to Dock',   impactLabel: '🔗 DOCKED',    showSep: true  },
-  breakup:   { heading: 'Breakup Replay',   ttiLabel: 'Time to Event',  impactLabel: '💥 BREAKUP',   showSep: false },
+  collision: { headingKey: 'replay.heading.collision', ttiKey: 'replay.tti.collision', bannerKey: 'replay.banner.collision', showSep: true  },
+  asat:      { headingKey: 'replay.heading.asat',      ttiKey: 'replay.tti.asat',      bannerKey: 'replay.banner.asat',      showSep: false },
+  docking:   { headingKey: 'replay.heading.docking',   ttiKey: 'replay.tti.docking',   bannerKey: 'replay.banner.docking',   showSep: true  },
+  breakup:   { headingKey: 'replay.heading.breakup',   ttiKey: 'replay.tti.breakup',   bannerKey: 'replay.banner.breakup',   showSep: false },
 } as const;
 
 function renderEventReplayPanel(detailEl: Element, eventId: string): void {
@@ -435,13 +444,13 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
               </div>`;
     }
     if (eType === 'asat') {
-      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">ASAT Missile</span></div>`;
+      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">${t('replay.asat_missile')}</span></div>`;
     }
     return '';
   })();
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading panel-heading--alert">${escapeHtml(meta.heading)}</h2>
+    <h2 class="panel-heading panel-heading--alert">${escapeHtml(t(meta.headingKey))}</h2>
     <div class="event-replay-title">${escapeHtml(event.title)}</div>
 
     <div class="event-replay-approach">
@@ -458,26 +467,26 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
       </div>
       <div class="era-timeline-labels">
         <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
-        <span>${eType === 'docking' ? 'DOCK' : 'IMPACT'}</span>
+        <span>${eType === 'docking' ? t('replay.dock_label') : t('replay.impact_label')}</span>
       </div>
     </div>
 
     <dl class="detail-list era-stats">
-      <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>
-      <div class="detail-row"><dt>${escapeHtml(meta.ttiLabel)}</dt><dd data-field="era-tti">—</dd></div>
+      <div class="detail-row"><dt>${t('replay.sim_time')}</dt><dd data-field="era-simtime">—</dd></div>
+      <div class="detail-row"><dt>${escapeHtml(t(meta.ttiKey))}</dt><dd data-field="era-tti">—</dd></div>
       ${meta.showSep
-        ? `<div class="detail-row"><dt>Separation</dt><dd data-field="era-dist">—</dd></div>`
+        ? `<div class="detail-row"><dt>${t('replay.separation')}</dt><dd data-field="era-dist">—</dd></div>`
         : ''
       }
     </dl>
 
     <div class="era-impact-banner" data-field="era-impact" hidden>
       <div class="era-impact-ring"></div>
-      <div class="era-impact-text">${escapeHtml(meta.impactLabel)}</div>
+      <div class="era-impact-text">${escapeHtml(t(meta.bannerKey))}</div>
     </div>
 
     <div class="era-completed-banner" data-field="era-completed" hidden>
-      Replay complete — press ↺ to restart
+      ${t('replay.complete')}
     </div>
 
     <div class="era-controls">
@@ -486,7 +495,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     </div>
 
     <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
-      Return to Global View
+      ${t('replay.return')}
     </button>
 
     ${buildInfoCard(event)}

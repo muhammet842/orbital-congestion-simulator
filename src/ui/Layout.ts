@@ -1,4 +1,5 @@
 import { getState, subscribe } from '../state/appState';
+import { getLang, setLang, SUPPORTED_LANGS } from '../i18n/i18n';
 
 /** Must match the max-width used for `.app-grid`'s mobile layout in style.css. */
 export const MOBILE_BREAKPOINT_PX = 860;
@@ -18,6 +19,9 @@ export function createLayout(root: HTMLElement): {
           Orbital Congestion Simulator
         </div>
         <button id="toggle-right-panel" class="panel-toggle-btn" type="button" aria-label="Toggle object details panel" aria-expanded="false">ℹ</button>
+        <select id="lang-select" class="lang-select" aria-label="Select language">
+          ${SUPPORTED_LANGS.map((l) => `<option value="${l}"${l === getLang() ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
+        </select>
         <a class="header-link" href="https://github.com" target="_blank" rel="noopener noreferrer">
           GitHub ↗
         </a>
@@ -36,8 +40,17 @@ export function createLayout(root: HTMLElement): {
   const timeBar = root.querySelector<HTMLElement>('#time-bar')!;
 
   setupMobilePanelToggles(root, leftPanel, rightPanel);
+  setupLangSelect(root);
 
   return { leftPanel, rightPanel, sceneContainer, timeBar };
+}
+
+function setupLangSelect(root: HTMLElement): void {
+  const select = root.querySelector<HTMLSelectElement>('#lang-select');
+  if (!select) return;
+  select.addEventListener('change', () => {
+    setLang(select.value as Parameters<typeof setLang>[0]);
+  });
 }
 
 function setupMobilePanelToggles(

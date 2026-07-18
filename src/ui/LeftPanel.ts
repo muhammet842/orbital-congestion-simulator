@@ -17,6 +17,7 @@ import {
   setColorByFunction,
 } from '../state/appState';
 import { initEventCards } from './EventCards';
+import { t, applyTranslations, onLangChange } from '../i18n/i18n';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const LIST_ITEM_HEIGHT = 36;
@@ -25,13 +26,14 @@ const LIST_OVERSCAN = 6;
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
-    <h2 class="panel-heading">Search Objects</h2>
+    <h2 class="panel-heading" data-i18n="ui.search_objects">Search Objects</h2>
     <div class="search-wrap">
       <input
         type="search"
         id="object-search"
         class="search-input"
-        placeholder="Name, NORAD, country, or operator (e.g. Türkiye, SpaceX)"
+        placeholder="${t('ui.search_ph')}"
+        data-i18n-ph="ui.search_ph"
         autocomplete="off"
         spellcheck="false"
       />
@@ -42,19 +44,19 @@ export function initLeftPanel(container: HTMLElement): void {
       <div class="object-list-items" id="object-list-items"></div>
     </div>
 
-    <h2 class="panel-heading">Orbit Layers</h2>
+    <h2 class="panel-heading" data-i18n="ui.orbit_layers">Orbit Layers</h2>
     <div class="layer-filters" id="layer-filters"></div>
 
-    <h2 class="panel-heading">Display Options</h2>
+    <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
     <div class="display-options" id="display-options"></div>
 
-    <h2 class="panel-heading">Object Categories</h2>
+    <h2 class="panel-heading" data-i18n="ui.object_categories">Object Categories</h2>
     <ul class="category-stats" id="category-stats"></ul>
 
-    <h2 class="panel-heading">Live Stats</h2>
+    <h2 class="panel-heading" data-i18n="ui.live_stats">Live Stats</h2>
     <dl class="stats-list" id="live-stats"></dl>
 
-    <h2 class="panel-heading panel-heading--alert">Close Approach Alerts</h2>
+    <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts</h2>
     <div class="conjunction-list" id="conjunction-list"></div>
   `;
 
@@ -87,6 +89,14 @@ export function initLeftPanel(container: HTMLElement): void {
     requestAnimationFrame(refreshLiveStatTime);
   };
   requestAnimationFrame(refreshLiveStatTime);
+
+  // On language change: update data-i18n labels and re-render dynamic sections
+  onLangChange(() => {
+    applyTranslations(container);
+    renderDisplayOptions(container);
+    renderStats(container);
+    renderConjunctions(container);
+  });
 
   let lastListKey = '';
   let lastSelectedIndex: number | null = null;
@@ -231,9 +241,9 @@ function renderDisplayOptions(container: HTMLElement): void {
         <span class="function-dot function-dot--active" title="Active"></span>
         <span class="function-dot function-dot--debris" title="Debris"></span>
       </span>
-      Color by Function
+      ${t('ui.color_by_function')}
     </label>
-    <p class="display-options-hint muted">Starlink · Stations · Active · Debris</p>
+    <p class="display-options-hint muted">${t('ui.cbf_hint')}</p>
   `;
 
   const checkbox = optionsEl.querySelector('#color-by-function') as HTMLInputElement;
@@ -254,9 +264,9 @@ function renderStats(container: HTMLElement): void {
 
   const categoryEl = container.querySelector('#category-stats')!;
   categoryEl.innerHTML = `
-    <li>Active: <strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
-    <li>Debris: <strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
-    <li>Stations: <strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
+    <li>${t('cat.active')}: <strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
+    <li>${t('cat.debris')}: <strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
+    <li>${t('cat.stations')}: <strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
   `;
 
   const fetchedDate = stats.fetchedAt
@@ -273,23 +283,23 @@ function renderStats(container: HTMLElement): void {
     : 0;
 
   const tleStaleHtml = tleAgeDays > 7
-    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ TLE data is ${Math.floor(tleAgeDays)} days old — LEO positions may be off by hundreds of km. Run <code>npm run fetch-tle</code>.</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ ${t('tle.critical').replace('{n}', String(Math.floor(tleAgeDays)))}</div>`
     : tleAgeDays > 3
-    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ TLE data is ${Math.floor(tleAgeDays)} days old — LEO accuracy degrading. Run <code>npm run fetch-tle</code>.</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ ${t('tle.warn').replace('{n}', String(Math.floor(tleAgeDays)))}</div>`
     : '';
 
   const liveEl = container.querySelector('#live-stats')!;
   const modeClass = isLive ? 'stat-value--live' : 'stat-value--historical';
-  const timeLabel = isLive ? 'UTC time' : 'Simulated time (UTC)';
+  const timeLabel = isLive ? t('stats.utc_time') : t('stats.sim_time');
 
   liveEl.innerHTML = `
     ${tleStaleHtml}
-    <div class="stat-row"><dt>Mode</dt><dd class="${modeClass}">${getTimeModeLabel(time.mode)}</dd></div>
+    <div class="stat-row"><dt>${t('stats.mode')}</dt><dd class="${modeClass}">${getTimeModeLabel(time.mode)}</dd></div>
     <div class="stat-row"><dt>${timeLabel}</dt><dd id="live-stat-time">${formatUtcDateTime(simTime)}</dd></div>
-    <div class="stat-row"><dt>Total objects</dt><dd>${stats.total.toLocaleString()}</dd></div>
-    <div class="stat-row"><dt>LEO</dt><dd>${stats.leoPercent}%</dd></div>
-    <div class="stat-row"><dt>Avg altitude</dt><dd>${stats.avgAltitude.toLocaleString()} km</dd></div>
-    <div class="stat-row"><dt>TLE data updated</dt><dd>${fetchedDate}</dd></div>
+    <div class="stat-row"><dt>${t('stats.total')}</dt><dd>${stats.total.toLocaleString()}</dd></div>
+    <div class="stat-row"><dt>${t('stats.leo')}</dt><dd>${stats.leoPercent}%</dd></div>
+    <div class="stat-row"><dt>${t('stats.avg_alt')}</dt><dd>${stats.avgAltitude.toLocaleString()} km</dd></div>
+    <div class="stat-row"><dt>${t('stats.tle_updated')}</dt><dd>${fetchedDate}</dd></div>
   `;
 }
 
@@ -299,7 +309,7 @@ function renderConjunctions(container: HTMLElement): void {
 
   if (conjunctions.length === 0) {
     previousAlertKeys.clear();
-    listEl.innerHTML = `<p class="muted conjunction-empty">No crossing-orbit close approaches detected (LEO, 0.1–3 km, relative speed ≥ 50 m/s). Co-orbiting stacks such as ISS or CSS modules are excluded.</p>`;
+    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.empty')}</p>`;
     return;
   }
 

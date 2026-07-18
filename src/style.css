@@ -75,6 +75,43 @@ body {
   text-decoration: underline;
 }
 
+/* ── Language selector dropdown ─────────────────────────────────────────── */
+.lang-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  padding: 5px 26px 5px 10px;
+  height: 32px;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.lang-select:hover {
+  background-color: rgba(34, 211, 238, 0.1);
+  border-color: var(--accent);
+}
+
+.lang-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.18);
+}
+
+.lang-select option {
+  background: #1e293b;
+  color: var(--text-primary);
+}
+
 .panel-toggle-btn {
   display: none;
   align-items: center;

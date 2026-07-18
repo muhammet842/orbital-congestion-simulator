@@ -1,4 +1,5 @@
 import { selectHistoricalEvent, getState, subscribe } from '../state/appState';
+import { t, onLangChange } from '../i18n/i18n';
 
 export interface HistoricalEventTLE {
   name: string;
@@ -299,7 +300,7 @@ const EVENT_TYPE_LABELS: Record<EventType, string> = {
 };
 
 function eventTypeLabel(type: EventType): string {
-  return EVENT_TYPE_LABELS[type] ?? type;
+  return t(`event_type.${type}`, EVENT_TYPE_LABELS[type] ?? type);
 }
 
 function formatEventDate(isoDate: string): string {
@@ -314,36 +315,41 @@ export function initEventCards(container: HTMLElement): void {
   const section = document.createElement('div');
   section.className = 'event-cards';
   section.innerHTML = `
-    <h2 class="panel-heading">Historical Events</h2>
+    <h2 class="panel-heading" data-i18n="ui.historical_events">Historical Events</h2>
     <div class="event-accordion" id="event-accordion"></div>
   `;
   container.appendChild(section);
 
   const accordion = section.querySelector('#event-accordion')!;
 
-  accordion.innerHTML = HISTORICAL_EVENTS.map(
-    (event) => `
-      <button
-        type="button"
-        class="event-card"
-        data-event-id="${event.id}"
-        aria-expanded="false"
-      >
-        <div class="event-card-top">
-          <span class="event-card-title">${event.title}</span>
-          <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
-        </div>
-        <span class="event-card-date">${formatEventDate(event.date)}</span>
-      </button>
-    `,
-  ).join('');
+  const renderCards = (): void => {
+    const { selectedEventId } = getState();
+    accordion.innerHTML = HISTORICAL_EVENTS.map(
+      (event) => `
+        <button
+          type="button"
+          class="event-card${event.id === selectedEventId ? ' event-card--active' : ''}"
+          data-event-id="${event.id}"
+          aria-expanded="${String(event.id === selectedEventId)}"
+        >
+          <div class="event-card-top">
+            <span class="event-card-title">${event.title}</span>
+            <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
+          </div>
+          <span class="event-card-date">${formatEventDate(event.date)}</span>
+        </button>
+      `,
+    ).join('');
 
-  accordion.querySelectorAll('.event-card').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const id = (btn as HTMLElement).dataset.eventId!;
-      selectHistoricalEvent(id);
+    accordion.querySelectorAll('.event-card').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).dataset.eventId!;
+        selectHistoricalEvent(id);
+      });
     });
-  });
+  };
+
+  renderCards();
 
   subscribe(() => {
     const { selectedEventId } = getState();
@@ -352,6 +358,11 @@ export function initEventCards(container: HTMLElement): void {
       btn.classList.toggle('event-card--active', id === selectedEventId);
       btn.setAttribute('aria-expanded', String(id === selectedEventId));
     });
+  });
+
+  // Re-render badges on language change (badge text needs re-translation)
+  onLangChange(() => {
+    renderCards();
   });
 }
 
