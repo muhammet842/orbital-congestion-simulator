@@ -23,6 +23,7 @@ import { Earth } from './Earth';
 import { OrbitalMeshes } from './OrbitalMeshes';
 import { OrbitTrail } from './OrbitTrail';
 import { SatelliteFootprint } from './SatelliteFootprint';
+import { SatelliteGroundTrack } from './SatelliteGroundTrack';
 import { getSubSatelliteScenePoints } from '../orbital/coordinates';
 import { SelectionMarker } from './SelectionMarker';
 import type { TrackedObject } from '../types';
@@ -56,6 +57,7 @@ export class SceneManager {
   private selectionMarker: SelectionMarker;
   private orbitTrail: OrbitTrail;
   private satelliteFootprint: SatelliteFootprint;
+  private groundTrack: SatelliteGroundTrack;
   private conjunctionVerification: ConjunctionVerification;
   private conjunctionLabels: ConjunctionLabels;
   private cameraFly: CameraFly;
@@ -154,6 +156,9 @@ export class SceneManager {
     this.satelliteFootprint = new SatelliteFootprint();
     this.scene.add(this.satelliteFootprint.group);
 
+    this.groundTrack = new SatelliteGroundTrack();
+    this.groundTrack.attachToEarth(this.earth.mesh);
+
     this.conjunctionVerification = new ConjunctionVerification();
     this.scene.add(this.conjunctionVerification.group);
 
@@ -215,6 +220,7 @@ export class SceneManager {
           this.satelliteFootprint.update(null, objects, new Date());
           this.selectionMarker.update(null, objects, new Date());
           this.orbitTrail.update(false, null, objects, new Date());
+          this.groundTrack.clear();
 
           // Hide all catalog satellite dots so only the 2 historical objects
           // are visible. Modern TLEs extrapolated 15+ years backwards produce
@@ -499,6 +505,16 @@ export class SceneManager {
     this.orbitTrail.update(
       currentState.showOrbitTrail,
       currentState.selectedIndex,
+      currentState.objects,
+      simTime,
+    );
+
+    // Ground track: show 1.5-orbit projection on Earth surface for selected satellite.
+    // Hidden during event replay or conjunction verification views.
+    this.groundTrack.update(
+      !currentState.eventReplay && !currentState.selectedConjunction && currentState.showGroundTrack
+        ? currentState.selectedIndex
+        : null,
       currentState.objects,
       simTime,
     );

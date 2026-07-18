@@ -53,6 +53,7 @@ export interface AppState {
   conjunctions: ConjunctionEvent[];
   conjunctionHiddenCount: number;
   showOrbitTrail: boolean;
+  showGroundTrack: boolean;
   colorByFunction: boolean;
 }
 
@@ -95,6 +96,7 @@ let state: AppState = {
   conjunctions: [],
   conjunctionHiddenCount: 0,
   showOrbitTrail: false,
+  showGroundTrack: true,
   colorByFunction: false,
 };
 
@@ -285,6 +287,7 @@ export function selectHistoricalEvent(eventId: string): void {
     verificationTime: null,
     eventReplay: null,
     showOrbitTrail: false,
+    showGroundTrack: true,
     ...(wasVerifying ? { time: restoreGlobalLiveTime() } : {}),
   });
 }
@@ -353,6 +356,7 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     selectedIndex: null,
     selectedEventId: null,
     showOrbitTrail: false,
+    showGroundTrack: true,
   });
 }
 
@@ -401,6 +405,10 @@ export function advanceVerificationTime(deltaMs: number): void {
 
 export function setShowOrbitTrail(show: boolean): void {
   setState({ showOrbitTrail: show });
+}
+
+export function setShowGroundTrack(show: boolean): void {
+  setState({ showGroundTrack: show });
 }
 
 export function setColorByFunction(enabled: boolean): void {
@@ -463,6 +471,7 @@ export function initState(
     conjunctions: [],
     conjunctionHiddenCount: 0,
     showOrbitTrail: false,
+    showGroundTrack: true,
     colorByFunction: false,
     time: {
       mode: 'live',

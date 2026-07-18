@@ -15,6 +15,7 @@ import {
   getState,
   exitConjunctionView,
   setShowOrbitTrail,
+  setShowGroundTrack,
   setEventReplayPartial,
   stopEventReplay,
   subscribe,
@@ -92,7 +93,7 @@ export function initRightPanel(container: HTMLElement): void {
 
   const maybeRender = (): void => {
     const state = getState();
-    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.showOrbitTrail}|${state.eventReplay?.eventId ?? ''}`;
+    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.showOrbitTrail}|${state.showGroundTrack}|${state.eventReplay?.eventId ?? ''}`;
     if (key === renderKey) return;
     renderKey = key;
     render(container);
@@ -116,6 +117,13 @@ export function initRightPanel(container: HTMLElement): void {
       return;
     }
 
+    const gtBtn = (e.target as HTMLElement).closest('#btn-ground-track');
+    if (gtBtn) {
+      e.preventDefault();
+      const { showGroundTrack } = getState();
+      setShowGroundTrack(!showGroundTrack);
+      return;
+    }
     const exitBtn = (e.target as HTMLElement).closest('#btn-exit-conjunction');
     if (exitBtn) {
       e.preventDefault();
@@ -323,6 +331,9 @@ function render(container: HTMLElement): void {
     </dl>
     <button type="button" id="btn-orbit-trail" class="btn-orbit-trail${state.showOrbitTrail ? ' active' : ''}">
       ${state.showOrbitTrail ? 'Hide orbit trail' : 'Show orbit trail'}
+    </button>
+    <button type="button" id="btn-ground-track" class="btn-orbit-trail${state.showGroundTrack ? ' active' : ''}">
+      ${state.showGroundTrack ? 'Hide ground track' : 'Show ground track'}
     </button>
   `;
 
