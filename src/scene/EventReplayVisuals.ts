@@ -74,11 +74,60 @@ function geoToScene(
   return new Vector3(scene.x, scene.y, scene.z);
 }
 
-/** Build a two-point straight-line geometry from `from` to `to`. */
-function buildApproachLine(from: Vector3, to: Vector3): BufferGeometry {
-  const pts = new Float32Array([from.x, from.y, from.z, to.x, to.y, to.z]);
+/**
+ * Spherical linear interpolation between two scene-space vectors.
+ *
+ * Unlike `lerp`, this keeps the interpolated point on the surface of an
+ * ellipsoid (sphere in this case) so the satellite travels along a curved
+ * arc above Earth rather than a chord that passes through the planet.
+ *
+ * The radius (altitude) is also linearly interpolated from |from| to |to|
+ * so the object smoothly climbs or descends if the start/end altitudes differ.
+ */
+function slerp(from: Vector3, to: Vector3, t: number): Vector3 {
+  const rFrom = from.length();
+  const rTo   = to.length();
+  if (rFrom < 1e-10 || rTo < 1e-10) return from.clone().lerp(to, t);
+
+  const fromDir = from.clone().normalize();
+  const toDir   = to.clone().normalize();
+
+  const cosTheta = Math.max(-1, Math.min(1, fromDir.dot(toDir)));
+  const theta = Math.acos(cosTheta);
+
+  // Interpolated radius (altitude) — linear between |from| and |to|
+  const radius = rFrom + (rTo - rFrom) * t;
+
+  // When the angle is very small, fall back to linear interpolation of
+  // the direction to avoid division by near-zero.
+  if (theta < 1e-6) {
+    return fromDir.lerp(toDir, t).normalize().multiplyScalar(radius);
+  }
+
+  const sinTheta = Math.sin(theta);
+  const scale0   = Math.sin((1 - t) * theta) / sinTheta;
+  const scale1   = Math.sin(t       * theta) / sinTheta;
+
+  return fromDir.clone().multiplyScalar(scale0)
+    .add(toDir.clone().multiplyScalar(scale1))
+    .normalize()
+    .multiplyScalar(radius);
+}
+
+/**
+ * Build a multi-segment arc geometry following the great-circle path from
+ * `from` to `to` (using slerp), so the trail hugs the sphere surface and
+ * never clips through the Earth.
+ */
+function buildApproachArc(from: Vector3, to: Vector3, segments = 48): BufferGeometry {
+  const pts: number[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const p = slerp(from, to, t);
+    pts.push(p.x, p.y, p.z);
+  }
   const geo = new BufferGeometry();
-  geo.setAttribute('position', new BufferAttribute(pts, 3));
+  geo.setAttribute('position', new BufferAttribute(new Float32Array(pts), 3));
   return geo;
 }
 
@@ -243,19 +292,19 @@ export class EventReplayVisuals {
       initialSeparationKm,
     };
 
-    // ── Build straight-line approach geometry ────────────────────────────
-    // The trail shows the FULL APPROACH PATH from initial position to the
-    // collision point — a straight line in scene space. The dot moves along
-    // this exact path via the linear lerp in tick().
+    // ── Build curved arc approach geometry ───────────────────────────────
+    // The trail follows the great-circle (slerp) path from the initial
+    // position to the collision point, matching the curved motion used in
+    // tick() — the dot always sits ON the arc, never inside the Earth.
     this.trailA.geometry.dispose();
-    this.trailA.geometry = buildApproachLine(initialPosA, collisionScene);
+    this.trailA.geometry = buildApproachArc(initialPosA, collisionScene);
     this.trailA.computeLineDistances();
     (this.trailA.material as LineDashedMaterial).opacity = 0.6;
     this.trailA.visible = true;
 
     if (initialPosB) {
       this.trailB.geometry.dispose();
-      this.trailB.geometry = buildApproachLine(initialPosB, collisionScene);
+      this.trailB.geometry = buildApproachArc(initialPosB, collisionScene);
       this.trailB.computeLineDistances();
       (this.trailB.material as LineDashedMaterial).opacity = 0.6;
       this.trailB.visible = true;
@@ -292,15 +341,17 @@ export class EventReplayVisuals {
     const elapsed = simTime.getTime() - startTimeMs;
     const progress = Math.max(0, Math.min(1, elapsed / totalMs));
 
-    // ── Object A: lerp from initial position to collision point ───────────
-    const posA = initialPosA.clone().lerp(collisionScene, progress);
+    // ── Object A: slerp along curved arc to collision point ───────────────
+    // slerp preserves altitude — the dot travels on a great-circle arc
+    // above Earth's surface instead of a straight chord through the planet.
+    const posA = slerp(initialPosA, collisionScene, progress);
     this.dotA.position.copy(posA);
     this.dotA.visible = true;
 
-    // ── Object B: same lerp (satellite or ASAT missile) ───────────────────
+    // ── Object B: same slerp (satellite or ASAT missile) ─────────────────
     let posB: Vector3 | null = null;
     if (initialPosB) {
-      posB = initialPosB.clone().lerp(collisionScene, progress);
+      posB = slerp(initialPosB, collisionScene, progress);
       this.dotB.position.copy(posB);
       this.dotB.visible = true;
     } else {
