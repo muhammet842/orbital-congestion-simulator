@@ -9,7 +9,6 @@ import {
 } from '../orbital/conjunction';
 import { propagateObject, toObjectSnapshot } from '../orbital/propagator';
 import { twoline2satrec } from 'satellite.js';
-import type { SatRec } from 'satellite.js';
 import type { ConjunctionEvent } from '../types';
 import {
   formatUtcDateTime,
@@ -25,12 +24,13 @@ import {
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
 
-/** Cached satrecs for event replay distance computation */
-const replaySatrecCache: Map<string, { satrecA: SatRec; satrecB: SatRec | null }> = new Map();
+/**
+ * Cache for event replay initial separation values.
+ * Key = eventId, value = initial separation in km at T-5min.
+ * Computed once from TLE propagation when the event is first displayed.
+ */
+const replayInitialSepCache: Map<string, number> = new Map();
 
-/** Throttle distance calculation to ~4 Hz in the right panel */
-let _replayDistLastMs = 0;
-let _replayDistCached: string | null = null;
 
 function verificationRiskClass(status: string): string {
   if (status === 'COLLISION CONFIRMED') return 'conjunction-risk--confirmed';
@@ -409,13 +409,6 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     </button>
   `;
 
-  // Pre-cache satrecs for refresh
-  if (!replaySatrecCache.has(eventId)) {
-    replaySatrecCache.set(eventId, {
-      satrecA: twoline2satrec(event.objectA.line1, event.objectA.line2),
-      satrecB: event.objectB ? twoline2satrec(event.objectB.line1, event.objectB.line2) : null,
-    });
-  }
 }
 
 function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisionTimeMs: number): void {
@@ -460,41 +453,37 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance — throttled to 4 Hz. In the final 2 min the dots are blending
-  // toward the collision point, so we scale the displayed distance accordingly.
+  // Distance — mirrors the 3D linear lerp in EventReplayVisuals.
+  // separation(progress) = (1 − progress) × initialSeparationKm
+  // This guarantees the display shows 0.00 km exactly when progress = 1 (T=0).
   if (distEl) {
-    const nowPerf = performance.now();
-    if (nowPerf - _replayDistLastMs > 250) {
-      _replayDistLastMs = nowPerf;
-      const cached = replaySatrecCache.get(eventId);
-      if (cached?.satrecB) {
-        const propA = propagateObject(cached.satrecA, simTime);
-        const propB = propagateObject(cached.satrecB, simTime);
-        if (propA && propB) {
-          const dx = propA.positionEci.x - propB.positionEci.x;
-          const dy = propA.positionEci.y - propB.positionEci.y;
-          const dz = propA.positionEci.z - propB.positionEci.z;
-          let distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-
-          // Mirror the 3D convergence blend: only apply in the last 2 min,
-          // using the same ease-in³ curve as EventReplayVisuals.
-          const msToImpact2 = collisionTimeMs - eventReplay.currentMs;
-          const BLEND_WINDOW_MS = 2 * 60 * 1000;
-          if (msToImpact2 <= 0) {
-            distKm = 0;
-          } else if (msToImpact2 < BLEND_WINDOW_MS) {
-            const t = 1 - msToImpact2 / BLEND_WINDOW_MS;
-            const blendFactor = t * t * t;
-            distKm = distKm * (1 - blendFactor);
-          }
-
-          _replayDistCached = distKm < 1
-            ? `${distKm.toFixed(2)} km`
-            : `${distKm.toFixed(0)} km`;
+    const event = getHistoricalEvent(eventId);
+    if (event?.objectB) {
+      // Compute initialSeparationKm once and cache it.
+      if (!replayInitialSepCache.has(eventId) && event.objectA && event.objectB) {
+        const satrecA = twoline2satrec(event.objectA.line1, event.objectA.line2);
+        const satrecB = twoline2satrec(event.objectB.line1, event.objectB.line2);
+        const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
+        const startDate = new Date(startMs);
+        const pA = propagateObject(satrecA, startDate);
+        const pB = propagateObject(satrecB, startDate);
+        if (pA && pB) {
+          const dx = pA.positionEci.x - pB.positionEci.x;
+          const dy = pA.positionEci.y - pB.positionEci.y;
+          const dz = pA.positionEci.z - pB.positionEci.z;
+          replayInitialSepCache.set(eventId, Math.sqrt(dx * dx + dy * dy + dz * dz));
         }
       }
+      const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
+      const progress = Math.max(0, Math.min(1,
+        (eventReplay.currentMs - startMs) / (collisionTimeMs - startMs),
+      ));
+      const initialSep = replayInitialSepCache.get(eventId) ?? 0;
+      const distKm = (1 - progress) * initialSep;
+      distEl.textContent = distKm < 1
+        ? `${distKm.toFixed(2)} km`
+        : `${distKm.toFixed(0)} km`;
     }
-    if (_replayDistCached) distEl.textContent = _replayDistCached;
   }
 
   // Impact banner — show from T=0 onwards (replay pauses here automatically)

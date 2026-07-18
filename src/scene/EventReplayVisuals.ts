@@ -10,7 +10,6 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import type { SatRec } from 'satellite.js';
 import { twoline2satrec } from 'satellite.js';
 import { eciToScene } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
@@ -18,29 +17,39 @@ import { getGmstRad } from './dayNight';
 import type { HistoricalEventTLE } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
-/** How far past the collision to draw the trail (ms). */
-const TRAIL_FORWARD_MS = 90 * 1000;
-/** Trail sampling interval (ms) — coarser = faster setup, still smooth visually. */
-const TRAIL_STEP_MS = 10_000;
-
 /** Glow sphere radius in scene units (same scale as Earth radius = 1). */
 const DOT_RADIUS = 0.005;
 
+/**
+ * All data captured once in setup() and used read-only in tick().
+ *
+ * The core motion model is a PURE LINEAR LERP:
+ *   pos(t) = lerp(initialPos, collisionScene, progress)
+ *   where progress = (currentMs - startMs) / (collisionMs - startMs)
+ *
+ * This guarantees both dots meet exactly at the collision point at T=0,
+ * regardless of TLE propagation drift (TLEs from 2009/2021 are unusable
+ * for back-propagation by the SGP4 model).
+ */
 interface ParsedObjects {
-  satrecA: SatRec;
-  satrecB: SatRec | null;
   nameA: string;
   nameB: string | null;
-  /** For ASAT events: Earth-surface launch point of the missile (unit vector). */
-  missileOrigin: Vector3 | null;
-  /** For ASAT events: satellite scene position at the moment of impact. */
-  impactPos: Vector3 | null;
+  /** Satellite A scene position at T−5 min (start of replay). */
+  initialPosA: Vector3;
   /**
-   * Known collision/impact ECI scene position, if geographic coords were provided.
-   * Used to blend the animated dots toward this point in the final 2 minutes so
-   * the satellites visually converge regardless of TLE propagation error.
+   * Satellite B (or ASAT missile) scene position at the start of replay.
+   * For missiles this is the surface nadir of the impact point.
    */
-  collisionScene: Vector3 | null;
+  initialPosB: Vector3 | null;
+  /** Known ECI scene position of the collision/impact point. */
+  collisionScene: Vector3;
+  /** Timestamp of the replay start (collisionTimeMs − EVENT_REPLAY_REWIND_MS). */
+  startTimeMs: number;
+  /**
+   * 3-D distance between A and B at T−5 min in km.
+   * Used to drive the separation counter in the right panel.
+   */
+  initialSeparationKm: number;
 }
 
 /**
@@ -54,9 +63,8 @@ function geoToScene(
   collisionDate: Date,
 ): Vector3 {
   const DEG = Math.PI / 180;
-  const r = 6371 + altKm; // km from Earth centre
+  const r = 6371 + altKm;
   const gmst = getGmstRad(collisionDate);
-  // Geographic → ECI: add GMST to geographic longitude
   const eciLonRad = lonDeg * DEG + gmst;
   const latRad = latDeg * DEG;
   const eciX = r * Math.cos(latRad) * Math.cos(eciLonRad);
@@ -66,25 +74,11 @@ function geoToScene(
   return new Vector3(scene.x, scene.y, scene.z);
 }
 
-function buildTrailGeometry(
-  satrec: SatRec,
-  collisionTimeMs: number,
-): BufferGeometry {
-  const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
-  const endMs = collisionTimeMs + TRAIL_FORWARD_MS;
-  const points: number[] = [];
-
-  for (let t = startMs; t <= endMs; t += TRAIL_STEP_MS) {
-    const prop = propagateObject(satrec, new Date(t));
-    if (!prop) continue;
-    const p = eciToScene(prop.positionEci.x, prop.positionEci.y, prop.positionEci.z);
-    points.push(p.x, p.y, p.z);
-  }
-
+/** Build a two-point straight-line geometry from `from` to `to`. */
+function buildApproachLine(from: Vector3, to: Vector3): BufferGeometry {
+  const pts = new Float32Array([from.x, from.y, from.z, to.x, to.y, to.z]);
   const geo = new BufferGeometry();
-  if (points.length >= 6) {
-    geo.setAttribute('position', new BufferAttribute(new Float32Array(points), 3));
-  }
+  geo.setAttribute('position', new BufferAttribute(pts, 3));
   return geo;
 }
 
@@ -173,7 +167,10 @@ export class EventReplayVisuals {
     this.group.visible = false;
   }
 
-  /** Parse TLEs and build orbital trail geometry. Call once per event selection. */
+  /**
+   * Parse TLEs, capture initial positions at T-5min, and build approach-line
+   * geometry. Call once per event selection.
+   */
   setup(
     eventId: string,
     tleA: HistoricalEventTLE,
@@ -187,67 +184,83 @@ export class EventReplayVisuals {
     const satrecA = twoline2satrec(tleA.line1, tleA.line2);
     const satrecB = tleB ? twoline2satrec(tleB.line1, tleB.line2) : null;
 
-    // Compute the ECI scene position of the collision/impact point
+    // ── Collision scene position (required) ──────────────────────────────
     const collisionDate = new Date(collisionTimeMs);
     const collisionScene: Vector3 | null = collisionGeo
       ? geoToScene(collisionGeo.latDeg, collisionGeo.lonDeg, collisionGeo.altKm, collisionDate)
       : null;
 
-    // For ASAT events compute missile approach geometry from Earth surface
-    let missileOrigin: Vector3 | null = null;
-    let impactPos: Vector3 | null = null;
-    if (!satrecB) {
-      // Use the known collision point if available, else fall back to SGP4 position
-      if (collisionScene) {
-        impactPos = collisionScene.clone();
-      } else {
-        const propImpact = propagateObject(satrecA, collisionDate);
-        if (propImpact) {
-          const sc = eciToScene(propImpact.positionEci.x, propImpact.positionEci.y, propImpact.positionEci.z);
-          impactPos = new Vector3(sc.x, sc.y, sc.z);
-        }
+    if (!collisionScene) {
+      // Without a known collision point we cannot run the interpolation model.
+      // Fall back silently — the group stays hidden.
+      return;
+    }
+
+    // ── Initial positions at T-5min ──────────────────────────────────────
+    const startTimeMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
+    const startDate = new Date(startTimeMs);
+
+    const propAStart = propagateObject(satrecA, startDate);
+    const scA = propAStart
+      ? eciToScene(propAStart.positionEci.x, propAStart.positionEci.y, propAStart.positionEci.z)
+      : null;
+    const initialPosA = scA
+      ? new Vector3(scA.x, scA.y, scA.z)
+      : collisionScene.clone();
+
+    let initialPosB: Vector3 | null = null;
+    let initialSeparationKm = 0;
+
+    if (satrecB) {
+      const propBStart = propagateObject(satrecB, startDate);
+      const scB = propBStart
+        ? eciToScene(propBStart.positionEci.x, propBStart.positionEci.y, propBStart.positionEci.z)
+        : null;
+      initialPosB = scB
+        ? new Vector3(scB.x, scB.y, scB.z)
+        : collisionScene.clone();
+
+      // Initial separation in km (scene unit = 1 / ORBIT_DISPLAY_SCALE km)
+      if (propAStart && propBStart) {
+        const dx = propAStart.positionEci.x - propBStart.positionEci.x;
+        const dy = propAStart.positionEci.y - propBStart.positionEci.y;
+        const dz = propAStart.positionEci.z - propBStart.positionEci.z;
+        initialSeparationKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
       }
-      if (impactPos) {
-        // Launch point = point on Earth surface directly below the impact (nadir)
-        missileOrigin = impactPos.clone().normalize(); // magnitude 1 = Earth surface
-      }
+    } else {
+      // ASAT event: missile starts at the Earth-surface nadir of impact point
+      initialPosB = collisionScene.clone().normalize(); // unit vector = surface
+      initialSeparationKm = 0; // no satellite-to-satellite separation for ASAT
     }
 
     this.parsed = {
-      satrecA,
-      satrecB,
       nameA: tleA.name,
       nameB: tleB?.name ?? null,
-      missileOrigin,
-      impactPos,
+      initialPosA,
+      initialPosB,
       collisionScene,
+      startTimeMs,
+      initialSeparationKm,
     };
 
+    // ── Build straight-line approach geometry ────────────────────────────
+    // The trail shows the FULL APPROACH PATH from initial position to the
+    // collision point — a straight line in scene space. The dot moves along
+    // this exact path via the linear lerp in tick().
     this.trailA.geometry.dispose();
-    this.trailA.geometry = buildTrailGeometry(satrecA, collisionTimeMs);
+    this.trailA.geometry = buildApproachLine(initialPosA, collisionScene);
     this.trailA.computeLineDistances();
+    (this.trailA.material as LineDashedMaterial).opacity = 0.6;
+    this.trailA.visible = true;
 
-    if (satrecB) {
+    if (initialPosB) {
       this.trailB.geometry.dispose();
-      this.trailB.geometry = buildTrailGeometry(satrecB, collisionTimeMs);
+      this.trailB.geometry = buildApproachLine(initialPosB, collisionScene);
       this.trailB.computeLineDistances();
+      (this.trailB.material as LineDashedMaterial).opacity = 0.6;
       this.trailB.visible = true;
     } else {
-      // Draw a short dashed "missile path" line from surface to impact point
-      if (missileOrigin && impactPos) {
-        const pts = new Float32Array([
-          missileOrigin.x, missileOrigin.y, missileOrigin.z,
-          impactPos.x, impactPos.y, impactPos.z,
-        ]);
-        const geo = new BufferGeometry();
-        geo.setAttribute('position', new BufferAttribute(pts, 3));
-        this.trailB.geometry.dispose();
-        this.trailB.geometry = geo;
-        this.trailB.computeLineDistances();
-        this.trailB.visible = true;
-      } else {
-        this.trailB.visible = false;
-      }
+      this.trailB.visible = false;
     }
 
     this.activeEventId = eventId;
@@ -255,15 +268,16 @@ export class EventReplayVisuals {
   }
 
   /**
-   * Update dot positions to the current sim time.
+   * Move the dots to their linearly-interpolated positions.
    *
-   * Convergence strategy:
-   * - T−5min → T−2min : pure SGP4 position — dot stays on the orbital trail
-   * - T−2min → T=0    : ease-in³ blend toward the known collision ECI point
-   * - T=0             : exactly at collision point; impact flash fires
+   * Motion model — pure linear lerp over the full 5-minute window:
+   *   progress = clamp((currentMs - startMs) / (collisionMs - startMs), 0, 1)
+   *   posA = lerp(initialPosA, collisionScene, progress)
+   *   posB = lerp(initialPosB, collisionScene, progress)
    *
-   * SceneManager pauses replay at T=0; tick() may still be called with a
-   * frozen simTime = collisionTime so the impact flash remains displayed.
+   * This guarantees both dots meet at EXACTLY the same collision point at
+   * T=0, regardless of TLE propagation drift. No SGP4 is called in this
+   * method — positions are fully deterministic from setup() data.
    */
   tick(
     simTime: Date,
@@ -271,94 +285,43 @@ export class EventReplayVisuals {
   ): { posA: Vector3; posB: Vector3 | null; impactFlash: number } | null {
     if (!this.parsed) return null;
 
-    const msToImpact = collisionTimeMs - simTime.getTime();
-    const msAfterCollision = -msToImpact;
+    const { initialPosA, initialPosB, collisionScene, startTimeMs } = this.parsed;
 
-    const { satrecA, satrecB, collisionScene } = this.parsed;
+    // ── Linear progress [0, 1] over the 5-minute replay window ───────────
+    const totalMs = collisionTimeMs - startTimeMs; // = EVENT_REPLAY_REWIND_MS
+    const elapsed = simTime.getTime() - startTimeMs;
+    const progress = Math.max(0, Math.min(1, elapsed / totalMs));
 
-    // ── Blend factor: 0 for first 3 min, ease-in³ in the last 2 min ──────
-    const BLEND_WINDOW_MS = 2 * 60 * 1000;
-    let blendFactor = 0;
-    if (collisionScene) {
-      if (msToImpact <= 0) {
-        blendFactor = 1;
-      } else if (msToImpact < BLEND_WINDOW_MS) {
-        const t = 1 - msToImpact / BLEND_WINDOW_MS; // 0→1 over last 2 min
-        blendFactor = t * t * t;                      // ease-in³
-      }
-    }
-
-    // ── Trail opacity fades as convergence blend kicks in ─────────────────
-    // Fully visible while satellite is on its real SGP4 path;
-    // fades to zero as the dot diverges toward the collision point.
-    const trailOpacity = Math.max(0, (1 - blendFactor * 1.5)) * 0.7;
-    (this.trailA.material as LineDashedMaterial).opacity = trailOpacity;
-    this.trailA.visible = trailOpacity > 0.01;
-
-    // ── Propagate objectA ─────────────────────────────────────────────────
-    const propA = propagateObject(satrecA, simTime);
-    if (!propA) return null;
-
-    const sceneA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
-    let posA = new Vector3(sceneA.x, sceneA.y, sceneA.z);
-    if (collisionScene && blendFactor > 0) {
-      posA = posA.clone().lerp(collisionScene, blendFactor);
-    }
+    // ── Object A: lerp from initial position to collision point ───────────
+    const posA = initialPosA.clone().lerp(collisionScene, progress);
     this.dotA.position.copy(posA);
     this.dotA.visible = true;
 
-    // ── Propagate or animate objectB / missile ────────────────────────────
+    // ── Object B: same lerp (satellite or ASAT missile) ───────────────────
     let posB: Vector3 | null = null;
-
-    if (satrecB) {
-      // Two-satellite event (Iridium/Cosmos)
-      const trailOpacityB = Math.max(0, (1 - blendFactor * 1.5)) * 0.7;
-      (this.trailB.material as LineDashedMaterial).opacity = trailOpacityB;
-      this.trailB.visible = trailOpacityB > 0.01 && this.parsed.nameB !== null;
-
-      const propB = propagateObject(satrecB, simTime);
-      if (propB) {
-        const sceneB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-        posB = new Vector3(sceneB.x, sceneB.y, sceneB.z);
-        if (collisionScene && blendFactor > 0) {
-          posB = posB.clone().lerp(collisionScene, blendFactor);
-        }
-        this.dotB.position.copy(posB);
-        this.dotB.visible = true;
-      }
-    } else if (this.parsed.missileOrigin && this.parsed.impactPos) {
-      // ASAT event: missile travels from Earth surface → impact point.
-      // Progress starts only in the last 3 min so the missile doesn't
-      // appear 5 min before impact (it's launched closer to intercept).
-      const MISSILE_LAUNCH_WINDOW_MS = 3 * 60 * 1000;
-      const missileProgress = msToImpact < MISSILE_LAUNCH_WINDOW_MS
-        ? Math.max(0, Math.min(1, 1 - msToImpact / MISSILE_LAUNCH_WINDOW_MS))
-        : 0;
-
-      if (msToImpact > 0 && missileProgress > 0) {
-        posB = this.parsed.missileOrigin.clone().lerp(this.parsed.impactPos, missileProgress);
-        this.dotB.position.copy(posB);
-        this.dotB.visible = true;
-      } else {
-        this.dotB.visible = false;
-      }
-
-      // Missile path trail: show only while missile is in flight
-      const missileTrailOpacity = msToImpact > 0 ? 0.6 : 0;
-      (this.trailB.material as LineDashedMaterial).opacity = missileTrailOpacity;
-      this.trailB.visible = missileTrailOpacity > 0.01;
+    if (initialPosB) {
+      posB = initialPosB.clone().lerp(collisionScene, progress);
+      this.dotB.position.copy(posB);
+      this.dotB.visible = true;
     } else {
       this.dotB.visible = false;
     }
 
-    // ── Impact flash ──────────────────────────────────────────────────────
-    // Replay is paused by SceneManager exactly at T=0, so msAfterCollision
-    // will typically be 0 (frozen). The flash stays at full opacity as long
-    // as the replay clock is at or just after the collision moment.
-    let impactFlash = 0;
+    // ── Trail opacity: full at the start, fades as dots converge ─────────
+    // At progress=0.7 the trail is at 50% opacity; fully gone at progress=1.
+    const trailOpacity = Math.max(0, 1 - progress * 1.4) * 0.6;
+    (this.trailA.material as LineDashedMaterial).opacity = trailOpacity;
+    this.trailA.visible = trailOpacity > 0.01;
+    (this.trailB.material as LineDashedMaterial).opacity = trailOpacity;
+    this.trailB.visible = trailOpacity > 0.01 && initialPosB !== null;
+
+    // ── Impact flash at T=0 ───────────────────────────────────────────────
+    // SceneManager freezes the clock at T=0 so progress stays ≈ 1 here.
+    const msAfterCollision = -(collisionTimeMs - simTime.getTime());
     const FLASH_WINDOW_MS = 30_000;
-    if (msAfterCollision >= 0 && msAfterCollision < FLASH_WINDOW_MS) {
-      impactFlash = 1 - msAfterCollision / FLASH_WINDOW_MS;
+    let impactFlash = 0;
+    if (progress >= 1 || (msAfterCollision >= 0 && msAfterCollision < FLASH_WINDOW_MS)) {
+      impactFlash = 1 - Math.min(1, msAfterCollision / FLASH_WINDOW_MS);
       const mat = this.dotImpact.material as MeshBasicMaterial;
       mat.opacity = impactFlash;
       this.dotImpact.position.copy(posA);
@@ -373,6 +336,11 @@ export class EventReplayVisuals {
   getNames(): { nameA: string; nameB: string | null } | null {
     if (!this.parsed) return null;
     return { nameA: this.parsed.nameA, nameB: this.parsed.nameB };
+  }
+
+  /** Initial separation in km between the two objects at T-5min. */
+  getInitialSeparationKm(): number {
+    return this.parsed?.initialSeparationKm ?? 0;
   }
 
   /** Returns the known collision scene position, or null if not available. */
