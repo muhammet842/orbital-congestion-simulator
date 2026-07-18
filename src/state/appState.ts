@@ -294,7 +294,10 @@ export function setEventReplayPartial(
 
 export function stopEventReplay(): void {
   if (!state.eventReplay) return;
-  setState({ eventReplay: null });
+  // Also clear the card selection so the event card is deselected and
+  // SceneManager.onStateChange() cleans up the 3-D visuals + restores
+  // catalog satellite visibility.
+  setState({ eventReplay: null, selectedEventId: null });
 }
 
 /** Advance event replay clock without triggering full re-render. */

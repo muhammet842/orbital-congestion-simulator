@@ -221,12 +221,17 @@ export class SceneManager {
       }
     }
 
-    // Clear event replay when deselected
-    if (this.lastEventReplayId && !selectedEventId) {
+    // Clear event replay when the card is deselected OR when stopEventReplay()
+    // was called (e.g. from "Return to Global View"). Both paths clear
+    // lastEventReplayId so this block only runs once.
+    const { eventReplay } = getState();
+    if (this.lastEventReplayId && (!selectedEventId || !eventReplay)) {
       this.lastEventReplayId = null;
       this._eventReplayStarted = false;
       this.eventReplayVisuals.dispose();
-      stopEventReplay();
+      this.eventReplayLabels.hide();
+      // stopEventReplay() already cleared state; call only when still set.
+      if (eventReplay) stopEventReplay();
       // Restore catalog satellites visibility
       if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
