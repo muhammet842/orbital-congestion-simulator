@@ -42,6 +42,7 @@ import {
   subscribe,
 } from '../state/appState';
 import { EventReplayVisuals } from './EventReplayVisuals';
+import { EventReplayLabels } from './EventReplayLabels';
 import { getHistoricalEvent } from '../ui/EventCards';
 
 export class SceneManager {
@@ -59,6 +60,7 @@ export class SceneManager {
   private conjunctionLabels: ConjunctionLabels;
   private cameraFly: CameraFly;
   private eventReplayVisuals: EventReplayVisuals;
+  private eventReplayLabels!: EventReplayLabels;
   private lastEventReplayId: string | null = null;
   private _eventReplayStarted = false;
   private raycaster = new Raycaster();
@@ -161,6 +163,8 @@ export class SceneManager {
 
     this.eventReplayVisuals = new EventReplayVisuals();
     this.scene.add(this.eventReplayVisuals.group);
+
+    this.eventReplayLabels = new EventReplayLabels(container);
 
     this.raycaster.params.Points = { threshold: 0.015 };
 
@@ -409,11 +413,30 @@ export class SceneManager {
         }
       }
 
+      // Floating info panels over the two objects
+      if (replayResult) {
+        const event = getHistoricalEvent(currentState.eventReplay.eventId);
+        const names = this.eventReplayVisuals.getNames();
+        this.eventReplayLabels.update(
+          replayResult.posA,
+          replayResult.posB,
+          names?.nameA ?? 'OBJECT A',
+          names?.nameB ?? null,
+          event?.objectB === null,          // isAsat when there is no second satellite
+          this.camera,
+          this.renderer,
+          replayResult.impactFlash,
+        );
+      } else {
+        this.eventReplayLabels.hide();
+      }
+
       this.renderer.render(this.scene, this.camera);
       this.updateFps(now);
       return; // skip all catalog propagation, conjunction scan, etc.
     }
 
+    this.eventReplayLabels.hide();
     this._eventReplayStarted = false;
 
     // ── Normal tick ──────────────────────────────────────────────────────────
