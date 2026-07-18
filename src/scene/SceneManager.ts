@@ -364,21 +364,20 @@ export class SceneManager {
         currentState.eventReplay.collisionTimeMs,
       );
 
-      if (replayResult) {
-        const { posA } = replayResult;
-
-        if (!this._eventReplayStarted && !this.cameraFly.isActive()) {
-          this._eventReplayStarted = true;
-          // Fly camera so Earth is centred and the satellite region faces us —
-          // same as clicking a satellite in the normal view.
-          const event = getHistoricalEvent(currentState.eventReplay.eventId);
-          this.cameraFly.frameSelectedOnGlobe(
-            this.camera,
-            this.controls,
-            { x: posA.x, y: posA.y, z: posA.z },
-            event?.altitudeKm ?? 800,
-          );
-        }
+      if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
+        this._eventReplayStarted = true;
+        const event = getHistoricalEvent(currentState.eventReplay.eventId);
+        // Prefer to aim at the known collision geographic point so the user
+        // immediately sees the relevant region (e.g. Siberia for Iridium/Cosmos).
+        // Fall back to the satellite's current SGP4 position.
+        const collisionScene = this.eventReplayVisuals.getCollisionScene();
+        const aimAt = collisionScene ?? replayResult.posA;
+        this.cameraFly.frameSelectedOnGlobe(
+          this.camera,
+          this.controls,
+          { x: aimAt.x, y: aimAt.y, z: aimAt.z },
+          event?.altitudeKm ?? 800,
+        );
       }
 
       this.renderer.render(this.scene, this.camera);

@@ -156,11 +156,11 @@ export class EventReplayVisuals {
       }),
     );
 
-    /** Flashing red sphere that marks the ASAT target point / collision flash */
+    /** Expanding ring that marks the collision flash at T=0 */
     this.dotImpact = new Mesh(
-      new SphereGeometry(DOT_RADIUS * 2, 12, 8),
+      new SphereGeometry(DOT_RADIUS * 1.4, 12, 8),
       new MeshBasicMaterial({
-        color: 0xff3322,
+        color: 0xff4422,
         transparent: true,
         opacity: 0,
         blending: AdditiveBlending,
@@ -271,20 +271,20 @@ export class EventReplayVisuals {
     const sceneA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
     let posA = new Vector3(sceneA.x, sceneA.y, sceneA.z);
 
-    // Convergence blend: in the final 2 min smoothly pull dots toward the
-    // known collision ECI scene point so they visually meet at T=0,
-    // compensating for TLE propagation error (±hundreds of km at epoch+17h).
+    // Convergence blend: over the entire 5-min replay window, smoothly pull
+    // both dots toward the known collision ECI scene point so they meet at T=0.
+    // Uses an ease-in² curve so motion is gentle at the start and accelerates
+    // naturally as T→0. This compensates for TLE epoch error (can be 100s km).
     const { collisionScene } = this.parsed;
-    const BLEND_WINDOW_MS = 2 * 60 * 1000;
     const msToImpact = collisionTimeMs - simTime.getTime();
     let blendFactor = 0;
-    if (collisionScene && msToImpact >= 0 && msToImpact < BLEND_WINDOW_MS) {
-      // ease-in curve: starts slow, accelerates toward impact
-      const t = 1 - msToImpact / BLEND_WINDOW_MS;
-      blendFactor = t * t;
-    } else if (collisionScene && msToImpact < 0) {
-      // Past impact: hold at collision point
-      blendFactor = 1;
+    if (collisionScene) {
+      if (msToImpact >= 0 && msToImpact <= EVENT_REPLAY_REWIND_MS) {
+        const t = 1 - msToImpact / EVENT_REPLAY_REWIND_MS; // 0 at start → 1 at T=0
+        blendFactor = t * t; // ease-in²
+      } else if (msToImpact < 0) {
+        blendFactor = 1; // hold at collision point after impact
+      }
     }
 
     if (collisionScene && blendFactor > 0) {
@@ -345,6 +345,11 @@ export class EventReplayVisuals {
   getNames(): { nameA: string; nameB: string | null } | null {
     if (!this.parsed) return null;
     return { nameA: this.parsed.nameA, nameB: this.parsed.nameB };
+  }
+
+  /** Returns the known collision scene position, or null if not available. */
+  getCollisionScene(): Vector3 | null {
+    return this.parsed?.collisionScene ?? null;
   }
 
   dispose(): void {

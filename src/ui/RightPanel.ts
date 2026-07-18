@@ -472,12 +472,11 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
           const dz = propA.positionEci.z - propB.positionEci.z;
           let distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
-          // Blend the displayed distance toward 0 in the final 2 min,
-          // matching the visual convergence applied to the 3D dots.
-          const BLEND_WINDOW_MS = 2 * 60 * 1000;
+          // Mirror the 3D convergence blend: reduce displayed distance over the
+          // full replay window (ease-in² same as EventReplayVisuals).
           const msToImpact = collisionTimeMs - eventReplay.currentMs;
-          if (msToImpact >= 0 && msToImpact < BLEND_WINDOW_MS) {
-            const t = 1 - msToImpact / BLEND_WINDOW_MS;
+          if (msToImpact >= 0 && msToImpact <= EVENT_REPLAY_REWIND_MS) {
+            const t = 1 - msToImpact / EVENT_REPLAY_REWIND_MS;
             const blendFactor = t * t;
             distKm = distKm * (1 - blendFactor);
           } else if (msToImpact < 0) {
