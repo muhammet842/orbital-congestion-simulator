@@ -497,19 +497,18 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     if (_replayDistCached) distEl.textContent = _replayDistCached;
   }
 
-  // Impact banner — show for 30 s after T=0
+  // Impact banner — show from T=0 onwards (replay pauses here automatically)
   if (impactEl) {
-    const msAfter = -msToImpact;
-    const active = msAfter >= 0 && msAfter < 30_000;
-    impactEl.hidden = !active;
-    impactEl.classList.toggle('era-impact--active', active);
+    const atOrPastImpact = msToImpact <= 0;
+    impactEl.hidden = !atOrPastImpact;
+    impactEl.classList.toggle('era-impact--active', atOrPastImpact);
   }
 
-  // "Replay complete" label when auto-paused
+  // "Replay complete" label: visible when paused at the collision moment
   const completedEl = container.querySelector<HTMLElement>('[data-field="era-completed"]');
   if (completedEl) {
-    const completed = -msToImpact > 30_000;
-    completedEl.hidden = !completed;
+    const pausedAtImpact = msToImpact <= 0 && !eventReplay.playing;
+    completedEl.hidden = !pausedAtImpact;
   }
 }
 

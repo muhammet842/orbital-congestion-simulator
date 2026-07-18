@@ -211,11 +211,13 @@ export class SceneManager {
             event.collisionGeo ?? null,
           );
           this.cameraFly.captureGlobalView(this.camera, this.controls);
-          // Camera positioning happens in tick() once we have live satellite positions
+
+          // Hide all catalog satellite dots so only the 2 historical objects
+          // are visible. Modern TLEs extrapolated 15+ years backwards produce
+          // garbage positions that scatter across the scene.
+          if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
         }
 
-        // Keep Earth visible — event replay is an "overlay" on the globe view,
-        // not a close-up zoom like conjunction verification.
         this.earth.mesh.visible = true;
         return;
       }
@@ -227,6 +229,8 @@ export class SceneManager {
       this._eventReplayStarted = false;
       this.eventReplayVisuals.dispose();
       stopEventReplay();
+      // Restore catalog satellites visibility
+      if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
     }
 
@@ -365,18 +369,20 @@ export class SceneManager {
         currentState.eventReplay.collisionTimeMs,
       );
 
-      // Auto-pause 30 s after collision — prevents post-impact Earth rotation
-      // from making dots appear to "float" over wrong geographic regions.
-      if (replayResult?.replayComplete && currentState.eventReplay.playing) {
-        setEventReplayPartial({ playing: false });
+      // Pause exactly at T=0 — the collision moment is the natural end-point.
+      // This prevents post-impact Earth rotation from drifting the dots over
+      // wrong geographic regions while keeping the impact flash visible.
+      if (replayResult && currentState.eventReplay.playing) {
+        const msToImpact = currentState.eventReplay.collisionTimeMs - currentState.eventReplay.currentMs;
+        if (msToImpact <= 0) {
+          setEventReplayPartial({ playing: false });
+        }
       }
 
+      // One-time initial camera fly to the collision region
       if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
         this._eventReplayStarted = true;
         const event = getHistoricalEvent(currentState.eventReplay.eventId);
-        // Prefer to aim at the known collision geographic point so the user
-        // immediately sees the relevant region (e.g. Siberia for Iridium/Cosmos).
-        // Fall back to the satellite's current SGP4 position.
         const collisionScene = this.eventReplayVisuals.getCollisionScene();
         const aimAt = collisionScene ?? replayResult.posA;
         this.cameraFly.frameSelectedOnGlobe(
@@ -385,6 +391,28 @@ export class SceneManager {
           { x: aimAt.x, y: aimAt.y, z: aimAt.z },
           event?.altitudeKm ?? 800,
         );
+      }
+
+      // After initial fly, gently rotate the camera to keep the midpoint of
+      // the two approaching objects facing toward us. This ensures neither
+      // satellite goes off-screen as they converge.
+      if (this._eventReplayStarted && !this.cameraFly.isActive() && replayResult) {
+        const { posA, posB } = replayResult;
+        const midpoint = posB
+          ? posA.clone().add(posB).multiplyScalar(0.5)
+          : posA.clone();
+
+        const camRadius = this.camera.position.length();
+        const currentDir = this.camera.position.clone().normalize();
+        const desiredDir = midpoint.clone().normalize();
+
+        if (currentDir.dot(desiredDir) < 0.9995) {
+          // ~1.5 % lerp per frame → smooth but responsive
+          const newDir = currentDir.lerp(desiredDir, 0.015).normalize();
+          this.camera.position.copy(newDir.multiplyScalar(camRadius));
+          this.controls.target.set(0, 0, 0);
+          this.controls.update();
+        }
       }
 
       this.renderer.render(this.scene, this.camera);

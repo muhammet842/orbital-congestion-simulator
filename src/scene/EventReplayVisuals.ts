@@ -257,38 +257,22 @@ export class EventReplayVisuals {
   /**
    * Update dot positions to the current sim time.
    *
-   * Convergence strategy (fixes "satellite leaves its trail" problem):
+   * Convergence strategy:
    * - T−5min → T−2min : pure SGP4 position — dot stays on the orbital trail
    * - T−2min → T=0    : ease-in³ blend toward the known collision ECI point
-   *                     (cubic so the start is almost imperceptible and the
-   *                     finish is sharp — satellite appears to "dive" into the
-   *                     collision zone in the last ~20 seconds)
    * - T=0             : exactly at collision point; impact flash fires
-   * - T+30s           : replay auto-complete; all visuals hidden
    *
-   * Returns null if not active, or result with `replayComplete:true` to signal
-   * that SceneManager should pause the replay clock.
+   * SceneManager pauses replay at T=0; tick() may still be called with a
+   * frozen simTime = collisionTime so the impact flash remains displayed.
    */
   tick(
     simTime: Date,
     collisionTimeMs: number,
-  ): { posA: Vector3; posB: Vector3 | null; impactFlash: number; replayComplete: boolean } | null {
+  ): { posA: Vector3; posB: Vector3 | null; impactFlash: number } | null {
     if (!this.parsed) return null;
 
     const msToImpact = collisionTimeMs - simTime.getTime();
     const msAfterCollision = -msToImpact;
-    const FLASH_WINDOW_MS = 30_000;
-
-    // ── Auto-complete: hide everything 30 s after the collision ───────────
-    if (msAfterCollision > FLASH_WINDOW_MS) {
-      this.dotA.visible = false;
-      this.dotB.visible = false;
-      this.dotImpact.visible = false;
-      this.trailA.visible = false;
-      this.trailB.visible = false;
-      const fallback = this.parsed.collisionScene ?? new Vector3();
-      return { posA: fallback, posB: null, impactFlash: 0, replayComplete: true };
-    }
 
     const { satrecA, satrecB, collisionScene } = this.parsed;
 
@@ -368,7 +352,11 @@ export class EventReplayVisuals {
     }
 
     // ── Impact flash ──────────────────────────────────────────────────────
+    // Replay is paused by SceneManager exactly at T=0, so msAfterCollision
+    // will typically be 0 (frozen). The flash stays at full opacity as long
+    // as the replay clock is at or just after the collision moment.
     let impactFlash = 0;
+    const FLASH_WINDOW_MS = 30_000;
     if (msAfterCollision >= 0 && msAfterCollision < FLASH_WINDOW_MS) {
       impactFlash = 1 - msAfterCollision / FLASH_WINDOW_MS;
       const mat = this.dotImpact.material as MeshBasicMaterial;
@@ -379,7 +367,7 @@ export class EventReplayVisuals {
       this.dotImpact.visible = false;
     }
 
-    return { posA, posB, impactFlash, replayComplete: false };
+    return { posA, posB, impactFlash };
   }
 
   getNames(): { nameA: string; nameB: string | null } | null {
