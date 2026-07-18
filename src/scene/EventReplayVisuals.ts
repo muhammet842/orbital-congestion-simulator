@@ -214,18 +214,22 @@ function buildApproachArc(from: Vector3, to: Vector3, segments = 48): BufferGeom
 }
 
 // ── Debris cloud ──────────────────────────────────────────────────────────────
-const DEBRIS_COUNT = 140;
-/** How far in replay-ms the cloud stays visible after T=0 (15× speed → ~3s real). */
-const DEBRIS_FADE_MS = 45_000;
-/** Max tangential spread speed in scene-units per replay-second. */
-const DEBRIS_SPREAD = 0.0018;
+const DEBRIS_COUNT = 160;
+/** Real-world milliseconds the cloud stays visible after spawn. */
+const DEBRIS_FADE_REAL_MS = 5_000;
+/** Max tangential spread speed in scene-units per real-second. */
+const DEBRIS_SPREAD = 0.024;
 
 class DebrisCloud {
   readonly points: Points;
   private readonly positions: Float32Array;
   private readonly velocities: Vector3[];
-  /** collisionTimeMs stored at spawn(); used to compute elapsed replay time. */
-  private collisionMs: number | null = null;
+  /**
+   * Wall-clock timestamp (Date.now()) set when spawn() is called.
+   * The cloud is driven by REAL time, not replay time, so it stays
+   * animated even while the replay clock is paused at T=0.
+   */
+  private spawnWallMs: number | null = null;
   private originRadius = 1;
 
   constructor(color: number) {
@@ -234,7 +238,7 @@ class DebrisCloud {
     geo.setAttribute('position', new BufferAttribute(this.positions, 3));
     const mat = new PointsMaterial({
       color,
-      size: 0.0028,
+      size: 0.0038,
       transparent: true,
       opacity: 0,
       blending: AdditiveBlending,
@@ -245,12 +249,10 @@ class DebrisCloud {
     this.points = new Points(geo, mat);
     this.points.visible = false;
 
-    // Pre-generate random tangential velocity directions.
-    // Keep a mix of orbital-direction and cross-track components.
     this.velocities = Array.from({ length: DEBRIS_COUNT }, () => {
       const theta = Math.random() * Math.PI * 2;
       const phi   = Math.acos(2 * Math.random() - 1);
-      const speed = DEBRIS_SPREAD * (0.25 + Math.random() * 0.75);
+      const speed = DEBRIS_SPREAD * (0.2 + Math.random() * 0.8);
       return new Vector3(
         Math.sin(phi) * Math.cos(theta) * speed,
         Math.sin(phi) * Math.sin(theta) * speed,
@@ -259,8 +261,8 @@ class DebrisCloud {
     });
   }
 
-  spawn(origin: Vector3, collisionTimeMs: number): void {
-    this.collisionMs  = collisionTimeMs;
+  spawn(origin: Vector3): void {
+    this.spawnWallMs  = Date.now();
     this.originRadius = origin.length();
     for (let i = 0; i < DEBRIS_COUNT; i++) {
       this.positions[i * 3]     = origin.x;
@@ -271,17 +273,17 @@ class DebrisCloud {
     this.points.visible = true;
   }
 
-  tick(origin: Vector3, simTimeMs: number): void {
-    if (this.collisionMs === null) return;
-    const elapsed = simTimeMs - this.collisionMs; // replay-ms
+  /** Drive animation with real-world time so it runs even while replay is paused. */
+  tick(origin: Vector3): void {
+    if (this.spawnWallMs === null) return;
+    const elapsed = Date.now() - this.spawnWallMs; // real milliseconds
     if (elapsed < 0) { this.points.visible = false; return; }
 
-    const t = elapsed / 1000; // replay-seconds
+    const t = elapsed / 1000; // real seconds
     const r = this.originRadius;
 
     for (let i = 0; i < DEBRIS_COUNT; i++) {
       const vel = this.velocities[i];
-      // Spread in velocity direction, then project back onto the orbital sphere
       const px = origin.x + vel.x * t;
       const py = origin.y + vel.y * t;
       const pz = origin.z + vel.z * t;
@@ -293,13 +295,13 @@ class DebrisCloud {
     }
     (this.points.geometry.attributes.position as BufferAttribute).needsUpdate = true;
 
-    const fade = 1 - Math.min(1, elapsed / DEBRIS_FADE_MS);
-    (this.points.material as PointsMaterial).opacity = fade * 0.9;
+    const fade = 1 - Math.min(1, elapsed / DEBRIS_FADE_REAL_MS);
+    (this.points.material as PointsMaterial).opacity = fade * 0.95;
     this.points.visible = fade > 0.005;
   }
 
   reset(): void {
-    this.collisionMs = null;
+    this.spawnWallMs = null;
     this.points.visible = false;
     (this.points.material as PointsMaterial).opacity = 0;
   }
@@ -595,9 +597,9 @@ export class EventReplayVisuals {
     if (msAfterCollision >= 0 && this.parsed.eventType !== 'docking') {
       if (!this.debrisTriggered) {
         this.debrisTriggered = true;
-        this.debrisCloud.spawn(posA, collisionTimeMs);
+        this.debrisCloud.spawn(posA);
       }
-      this.debrisCloud.tick(posA, simTime.getTime());
+      this.debrisCloud.tick(posA);
     } else if (msAfterCollision < 0) {
       // Reset if replay is rewound back before T=0
       if (this.debrisTriggered) {
