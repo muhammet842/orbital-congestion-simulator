@@ -52,6 +52,13 @@ export interface HistoricalEvent {
    */
   approachA: { inclinationDeg: number; ascending: boolean };
   approachB: { inclinationDeg: number; ascending: boolean } | null;
+  /**
+   * Turkish-language background card shown in the right panel.
+   * title  — short label (e.g. "Tarihteki İlk Büyük Uydu Çarpışması")
+   * reason — why it happened
+   * outcome — consequences / historical significance
+   */
+  info: { title: string; reason: string; outcome: string };
 }
 
 export const HISTORICAL_EVENTS: HistoricalEvent[] = [
@@ -76,6 +83,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // crossing rather than one nearly-horizontal path.
     approachA: { inclinationDeg: 86.4, ascending: false },
     approachB: { inclinationDeg: 74.0, ascending: true },
+    info: {
+      title: 'Tarihteki İlk Büyük Uydu Çarpışması',
+      reason: 'Tamamen kazara gerçekleşti. Biri aktif (Iridium 33), diğeri işlevsiz (Cosmos 2251) iki uydu, birbirinden habersiz olarak aynı yörünge düzlemini aşırı yüksek hızla (yaklaşık 11,6 km/s göreli hız) kesti.',
+      outcome: 'Kontrolsüz uzay çöplerinin ve aktif uyduların takibinin ne kadar kritik olduğunu dünyaya gösteren, uzay çağının en büyük dönüm noktası kazasıdır. Oluşan ~2.000 takip edilebilir enkaz parçası onlarca yıl boyunca alçak Dünya yörüngesini tehdit etmeye devam etti.',
+    },
     objectA: {
       name: 'IRIDIUM 33',
       noradId: 24946,
@@ -106,6 +118,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // FY-1C in retrograde SSO, ascending at the interception latitude
     approachA: { inclinationDeg: 98.8, ascending: true },
     approachB: null,
+    info: {
+      title: 'Çin Anti-Uydu Füze Testi',
+      reason: 'Çin Halk Kurtuluş Ordusu\'nun yerden fırlatılan kinetik sistemlerle (SC-19 / KT-2 füzesi) alçak yörüngedeki uyduları imha etme kapasitesini test etmek amacıyla bilerek planlandı.',
+      outcome: 'Tarihin en büyük yapay uzay çöpü bulutunu oluşturan olaydır. 3.000\'den fazla büyük boyutlu enkaz parçası hâlâ yörüngede dolaşmakta ve diğer uyduları aktif olarak tehdit etmektedir. Olay, uluslararası toplumun ASAT testlerine karşı ciddi tepkisine yol açtı.',
+    },
     objectA: {
       name: 'FENGYUN-1C',
       noradId: 25730,
@@ -131,6 +148,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // Cosmos 1408 ascending northward at the time of interception
     approachA: { inclinationDeg: 82.6, ascending: true },
     approachB: null,
+    info: {
+      title: 'Rusya Anti-Uydu Füze Testi',
+      reason: 'Rusya\'nın kendi geliştirdiği A-235 Nudol (PL-19) balistik füze savunma sisteminin alçak Dünya yörüngesindeki uyduları kinetik olarak vurma yeteneğini test etmek amacıyla bilerek planlandı.',
+      outcome: 'Oluşan enkaz bulutu, Uluslararası Uzay İstasyonu\'nun yörüngesini doğrudan kesti; mürettebat saatler boyunca sığınak kapsüllerine geçmek zorunda kaldı. Olay, uluslararası arenada büyük kınama ve ASAT testlerinin yasaklanması yönünde baskılara neden oldu.',
+    },
     objectA: {
       name: 'COSMOS 1408',
       noradId: 13552,
@@ -155,6 +177,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // USA-193 was descending (coming south after passing high lat) at intercept
     approachA: { inclinationDeg: 58.5, ascending: false },
     approachB: null,
+    info: {
+      title: 'Burnt Frost Operasyonu',
+      reason: 'ABD Ulusal Keşif Ofisi\'ne ait arızalı NRO casus uydusunun kontrolsüzce Dünya\'ya düşmesini önlemek ve içindeki yaklaşık 450 kg toksik hidrazin yakıt tankının kalabalık bölgelere zarar vermeden yörüngede imha edilmesi amacıyla bilerek planlandı.',
+      outcome: 'Deniz kuvvetlerine ait USS Lake Erie kruvazöründen fırlatılan SM-3 füzesi, uyduyu 247 km irtifada başarıyla vurdu. Alçak irtifada gerçekleştiği için oluşan enkaz parçalarının büyük çoğunluğu birkaç hafta içinde atmosferde yanarak yok oldu.',
+    },
     objectA: {
       name: 'USA 193',
       noradId: 29651,
@@ -180,6 +207,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     approachA: { inclinationDeg: 98.6, ascending: true },
     // Ariane debris from a different SSO pass — descending (heading south) for head-on crossing
     approachB: { inclinationDeg: 98.6, ascending: false },
+    info: {
+      title: 'İlk Tescilli Uzay Çöpü Çarpışması',
+      reason: 'Tamamen kazara gerçekleşti. Aktif Fransız askeri istihbarat uydusu Cerise, fırlatılmasının üzerinden 9 yıl geçmiş ve artık takip edilmeyen bir Ariane 3 roketinin üst katmanından kopan başıboş bir enkaz parçasıyla yörüngede karşılaştı.',
+      outcome: 'Uzay tarihinde, bir uydunun kataloglanmış insan yapımı bir uzay çöpüyle çarpışmasının resmi olarak tescillendiği ilk olaydır. Çarpışma sonucu Cerise\'in yerçekimi gradyan stabilizasyon anteni koptu. Bu olay, uzay çöpü tehlikesini uluslararası kamuoyunun gündemine taşıdı.',
+    },
     objectA: {
       name: 'CERISE',
       noradId: 23606,
@@ -210,6 +242,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // Both spacecraft in near-equatorial GEO, MEV-1 approaching from slightly different longitude
     approachA: { inclinationDeg: 0.2, ascending: true },
     approachB: { inclinationDeg: 0.1, ascending: false },
+    info: {
+      title: 'Yörüngede Güvenli Kenetlenme',
+      reason: 'Yakıtı tükenmek üzere olan ancak elektronik sistemleri hâlâ çalışır durumda bulunan Intelsat 901 haberleşme uydusunun servis ömrünü uzatmak için ticari bir yörüngede servis aracı (MEV-1) tarafından arkadan yavaşça kenetlendi.',
+      outcome: 'Uzay tarihindeki ilk başarılı ticari "yörüngede servis ve kenetleme" operasyonudur. Sıfır patlama, sıfır enkaz. Kenetlenen ikili daha sonra birlikte yeni bir GEO slotuna taşındı ve Intelsat 901\'in operasyonel ömrü 5 yıl daha uzatıldı.',
+    },
     objectA: {
       name: 'MEV-1',
       noradId: 44343,
@@ -239,6 +276,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     // Ascending toward its orbital peak at the high northern latitude
     approachA: { inclinationDeg: 64.9, ascending: true },
     approachB: null,
+    info: {
+      title: 'Gizemli Yörünge Dağılması',
+      reason: 'Dışarıdan herhangi bir etki (füze veya çarpışma) olmaksızın, uydunun yörüngede ilerlerken büyük ihtimalle bir batarya veya yakıt tankı arızasından kaynaklanan iç basınç nedeniyle aniden parçalandığı değerlendirilmektedir. Rusya resmi bir açıklama yapmadı.',
+      outcome: 'Rusya\'nın gizli manevra uyduları programının bir parçası olan araç, aniden düzinelerce parçaya ayrılarak arkasında takibi güç bir enkaz bulutu bıraktı. Olay, uzayda manevra yapabilen "kinetik silah" uydularına yönelik kaygıları yeniden alevlendirdi.',
+    },
     objectA: {
       name: 'KOSMOS 2499',
       noradId: 39765,

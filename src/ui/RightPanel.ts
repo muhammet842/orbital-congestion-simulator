@@ -364,6 +364,27 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
   `;
 }
 
+function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
+  if (!event?.info) return '';
+  const { title, reason, outcome } = event.info;
+  const eType = event.eventType ?? 'collision';
+  return `
+    <div class="eic eic--${escapeHtml(eType)}">
+      <div class="eic__title">
+        <span class="eic__badge">${escapeHtml(title)}</span>
+      </div>
+      <div class="eic__section">
+        <h4 class="eic__heading">Neden Yaşandı?</h4>
+        <p class="eic__text">${escapeHtml(reason)}</p>
+      </div>
+      <div class="eic__section">
+        <h4 class="eic__heading">Sonuç ve Etkileri</h4>
+        <p class="eic__text">${escapeHtml(outcome)}</p>
+      </div>
+    </div>
+  `;
+}
+
 function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   const event = getHistoricalEvent(eventId);
   if (!event) {
@@ -388,6 +409,7 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
         <div class="detail-row"><dt>Debris generated</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
       </dl>
     </div>
+    ${buildInfoCard(event)}
   `;
 }
 
@@ -466,6 +488,8 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
       Return to Global View
     </button>
+
+    ${buildInfoCard(event)}
   `;
 }
 

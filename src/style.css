@@ -1437,3 +1437,64 @@ body {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Event Information Card (eic) ───────────────────────────────────── */
+
+.eic {
+  margin-top: 14px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(10, 14, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  /* Left accent bar — color set per eventType below */
+  border-left-width: 3px;
+}
+.eic--collision { border-left-color: rgba(248, 113, 113, 0.7); }
+.eic--asat      { border-left-color: rgba(251, 146,  60, 0.7); }
+.eic--docking   { border-left-color: rgba( 74, 222, 128, 0.7); }
+.eic--breakup   { border-left-color: rgba(250, 204,  21, 0.7); }
+
+/* Card title / badge row */
+.eic__title {
+  padding: 9px 12px 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.eic__badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+}
+
+/* Section blocks */
+.eic__section {
+  padding: 9px 12px;
+}
+.eic__section + .eic__section {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Section heading */
+.eic__heading {
+  margin: 0 0 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+/* Per-type accent on heading */
+.eic--collision .eic__heading { color: #f87171; }
+.eic--asat      .eic__heading { color: #fb923c; }
+.eic--docking   .eic__heading { color: #4ade80; }
+.eic--breakup   .eic__heading { color: #facc15; }
+
+/* Body text */
+.eic__text {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.65;
+  color: #94a3b8;
+}
