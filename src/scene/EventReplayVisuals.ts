@@ -18,9 +18,9 @@ import type { HistoricalEventTLE } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
 /** How far past the collision to draw the trail (ms). */
-const TRAIL_FORWARD_MS = 2 * 60 * 1000;
-/** Trail sampling interval (ms). */
-const TRAIL_STEP_MS = 5_000;
+const TRAIL_FORWARD_MS = 90 * 1000;
+/** Trail sampling interval (ms) — coarser = faster setup, still smooth visually. */
+const TRAIL_STEP_MS = 10_000;
 
 /** Glow sphere radius in scene units (same scale as Earth radius = 1). */
 const DOT_RADIUS = 0.005;

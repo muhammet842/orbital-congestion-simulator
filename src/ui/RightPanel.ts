@@ -28,6 +28,10 @@ import { loadObjectPhotoInto } from '../data/objectPhotos';
 /** Cached satrecs for event replay distance computation */
 const replaySatrecCache: Map<string, { satrecA: SatRec; satrecB: SatRec | null }> = new Map();
 
+/** Throttle distance calculation to ~4 Hz in the right panel */
+let _replayDistLastMs = 0;
+let _replayDistCached: string | null = null;
+
 function verificationRiskClass(status: string): string {
   if (status === 'COLLISION CONFIRMED') return 'conjunction-risk--confirmed';
   if (status === 'COLLISION AVERTED') return 'conjunction-risk--averted';
@@ -452,22 +456,27 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance between the two objects
+  // Distance — throttled to 4 Hz to avoid per-frame SGP4 cost in the panel
   if (distEl) {
-    const cached = replaySatrecCache.get(eventId);
-    if (cached?.satrecB) {
-      const propA = propagateObject(cached.satrecA, simTime);
-      const propB = propagateObject(cached.satrecB, simTime);
-      if (propA && propB) {
-        const dx = propA.positionEci.x - propB.positionEci.x;
-        const dy = propA.positionEci.y - propB.positionEci.y;
-        const dz = propA.positionEci.z - propB.positionEci.z;
-        const distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        distEl.textContent = distKm < 10
-          ? `${distKm.toFixed(3)} km`
-          : `${distKm.toFixed(1)} km`;
+    const now = performance.now();
+    if (now - _replayDistLastMs > 250) {
+      _replayDistLastMs = now;
+      const cached = replaySatrecCache.get(eventId);
+      if (cached?.satrecB) {
+        const propA = propagateObject(cached.satrecA, simTime);
+        const propB = propagateObject(cached.satrecB, simTime);
+        if (propA && propB) {
+          const dx = propA.positionEci.x - propB.positionEci.x;
+          const dy = propA.positionEci.y - propB.positionEci.y;
+          const dz = propA.positionEci.z - propB.positionEci.z;
+          const distKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          _replayDistCached = distKm < 10
+            ? `${distKm.toFixed(3)} km`
+            : `${distKm.toFixed(1)} km`;
+        }
       }
     }
+    if (_replayDistCached) distEl.textContent = _replayDistCached;
   }
 
   // Impact banner — show for 30 s after T=0

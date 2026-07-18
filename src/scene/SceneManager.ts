@@ -343,6 +343,57 @@ export class SceneManager {
 
     const currentState = getState();
     const simTime = getSimulationTime();
+
+    // ── Event replay fast-path: skip bulk propagation of all catalog satellites
+    //    (they have modern TLEs; propagating them to 2007/2009/2021 is extremely
+    //    slow and produces garbage results). Only run the two historical satrecs.
+    if (currentState.eventReplay) {
+      const flying = this.cameraFly.update(this.camera, this.controls, now);
+      if (!flying) this.controls.update();
+      this.camera.updateMatrixWorld();
+
+      const replayResult = this.eventReplayVisuals.tick(
+        simTime,
+        currentState.eventReplay.collisionTimeMs,
+      );
+
+      if (replayResult) {
+        const { posA, posB } = replayResult;
+        const midPoint = posB
+          ? new Vector3().addVectors(posA, posB).multiplyScalar(0.5)
+          : posA.clone();
+
+        if (!this.cameraFly.isActive()) {
+          if (!this._eventReplayStarted) {
+            this._eventReplayStarted = true;
+            // Initial fly-in: use a large fictitious separation so the camera
+            // backs off enough to see both trail lines clearly.
+            const distKm = posB ? posA.distanceTo(posB) * 6371 * 4 + 200 : 500;
+            this.cameraFly.flyToConjunctionPair(
+              this.camera,
+              this.controls,
+              posA,
+              posB ?? posA,
+              distKm,
+            );
+          } else if (!flying) {
+            // Smooth-follow midpoint each frame
+            const alpha = 1 - Math.exp(-(deltaMs / 1000) * 2);
+            const delta = midPoint.clone().sub(this.controls.target).multiplyScalar(alpha);
+            this.controls.target.add(delta);
+            this.camera.position.add(delta);
+          }
+        }
+      }
+
+      this.renderer.render(this.scene, this.camera);
+      this.updateFps(now);
+      return; // skip all catalog propagation, conjunction scan, etc.
+    }
+
+    this._eventReplayStarted = false;
+
+    // ── Normal tick ──────────────────────────────────────────────────────────
     const timeSpeed =
       currentState.verificationTime?.speed ??
       (currentState.time.mode === 'historical' ? currentState.time.speed : 1);
@@ -438,36 +489,6 @@ export class SceneManager {
       getConjunctions(currentState.objects, simTime, timeSpeed, (fresh) => {
         setConjunctions(fresh);
       });
-    }
-
-    // --- Event replay tick ---
-    if (currentState.eventReplay) {
-      const replayResult = this.eventReplayVisuals.tick(simTime, currentState.eventReplay.collisionTimeMs);
-      if (replayResult && !flying) {
-        const { posA, posB } = replayResult;
-        const midPoint = posB
-          ? new Vector3().addVectors(posA, posB).multiplyScalar(0.5)
-          : posA.clone();
-
-        if (!this.cameraFly.isActive()) {
-          // On the very first frame of the replay, fly to the initial satellite positions
-          if (this.lastEventReplayId && !this._eventReplayStarted) {
-            this._eventReplayStarted = true;
-            const distKm = posB ? posA.distanceTo(posB) * 6371 : 500;
-            this.cameraFly.flyToConjunctionPair(this.camera, this.controls, posA, posB ?? posA, distKm);
-          } else {
-            // Smooth-follow midpoint each frame
-            const alpha = 1 - Math.exp(-(deltaMs / 1000) * 3);
-            this.controls.target.lerp(midPoint, alpha);
-            this.camera.position.addScaledVector(
-              midPoint.clone().sub(this.controls.target),
-              alpha,
-            );
-          }
-        }
-      }
-    } else {
-      this._eventReplayStarted = false;
     }
 
     this.renderer.render(this.scene, this.camera);
