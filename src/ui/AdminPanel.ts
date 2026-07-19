@@ -140,17 +140,17 @@ function countryFlag(code: string): string {
   } catch { return '🌐'; }
 }
 
-/** Increment a country visit counter in Firebase (once per session). */
-async function fbIncCountry(code: string, name: string): Promise<void> {
-  // Store as "CODE|Name" so we can display the name alongside the flag
-  const key = `${code}|${encodeURIComponent(name)}`;
-  const r = await fbFetch(`/orbital_countries/${encodeURIComponent(key)}.json`);
+/** Increment a country visit counter in Firebase.
+ *  Key is the 2-letter ISO code (TR, US, DE…) — no encoding issues. */
+async function fbIncCountry(code: string): Promise<void> {
+  const safeCode = code.toUpperCase().replace(/[^A-Z]/g, 'X').slice(0, 2) || 'XX';
+  const r = await fbFetch(`/orbital_countries/${safeCode}.json`);
   if (!r || !r.ok) return;
   const cur = ((await r.json().catch(() => null)) as number | null) ?? 0;
   const base = getFirebaseUrl();
   const ctl = new AbortController();
   const tid = setTimeout(() => ctl.abort(), 4000);
-  await fetch(`${base}/orbital_countries/${encodeURIComponent(key)}.json`, {
+  await fetch(`${base}/orbital_countries/${safeCode}.json`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cur + 1),
@@ -159,17 +159,22 @@ async function fbIncCountry(code: string, name: string): Promise<void> {
   clearTimeout(tid);
 }
 
+/** Get the display name for an ISO 3166-1 alpha-2 country code. */
+function countryName(code: string): string {
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? code;
+  } catch { return code; }
+}
+
 /** Track the visitor's country in Firebase (once per browser session). */
 async function trackCountry(): Promise<void> {
   if (isAdminMode()) return;
-  const cached = sessionStorage.getItem('orbital_geo_tracked');
-  if (cached) return; // already tracked this session
+  if (sessionStorage.getItem('orbital_geo_tracked')) return;
   sessionStorage.setItem('orbital_geo_tracked', '1');
   try {
     const geo = await fetchGeo();
-    if (geo?.country_name) {
-      const code = (geo as unknown as Record<string, string>)['country_code'] ?? 'XX';
-      await fbIncCountry(code, geo.country_name);
+    if (geo?.country_code) {
+      await fbIncCountry(geo.country_code);
     }
   } catch { /* non-fatal */ }
 }
@@ -232,7 +237,14 @@ export function revokeAdmin(): void {
 
 // ── Geolocation cache ─────────────────────────────────────────────────────────
 
-interface GeoData { ip: string; city: string; region: string; country_name: string; org: string; }
+interface GeoData {
+  ip: string;
+  city: string;
+  region: string;
+  country_name: string;
+  country_code: string; // ISO 3166-1 alpha-2, e.g. "TR"
+  org: string;
+}
 let geoCache: GeoData | null = null;
 let geoFetching = false;
 
@@ -445,13 +457,9 @@ function renderCountryList(countries: CountryMap | null): string {
   if (!countries || Object.keys(countries).length === 0) {
     return '<p class="ap-note-text" style="margin:4px 0 0;font-size:0.73rem">Henüz ülke verisi yok — ziyaretçi bekleniyor.</p>';
   }
-  // Parse "CODE|Name" keys
+  // Keys are plain 2-letter ISO codes (TR, US, DE…)
   const parsed = Object.entries(countries)
-    .map(([key, count]) => {
-      const [code, encodedName] = key.split('|');
-      const name = encodedName ? decodeURIComponent(encodedName) : code;
-      return { code, name, count };
-    })
+    .map(([code, count]) => ({ code, name: countryName(code), count }))
     .sort((a, b) => b.count - a.count);
 
   const rows = parsed.map(({ code, name, count }) =>
