@@ -56,7 +56,7 @@ export function initLeftPanel(container: HTMLElement): void {
     <h2 class="panel-heading" data-i18n="ui.live_stats">Live Stats</h2>
     <dl class="stats-list" id="live-stats"></dl>
 
-    <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts</h2>
+    <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts (Next 24h)</h2>
     <div class="conjunction-list" id="conjunction-list"></div>
 
     <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
@@ -318,6 +318,7 @@ function renderConjunctions(container: HTMLElement): void {
     return;
   }
 
+  const nowMs = getSimulationTime().getTime();
   const nextKeys = new Set<string>();
   const alertsHtml = conjunctions
     .map((c, index) => {
@@ -325,10 +326,12 @@ function renderConjunctions(container: HTMLElement): void {
       const isNew = !previousAlertKeys.has(sessionKey);
       const isActive = sessionKey === selectedConjunctionSessionKey;
       nextKeys.add(sessionKey);
-      const message = t('conj.alert')
+      const msUntil = c.time.getTime() - nowMs;
+      const message = t(msUntil > 1000 ? 'conj.alert_in' : 'conj.alert')
         .replace('{a}', c.objectA)
         .replace('{b}', c.objectB)
-        .replace('{km}', c.distanceKm.toFixed(2));
+        .replace('{km}', c.distanceKm.toFixed(2))
+        .replace('{t}', formatTimeUntil(msUntil));
       return `
         <button
           type="button"
@@ -352,6 +355,19 @@ function renderConjunctions(container: HTMLElement): void {
 }
 
 let previousAlertKeys = new Set<string>();
+
+/** Compact "in 3h 12m" / "in 45s" style duration, for predicted close approaches
+ *  up to 24h out. Falls back to 0s for anything already at/past CPA. */
+function formatTimeUntil(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+
+  if (h > 0) return t('unit.h_m').replace('{h}', String(h)).replace('{m}', String(m));
+  if (m > 0) return t('unit.m_s').replace('{m}', String(m)).replace('{s}', String(s));
+  return t('unit.s').replace('{s}', String(s));
+}
 
 // ── Advanced Filters ──────────────────────────────────────────────────────────
 

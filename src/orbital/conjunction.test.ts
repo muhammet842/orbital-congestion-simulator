@@ -4,11 +4,14 @@ import {
   conjunctionSessionKey,
   findCandidatePairsWithinRadius,
   findConjunctions,
+  findUpcomingConjunctions,
   formatCloseApproachAlert,
   formatRelativeVelocityKmS,
   getConjunctions,
   getRiskAssessment,
+  getUpcomingConjunctions,
   invalidateConjunctionCache,
+  invalidateUpcomingConjunctionCache,
   isCoOrbitingPair,
   normalizeConjunctionAlert,
 } from './conjunction';
@@ -393,6 +396,181 @@ describe('findConjunctions — narrow high-speed window detection', () => {
     const result = findConjunctions(objects, sampleTime);
 
     expect(result.alerts).toHaveLength(0);
+  });
+});
+
+describe('findUpcomingConjunctions — forward-looking 24h screen', () => {
+  const SAMPLE_STEP_MS = 30 * 60 * 1000; // 30 min
+  const HORIZON_MS = 6 * SAMPLE_STEP_MS; // 3h, i.e. 6 samples (steps 0..6)
+  const REL_VELOCITY_KM_S = 0.5;
+  const MIN_SEPARATION_KM = 2.0;
+
+  function makeSlowPair(): TrackedObject[] {
+    const base = {
+      country: 'US',
+      owner: 'TEST',
+      layer: 'LEO' as const,
+      color: [1, 1, 1] as [number, number, number],
+      functionGroup: 'debris' as const,
+      meanAltitudeKm: 550,
+      inclinationDeg: 53,
+    };
+    return [
+      {
+        ...base,
+        noradId: 10,
+        name: 'SLOW-A',
+        line1: 'A-LINE-1',
+        line2: 'A-LINE-2',
+        category: 'debris',
+        satrec: { id: 'A' } as unknown as TrackedObject['satrec'],
+      },
+      {
+        ...base,
+        noradId: 20,
+        name: 'SLOW-B',
+        line1: 'B-LINE-1',
+        line2: 'B-LINE-2',
+        category: 'debris',
+        satrec: { id: 'B' } as unknown as TrackedObject['satrec'],
+      },
+    ];
+  }
+
+  /** Linear relative motion whose true closest approach sits exactly at `cpaMs`. */
+  function mockLinearApproach(cpaMs: number): void {
+    vi.spyOn(propagatorModule, 'propagateObject').mockImplementation((satrec, date) => {
+      const id = (satrec as unknown as { id: string }).id;
+      const dtSec = (date.getTime() - cpaMs) / 1000;
+      const sign = id === 'A' ? 1 : -1;
+      return {
+        positionEci: {
+          x: sign * (REL_VELOCITY_KM_S / 2) * dtSec,
+          y: id === 'A' ? 0 : MIN_SEPARATION_KM,
+          z: 0,
+        },
+        velocityEci: { x: sign * (REL_VELOCITY_KM_S / 2), y: 0, z: 0 },
+        altitudeKm: 550,
+        velocityKmS: REL_VELOCITY_KM_S / 2,
+        inclinationDeg: 53,
+        layer: 'LEO',
+      };
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('predicts an approach whose CPA lands on one of the sampled snapshots', () => {
+    const objects = makeSlowPair();
+    const startMs = Date.now();
+    // Align the true CPA exactly on the 3rd sample so the coarse pass is
+    // guaranteed to see it well inside the detection net.
+    const cpaMs = startMs + 3 * SAMPLE_STEP_MS;
+    mockLinearApproach(cpaMs);
+
+    const result = findUpcomingConjunctions(objects, new Date(startMs), HORIZON_MS, SAMPLE_STEP_MS);
+
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts[0].distanceKm).toBeCloseTo(MIN_SEPARATION_KM, 1);
+    expect(Math.abs(result.alerts[0].time.getTime() - cpaMs)).toBeLessThan(5_000);
+    // This is the whole point of the feature: the predicted event is in the
+    // future relative to the scan's start time, not "happening right now".
+    expect(result.alerts[0].time.getTime()).toBeGreaterThan(startMs);
+  });
+
+  it('reports nothing when the pair never comes within the detection radius', () => {
+    const objects = makeSlowPair();
+    const startMs = Date.now();
+    // CPA far outside the horizon entirely — never sampled anywhere close.
+    mockLinearApproach(startMs + 30 * HORIZON_MS);
+
+    const result = findUpcomingConjunctions(objects, new Date(startMs), HORIZON_MS, SAMPLE_STEP_MS);
+
+    expect(result.alerts).toHaveLength(0);
+  });
+
+  it('does not report a predicted approach whose true CPA falls outside the requested horizon', () => {
+    const objects = makeSlowPair();
+    const startMs = Date.now();
+    // The last sample (step 6) sits at startMs + HORIZON_MS. Put the true
+    // CPA just 60s beyond that — at 0.5 km/s relative velocity the raw
+    // distance at the last sample is only ~30 km (well inside the 50 km
+    // detection radius), so this specifically exercises the horizon
+    // boundary clip on the *refined* CPA time, not "too far away to notice
+    // at all".
+    const cpaMs = startMs + HORIZON_MS + 60 * 1000;
+    mockLinearApproach(cpaMs);
+
+    const result = findUpcomingConjunctions(objects, new Date(startMs), HORIZON_MS, SAMPLE_STEP_MS);
+
+    expect(result.alerts).toHaveLength(0);
+  });
+});
+
+describe('getUpcomingConjunctions — async, incremental scheduling', () => {
+  type IdleDeadline = { didTimeout: boolean; timeRemaining: () => number };
+  type IdleCallback = (deadline: IdleDeadline) => void;
+
+  beforeEach(() => {
+    invalidateUpcomingConjunctionCache();
+  });
+
+  afterEach(() => {
+    invalidateUpcomingConjunctionCache();
+    vi.unstubAllGlobals();
+  });
+
+  it('spreads a full sweep across one idle callback per snapshot before reporting a result', () => {
+    const scheduled: IdleCallback[] = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        scheduled.push(cb);
+        return scheduled.length;
+      }),
+    );
+
+    const onUpdate = vi.fn();
+    // Empty object list keeps every snapshot trivial (no LEO entries to
+    // propagate) — this test only exercises the *scheduling* shape (one
+    // idle slice per snapshot, self-rescheduling until done), not the scan.
+    getUpcomingConjunctions([], new Date(), onUpdate);
+
+    expect(scheduled.length).toBe(1);
+    expect(onUpdate).not.toHaveBeenCalled();
+
+    let guard = 0;
+    while (onUpdate.mock.calls.length === 0 && guard < 1000) {
+      const cb = scheduled[scheduled.length - 1];
+      cb({ didTimeout: false, timeRemaining: () => 50 });
+      guard++;
+    }
+
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate).toHaveBeenCalledWith({ alerts: [], hiddenCount: 0 });
+    // A real sweep is many snapshots — this must not have finished in one shot.
+    expect(guard).toBeGreaterThan(1);
+  });
+
+  it('does not start a second sweep while one is still in progress', () => {
+    const scheduled: IdleCallback[] = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        scheduled.push(cb);
+        return scheduled.length;
+      }),
+    );
+
+    const onUpdate = vi.fn();
+    getUpcomingConjunctions([], new Date(), onUpdate);
+    expect(scheduled.length).toBe(1);
+
+    // Scan is still mid-flight — this must not kick off a second, concurrent sweep.
+    getUpcomingConjunctions([], new Date(), onUpdate);
+    expect(scheduled.length).toBe(1);
   });
 });
 

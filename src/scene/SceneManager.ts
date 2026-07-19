@@ -10,7 +10,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { getConjunctions, conjunctionSessionKey } from '../orbital/conjunction';
+import { getUpcomingConjunctions, conjunctionSessionKey } from '../orbital/conjunction';
 import { getDebrisUpdateStride, getPropagationResults } from '../orbital/propagationBatch';
 import { PropagationWorkerBridge } from '../orbital/PropagationWorkerBridge';
 import { eciToScene } from '../orbital/coordinates';
@@ -599,7 +599,9 @@ export class SceneManager {
     );
 
     if (!currentState.selectedConjunction) {
-      getConjunctions(currentState.objects, simTime, timeSpeed, (fresh) => {
+      // Forward-looking: predicts the closest approaches over the next 24h
+      // rather than only reporting what's happening at this exact instant.
+      getUpcomingConjunctions(currentState.objects, simTime, (fresh) => {
         setConjunctions(fresh);
       });
     }

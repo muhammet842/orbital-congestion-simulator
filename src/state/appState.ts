@@ -2,6 +2,7 @@ import type { ConjunctionScanResult } from '../orbital/conjunction';
 import {
   conjunctionSessionKey,
   invalidateConjunctionCache,
+  invalidateUpcomingConjunctionCache,
   normalizeConjunctionAlert,
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
@@ -259,7 +260,10 @@ function restoreGlobalLiveTime(): TimeState {
 
 export function selectObject(index: number): void {
   const wasVerifying = state.verificationTime != null;
-  if (wasVerifying) invalidateConjunctionCache();
+  if (wasVerifying) {
+    invalidateConjunctionCache();
+    invalidateUpcomingConjunctionCache();
+  }
   setState({
     selectedIndex: index,
     selectedEventId: null,
@@ -278,7 +282,10 @@ export function clearObjectSelection(): void {
 
 export function selectHistoricalEvent(eventId: string): void {
   const wasVerifying = state.verificationTime != null;
-  if (wasVerifying) invalidateConjunctionCache();
+  if (wasVerifying) {
+    invalidateConjunctionCache();
+    invalidateUpcomingConjunctionCache();
+  }
   setState({
     selectedEventId: eventId,
     selectedIndex: null,
@@ -338,6 +345,7 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
 
   if (state.verificationTime) {
     invalidateConjunctionCache();
+    invalidateUpcomingConjunctionCache();
   }
 
   const cpaTimeMs = frozen.time.getTime();
@@ -375,6 +383,7 @@ export function toggleConjunctionFromAlert(alert: ConjunctionEvent): void {
 export function clearSelectedConjunction(): void {
   if (!state.selectedConjunction && !state.verificationTime) return;
   invalidateConjunctionCache();
+  invalidateUpcomingConjunctionCache();
   setState({
     selectedConjunction: null,
     selectedConjunctionSessionKey: null,

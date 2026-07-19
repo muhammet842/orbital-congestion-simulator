@@ -9,6 +9,7 @@ import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
 import { findConjunctions } from './orbital/conjunction';
+import { applyTranslations } from './i18n/i18n';
 
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
@@ -35,6 +36,13 @@ async function main(): Promise<void> {
     initLeftPanel(leftPanel);
     initRightPanel(rightPanel);
     initTimeControls(timeBar);
+
+    // Static [data-i18n] headings are hardcoded in English in their markup
+    // (as a no-JS-yet placeholder) and only otherwise get translated on a
+    // *later* language switch — without this, a first-time visitor whose
+    // browser/stored language resolves to non-English would see an
+    // untranslated shell until they touched the language dropdown.
+    applyTranslations(document);
 
     const sceneManager = new SceneManager(sceneContainer);
     await sceneManager.initOrbitalMeshes(objects);

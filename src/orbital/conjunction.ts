@@ -679,3 +679,220 @@ export function invalidateConjunctionCache(): void {
   cache = null;
   pendingRefresh = null;
 }
+
+// ── Predictive 24h scan ─────────────────────────────────────────────────────
+/**
+ * Unlike everything above (which only ever evaluates the *current* instant,
+ * plus a ±10s refine window around it), this walks forward in time and asks
+ * "what will actually pass close over the next N hours?" — a genuine
+ * prediction, not a live radar of what's already happening.
+ *
+ * Approach: sample the whole LEO catalog at fixed intervals across the
+ * horizon, run the same spatial-hash candidate search at each snapshot, and
+ * locally refine every candidate found (reusing `refineCloseApproach`, which
+ * already does its own coarse+fine zoom). The single best (closest) approach
+ * per object pair anywhere in the horizon is kept.
+ *
+ * This is deliberately *not* exhaustive. Fast-crossing LEO pairs (relative
+ * velocity up to ~15 km/s) can cross an entire wide detection net between
+ * two 10-minute snapshots — the same fundamental sampling trade-off as the
+ * live scan above, just at a much coarser cadence because a full-catalog
+ * SGP4 sweep repeated every few minutes for 24h is already a lot of compute.
+ * This is a best-effort screening pass (same spirit as real-world "smart
+ * sieve" conjunction assessment filters): it reliably surfaces genuinely
+ * close or repeatedly-observed approaches, but a vanishingly narrow
+ * single-pass event could in principle slip through undetected.
+ */
+export const UPCOMING_HORIZON_MS = 24 * 60 * 60 * 1000;
+export const UPCOMING_SAMPLE_STEP_MS = 10 * 60 * 1000;
+export const UPCOMING_DETECTION_RADIUS_KM = 50;
+export const UPCOMING_REFINE_WINDOW_MS = UPCOMING_SAMPLE_STEP_MS;
+export const UPCOMING_REFINE_STEP_MS = 15_000;
+/** A full sweep costs a full-catalog SGP4 pass per snapshot (see above) —
+ *  far too expensive to repeat every tick, so re-run it at most this often. */
+export const UPCOMING_RESCAN_INTERVAL_MS = 5 * 60 * 1000;
+
+function scanUpcomingSample(
+  objects: TrackedObject[],
+  sampleMs: number,
+  startMs: number,
+  horizonMs: number,
+  bestByPair: Map<string, ConjunctionEvent>,
+): void {
+  const sampleDate = new Date(sampleMs);
+  const leoEntries: { index: number; position: { x: number; y: number; z: number } }[] = [];
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    if (obj.layer !== SUBSET) continue;
+    const propagation = propagateObject(obj.satrec, sampleDate);
+    if (!propagation) continue;
+    leoEntries.push({ index: i, position: propagation.positionEci });
+  }
+
+  const candidatePairs = findCandidatePairsWithinRadius(
+    leoEntries.map((e) => e.position),
+    UPCOMING_DETECTION_RADIUS_KM,
+  );
+
+  for (const [ei, ej] of candidatePairs) {
+    const objI = objects[leoEntries[ei].index];
+    const objJ = objects[leoEntries[ej].index];
+    if (sharesOrbitData(objI, objJ)) continue;
+
+    const refined = refineCloseApproach(
+      objects,
+      leoEntries[ei].index,
+      leoEntries[ej].index,
+      sampleDate,
+      UPCOMING_REFINE_WINDOW_MS,
+      UPCOMING_REFINE_STEP_MS,
+    );
+    if (!refined) continue;
+    // A refine pass can walk slightly outside [start, start+horizon] near
+    // the edges of the sweep — don't report a "predicted" approach that's
+    // actually already in the past relative to the scan's own start time.
+    if (refined.time.getTime() < startMs || refined.time.getTime() > startMs + horizonMs) continue;
+    if (refined.distanceKm < MIN_DISTANCE_KM || refined.distanceKm > THRESHOLD_KM) continue;
+    if (isCoOrbitingPair(refined.relativeVelocityKmS)) continue;
+
+    const pairKey = conjunctionPairKey(String(refined.noradIdA), String(refined.noradIdB));
+    const existing = bestByPair.get(pairKey);
+    if (!existing || refined.distanceKm < existing.distanceKm) {
+      bestByPair.set(pairKey, refined);
+    }
+  }
+}
+
+/**
+ * Synchronous, one-shot version of the predictive scan — walks the entire
+ * horizon in a single call. Fine for tests/small catalogs; production code
+ * should use `getUpcomingConjunctions` instead, which spreads the same work
+ * across many idle-time slices so it never blocks the main thread.
+ */
+export function findUpcomingConjunctions(
+  objects: TrackedObject[],
+  startDate: Date,
+  horizonMs: number = UPCOMING_HORIZON_MS,
+  sampleStepMs: number = UPCOMING_SAMPLE_STEP_MS,
+): ConjunctionScanResult {
+  const startMs = startDate.getTime();
+  const totalSamples = Math.floor(horizonMs / sampleStepMs);
+  const bestByPair = new Map<string, ConjunctionEvent>();
+
+  for (let step = 0; step <= totalSamples; step++) {
+    scanUpcomingSample(objects, startMs + step * sampleStepMs, startMs, horizonMs, bestByPair);
+  }
+
+  const ranked = deduplicatePhysicalConjunctions(Array.from(bestByPair.values()), objects);
+  return {
+    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+  };
+}
+
+interface UpcomingScanState {
+  objects: TrackedObject[];
+  startMs: number;
+  horizonMs: number;
+  sampleStepMs: number;
+  totalSamples: number;
+  stepIndex: number;
+  bestByPair: Map<string, ConjunctionEvent>;
+}
+
+let upcomingScan: UpcomingScanState | null = null;
+let upcomingResult: ConjunctionScanResult = { alerts: [], hiddenCount: 0 };
+let upcomingScanStartedWallMs = -Infinity;
+let upcomingStepScheduled = false;
+
+function finishUpcomingScan(scan: UpcomingScanState): void {
+  const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects);
+  upcomingResult = {
+    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+  };
+  upcomingScan = null;
+}
+
+/** Advances the in-progress sweep by exactly one snapshot. Returns true once
+ *  the whole horizon has been covered and `upcomingResult` is up to date. */
+function stepUpcomingScanOnce(): boolean {
+  const scan = upcomingScan;
+  if (!scan) return true;
+
+  const sampleMs = scan.startMs + scan.stepIndex * scan.sampleStepMs;
+  scanUpcomingSample(scan.objects, sampleMs, scan.startMs, scan.horizonMs, scan.bestByPair);
+  scan.stepIndex++;
+
+  if (scan.stepIndex > scan.totalSamples) {
+    finishUpcomingScan(scan);
+    return true;
+  }
+  return false;
+}
+
+function scheduleUpcomingScanStep(onUpdate: ConjunctionRefreshListener): void {
+  if (upcomingStepScheduled) return;
+  upcomingStepScheduled = true;
+
+  const runStep = (): void => {
+    upcomingStepScheduled = false;
+    const done = stepUpcomingScanOnce();
+    if (done) {
+      onUpdate(upcomingResult);
+      return;
+    }
+    scheduleUpcomingScanStep(onUpdate);
+  };
+
+  const idle = globalThis.requestIdleCallback;
+  if (typeof idle === 'function') {
+    idle(runStep, { timeout: 1_000 });
+  } else {
+    globalThis.setTimeout(runStep, 0);
+  }
+}
+
+/**
+ * Forward-looking close-approach screen — walks `UPCOMING_HORIZON_MS` into
+ * the future (24h by default) and returns the closest predicted approaches,
+ * sorted by predicted minimum distance. This is what actually answers "what
+ * close approaches are coming up", as opposed to `getConjunctions`, which
+ * only ever reports what's happening at this exact instant.
+ *
+ * A full sweep touches every LEO object at dozens of points in time — too
+ * expensive to run in one synchronous call on a render-heavy page — so this
+ * advances the sweep by one snapshot per idle-time slice and only pushes a
+ * new result via `onUpdate` once the whole sweep finishes. Call it every
+ * frame just like `getConjunctions`: it's a cheap no-op between sweeps
+ * (throttled by `UPCOMING_RESCAN_INTERVAL_MS`) and self-driving once a sweep
+ * has started, so callers don't need to do anything beyond calling it.
+ */
+export function getUpcomingConjunctions(
+  objects: TrackedObject[],
+  referenceTime: Date,
+  onUpdate: ConjunctionRefreshListener,
+): ConjunctionScanResult {
+  const nowWallMs = performance.now();
+  if (!upcomingScan && nowWallMs - upcomingScanStartedWallMs >= UPCOMING_RESCAN_INTERVAL_MS) {
+    upcomingScanStartedWallMs = nowWallMs;
+    upcomingScan = {
+      objects,
+      startMs: referenceTime.getTime(),
+      horizonMs: UPCOMING_HORIZON_MS,
+      sampleStepMs: UPCOMING_SAMPLE_STEP_MS,
+      totalSamples: Math.floor(UPCOMING_HORIZON_MS / UPCOMING_SAMPLE_STEP_MS),
+      stepIndex: 0,
+      bestByPair: new Map(),
+    };
+    scheduleUpcomingScanStep(onUpdate);
+  }
+  return upcomingResult;
+}
+
+export function invalidateUpcomingConjunctionCache(): void {
+  upcomingScan = null;
+  upcomingResult = { alerts: [], hiddenCount: 0 };
+  upcomingScanStartedWallMs = -Infinity;
+}

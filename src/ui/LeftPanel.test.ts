@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initLeftPanel } from './LeftPanel';
+import { setState } from '../state/appState';
+import type { ConjunctionEvent } from '../types';
 
 // requestAnimationFrame is not implemented in jsdom — stub it so initLeftPanel
 // can register the live-time refresh loop without throwing.
@@ -78,5 +80,54 @@ describe('initLeftPanel – DOM smoke', () => {
     initLeftPanel(container);
     expect(container.querySelector('#color-by-function')).not.toBeNull();
     document.body.removeChild(container);
+  });
+});
+
+describe('renderConjunctions — predicted (future) close approaches', () => {
+  function makeFutureConjunction(msFromNow: number): ConjunctionEvent {
+    return {
+      objectA: 'STARLINK-1',
+      objectB: 'COSMOS-99',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      distanceKm: 1.85,
+      relativeVelocityKmS: 7.2,
+      time: new Date(Date.now() + msFromNow),
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+  }
+
+  it('shows a "closest approach in <duration>" style message for a future event', () => {
+    setState({ conjunctions: [makeFutureConjunction(3 * 60 * 60 * 1000 + 12 * 60 * 1000)], conjunctionHiddenCount: 0 });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    const text = container.querySelector('.conjunction-alert-text')?.textContent ?? '';
+    expect(text).toContain('STARLINK-1');
+    expect(text).toContain('COSMOS-99');
+    expect(text).toContain('1.85');
+    // ~3h12m away — must not render as if it were already happening now.
+    expect(text).toMatch(/3h ?12m|in 3h/);
+
+    document.body.removeChild(container);
+    setState({ conjunctions: [], conjunctionHiddenCount: 0 });
+  });
+
+  it('shows the plain "close approach!" message once an event is at/past CPA', () => {
+    setState({ conjunctions: [makeFutureConjunction(0)], conjunctionHiddenCount: 0 });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    const text = container.querySelector('.conjunction-alert-text')?.textContent ?? '';
+    expect(text).toContain('close approach!');
+
+    document.body.removeChild(container);
+    setState({ conjunctions: [], conjunctionHiddenCount: 0 });
   });
 });
