@@ -80,16 +80,27 @@ function deletePresence(): void {
 }
 
 async function initPresence(): Promise<void> {
-  // Already initialized this session
-  if (sessionStorage.getItem('orbital_presence_init')) {
+  const cachedCode = sessionStorage.getItem('orbital_country_code');
+
+  // If we already know the country (and it's not unknown), just heartbeat
+  if (cachedCode && cachedCode !== 'XX') {
+    const alreadyWritten = sessionStorage.getItem('orbital_presence_init');
+    if (!alreadyWritten) {
+      sessionStorage.setItem('orbital_presence_init', '1');
+      await writePresence(cachedCode);
+      window.addEventListener('beforeunload', deletePresence);
+      window.addEventListener('pagehide', deletePresence);
+    }
     startPresenceHeartbeat();
     return;
   }
-  sessionStorage.setItem('orbital_presence_init', '1');
 
+  // First time or country was unknown — fetch geo
+  sessionStorage.setItem('orbital_presence_init', '1');
   try {
     const geo = await fetchGeo();
     const code = geo?.country_code ?? 'XX';
+    sessionStorage.setItem('orbital_country_code', code);
     await writePresence(code);
   } catch {
     await writePresence('XX');
@@ -340,13 +351,38 @@ async function fetchGeo(): Promise<GeoData | null> {
   if (geoCache) return geoCache;
   if (geoFetching) return null;
   geoFetching = true;
-  try {
-    const r = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) return null;
-    geoCache = (await r.json()) as GeoData;
-    return geoCache;
-  } catch { return null; }
-  finally { geoFetching = false; }
+
+  // Try ipapi.co first, fall back to ip-api.com
+  const attempts: (() => Promise<GeoData>)[] = [
+    async () => {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 5000);
+      const r = await fetch('https://ipapi.co/json/', { signal: ctl.signal });
+      if (!r.ok) throw new Error(`ipapi.co ${r.status}`);
+      const d = await r.json() as GeoData;
+      if (!d.country_code) throw new Error('no country_code');
+      return d;
+    },
+    async () => {
+      const ctl = new AbortController();
+      setTimeout(() => ctl.abort(), 5000);
+      const r = await fetch('https://ip-api.com/json/?fields=status,country,countryCode,city,regionName,org,query', { signal: ctl.signal });
+      if (!r.ok) throw new Error(`ip-api.com ${r.status}`);
+      const d = await r.json() as { status: string; country: string; countryCode: string; city: string; regionName: string; org: string; query: string };
+      if (d.status !== 'success') throw new Error('ip-api.com failed');
+      return { ip: d.query, city: d.city, region: d.regionName, country_name: d.country, country_code: d.countryCode, org: d.org };
+    },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      geoCache = await attempt();
+      geoFetching = false;
+      return geoCache;
+    } catch { /* try next */ }
+  }
+  geoFetching = false;
+  return null;
 }
 
 // ── Browser / device fingerprint ──────────────────────────────────────────────
@@ -570,47 +606,34 @@ async function refreshPresenceSection(): Promise<void> {
   }, {});
 
   const total = online.length;
-  const resetBtn = `<button id="ap-presence-reset" class="ap-tool-btn ap-tool-btn--danger"
-    style="padding:3px 9px;font-size:0.68rem;margin:0">Temizle</button>`;
-
   if (total === 0) {
     sec.innerHTML = `
-      <h4 class="ap-section-title" style="display:flex;align-items:center;justify-content:space-between">
-        <span>🟢 Şu An Online <span class="ap-online-count ap-online-zero">0</span>
-          <span class="ap-sub-hint">her 20sn güncellenir</span></span>
-        ${resetBtn}
+      <h4 class="ap-section-title">
+        🟢 Şu An Online <span class="ap-online-count ap-online-zero">0</span>
+        <span class="ap-sub-hint">her 20sn güncellenir</span>
       </h4>
       <p class="ap-note-text" style="margin:0;font-size:0.73rem">Aktif ziyaretçi yok.</p>`;
-  } else {
-    const rows = Object.entries(byCountry)
-      .sort(([, a], [, b]) => b - a)
-      .map(([code, cnt]) => `
-        <div class="ap-country-row">
-          <span class="ap-country-flag">${code === '??' ? '🌐' : countryFlag(code)}</span>
-          <span class="ap-country-name">${code === '??' ? 'Bilinmiyor' : countryName(code)}</span>
-          <span class="ap-country-bar-wrap">
-            <span class="ap-country-bar" style="width:${Math.round((cnt / total) * 100)}%"></span>
-          </span>
-          <span class="ap-country-count">${cnt}</span>
-        </div>`).join('');
-
-    sec.innerHTML = `
-      <h4 class="ap-section-title" style="display:flex;align-items:center;justify-content:space-between">
-        <span>🟢 Şu An Online <span class="ap-online-count">${total}</span>
-          <span class="ap-sub-hint">her 20sn güncellenir</span></span>
-        ${resetBtn}
-      </h4>
-      <div class="ap-country-list">${rows}</div>`;
+    return;
   }
 
-  sec.querySelector('#ap-presence-reset')?.addEventListener('click', async () => {
-    if (!confirm('Firebase\'deki tüm aktif oturum kayıtları silinsin mi?')) return;
-    const base = getFirebaseUrl();
-    await fetch(`${base}/orbital_presence.json`, { method: 'DELETE' }).catch(() => null);
-    sessionStorage.removeItem('orbital_presence_init');
-    await initPresence().catch(() => null);
-    await refreshPresenceSection();
-  });
+  const rows = Object.entries(byCountry)
+    .sort(([, a], [, b]) => b - a)
+    .map(([code, cnt]) => `
+      <div class="ap-country-row">
+        <span class="ap-country-flag">${countryFlag(code)}</span>
+        <span class="ap-country-name">${countryName(code)}</span>
+        <span class="ap-country-bar-wrap">
+          <span class="ap-country-bar" style="width:${Math.round((cnt / total) * 100)}%"></span>
+        </span>
+        <span class="ap-country-count">${cnt}</span>
+      </div>`).join('');
+
+  sec.innerHTML = `
+    <h4 class="ap-section-title">
+      🟢 Şu An Online <span class="ap-online-count">${total}</span>
+      <span class="ap-sub-hint">her 20sn güncellenir</span>
+    </h4>
+    <div class="ap-country-list">${rows}</div>`;
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
