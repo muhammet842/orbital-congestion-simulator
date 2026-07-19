@@ -234,6 +234,7 @@ async function fbRead(): Promise<FbReadResult> {
 
 /** Convert ISO 3166-1 alpha-2 code to flag emoji (e.g. "TR" → "🇹🇷"). */
 function countryFlag(code: string): string {
+  if (!code || code === 'XX' || code === '??' || code.length !== 2) return '🌐';
   try {
     return [...code.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('');
   } catch { return '🌐'; }
@@ -260,9 +261,10 @@ async function fbIncCountry(code: string): Promise<void> {
 
 /** Get the display name for an ISO 3166-1 alpha-2 country code. */
 function countryName(code: string): string {
+  if (!code || code === 'XX' || code === '??' || code.length !== 2) return 'Unknown';
   try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? code;
-  } catch { return code; }
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? 'Unknown';
+  } catch { return 'Unknown'; }
 }
 
 /** Track the visitor's country in Firebase (once per browser session). */
