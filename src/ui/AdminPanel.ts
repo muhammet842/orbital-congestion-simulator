@@ -157,7 +157,7 @@ if (!sessionStorage.getItem(SS_SESSION_PREFIX + 'loaded')) {
 
 // ── Firebase RTDB REST helpers ────────────────────────────────────────────────
 
-function getFirebaseUrl(): string {
+export function getFirebaseUrl(): string {
   try {
     // Admin panel override takes priority; fall back to built-in URL
     return localStorage.getItem(LS_FIREBASE_URL) || DEFAULT_FIREBASE_URL;
@@ -165,7 +165,7 @@ function getFirebaseUrl(): string {
     return DEFAULT_FIREBASE_URL;
   }
 }
-function setFirebaseUrl(url: string): void {
+export function setFirebaseUrl(url: string): void {
   try { localStorage.setItem(LS_FIREBASE_URL, url.trim()); }
   catch { /* ignore */ }
 }
@@ -233,7 +233,7 @@ async function fbRead(): Promise<FbReadResult> {
 }
 
 /** Convert ISO 3166-1 alpha-2 code to flag emoji (e.g. "TR" → "🇹🇷"). */
-function countryFlag(code: string): string {
+export function countryFlag(code: string): string {
   if (!code || code === 'XX' || code === '??' || code.length !== 2) return '🌐';
   try {
     return [...code.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('');
@@ -260,7 +260,7 @@ async function fbIncCountry(code: string): Promise<void> {
 }
 
 /** Get the display name for an ISO 3166-1 alpha-2 country code. */
-function countryName(code: string): string {
+export function countryName(code: string): string {
   if (!code || code === 'XX' || code === '??' || code.length !== 2) return 'Unknown';
   try {
     return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? 'Unknown';
@@ -304,7 +304,7 @@ async function fbInc(k: CounterKey): Promise<void> {
 
 // ── Simple PIN hash (djb2) ────────────────────────────────────────────────────
 
-function hashPin(pin: string): string {
+export function hashPin(pin: string): string {
   let h = 5381;
   for (let i = 0; i < pin.length; i++) h = Math.imul(h, 31) + pin.charCodeAt(i);
   return (h >>> 0).toString(36);
@@ -389,7 +389,7 @@ async function fetchGeo(): Promise<GeoData | null> {
 
 // ── Browser / device fingerprint ──────────────────────────────────────────────
 
-function detectBrowser(): string {
+export function detectBrowser(): string {
   const ua = navigator.userAgent;
   if (/Edg\//.test(ua)) return 'Edge';
   if (/OPR\//.test(ua)) return 'Opera';
@@ -398,19 +398,22 @@ function detectBrowser(): string {
   if (/Safari\//.test(ua)) return 'Safari';
   return 'Unknown';
 }
-function detectOS(): string {
+export function detectOS(): string {
   const ua = navigator.userAgent;
+  // Order matters: Android UAs also contain "Linux", and iOS UAs also
+  // contain "like Mac OS X" — so the more specific mobile checks must run
+  // before the desktop ones, or every mobile visitor gets misclassified.
+  if (/iPhone|iPad/.test(ua)) return 'iOS';
+  if (/Android/.test(ua)) return 'Android';
   if (/Windows NT 10/.test(ua)) return 'Windows 10/11';
   if (/Windows/.test(ua)) return 'Windows';
   if (/Mac OS X/.test(ua)) return 'macOS';
   if (/Linux/.test(ua)) return 'Linux';
-  if (/Android/.test(ua)) return 'Android';
-  if (/iPhone|iPad/.test(ua)) return 'iOS';
   return 'Unknown OS';
 }
 
 const SESSION_START = Date.now();
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
@@ -971,7 +974,7 @@ function setupSessionTracking(): void {
  * a fresh `page.goto('/')` with clean storage, which would otherwise create
  * a brand-new "visitor" + presence entry on every push.
  */
-function isAutomatedBrowser(): boolean {
+export function isAutomatedBrowser(): boolean {
   try { return navigator.webdriver === true; }
   catch { return false; }
 }
