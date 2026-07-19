@@ -1845,11 +1845,16 @@ body {
 .ap-stat-value.ap-accent { color: var(--accent); }
 .ap-stat-value.ap-warn   { color: var(--warning); }
 
-/* ── Metric block (3-col) ──────────────────────────────────────────────────── */
+/* ── Metric block (3-col / 4-col) ─────────────────────────────────────────── */
 .ap-grid-3 {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+}
+.ap-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 .ap-metric {
   display: flex;
@@ -1873,6 +1878,40 @@ body {
   text-align: center;
   letter-spacing: 0.02em;
 }
+
+/* ── Section sub-hint ──────────────────────────────────────────────────────── */
+.ap-sub-hint {
+  font-size: 0.62rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+/* ── Firebase input row ────────────────────────────────────────────────────── */
+.ap-firebase-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ap-fb-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.76rem;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.ap-fb-input:focus { border-color: var(--accent); }
+.ap-fb-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 
 /* ── Analytics note ────────────────────────────────────────────────────────── */
 .ap-note-text {
