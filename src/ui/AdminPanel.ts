@@ -24,6 +24,12 @@ const LS_FIREBASE_URL  = 'orbital_firebase_url';
 const LS_TOTAL_PREFIX  = 'orbital_total_';   // all-time, this device
 const SS_SESSION_PREFIX= 'orbital_ses_';     // current tab/session
 
+/**
+ * Built-in Firebase RTDB URL — used by ALL visitors automatically.
+ * Admin can override this via the admin panel (stored in localStorage).
+ */
+const DEFAULT_FIREBASE_URL = 'https://orbital-congestion-sim-default-rtdb.firebaseio.com';
+
 // ── Counter helpers ───────────────────────────────────────────────────────────
 
 type CounterKey = 'sat' | 'evt' | 'flt' | 'loads';
@@ -53,8 +59,12 @@ if (!sessionStorage.getItem(SS_SESSION_PREFIX + 'loaded')) {
 // ── Firebase RTDB REST helpers ────────────────────────────────────────────────
 
 function getFirebaseUrl(): string {
-  try { return localStorage.getItem(LS_FIREBASE_URL) ?? ''; }
-  catch { return ''; }
+  try {
+    // Admin panel override takes priority; fall back to built-in URL
+    return localStorage.getItem(LS_FIREBASE_URL) || DEFAULT_FIREBASE_URL;
+  } catch {
+    return DEFAULT_FIREBASE_URL;
+  }
 }
 function setFirebaseUrl(url: string): void {
   try { localStorage.setItem(LS_FIREBASE_URL, url.trim()); }
@@ -396,23 +406,11 @@ function updateGlobalSection(result: FbReadResult): void {
   const url = getFirebaseUrl();
   const { data: fb, error } = result;
 
+  // url is now always at least DEFAULT_FIREBASE_URL, so this branch rarely fires
   if (!url) {
     sec.innerHTML = `
       <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
-      <p class="ap-note-text" style="margin:0 0 10px">
-        Firebase Realtime Database bağlayınca tüm kullanıcıların verisi burada
-        görünür. Ücretsiz Firebase projesi oluştur ve URL'yi aşağıya yapıştır.
-      </p>
-      <div class="ap-firebase-row">
-        <input id="ap-fb-url" class="ap-fb-input" type="text"
-          placeholder="https://PROJE-default-rtdb.firebaseio.com" value="" />
-        <button id="ap-fb-save" class="ap-tool-btn">Kaydet</button>
-      </div>
-      <a class="ap-note-link" style="margin-top:8px;display:inline-block"
-        href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer">
-        Firebase Console → Ücretsiz Proje Oluştur
-      </a>`;
-    bindFirebaseSave(sec);
+      <p class="ap-note-text" style="margin:0 0 10px">Firebase URL bulunamadı.</p>`;
     return;
   }
 
@@ -438,19 +436,25 @@ function updateGlobalSection(result: FbReadResult): void {
     return;
   }
 
+  const isDefault = url === DEFAULT_FIREBASE_URL;
   sec.innerHTML = `
-    <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase) <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">— ${url.replace('https://', '').split('.')[0]}</span></h4>
+    <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase)
+      <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">
+        — ${url.replace('https://', '').split('.')[0]}${isDefault ? ' (varsayılan)' : ''}
+      </span>
+    </h4>
     <div class="ap-grid-4" style="margin-bottom:12px">
       ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
       ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
       ${metricBox(fb.evt.toLocaleString(),   'Olay Tıklama')}
       ${metricBox(fb.flt.toLocaleString(),   'Filtre Değişimi')}
     </div>
+    ${!isDefault ? `
     <div style="text-align:right">
       <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger" style="padding:4px 10px;font-size:0.72rem">
-        Bağlantıyı Kaldır
+        Varsayılana Dön
       </button>
-    </div>`;
+    </div>` : ''}`;
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
     updateGlobalSection({ data: null, error: null });
