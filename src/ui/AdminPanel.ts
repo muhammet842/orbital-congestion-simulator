@@ -538,56 +538,79 @@ export function closeAdminPanel(): void {
   document.removeEventListener('keydown', handleEsc);
 }
 
+const PRESENCE_STALE_MS = 90_000;   // consider offline after 90s without heartbeat
+const PRESENCE_PURGE_MS = 5 * 60_000; // auto-delete entries older than 5 min
+
+async function purgeStalePresence(all: Record<string, PresenceEntry>): Promise<void> {
+  const base = getFirebaseUrl();
+  const now  = Date.now();
+  const stale = Object.entries(all).filter(([, e]) => now - (e.lastSeen ?? 0) > PRESENCE_PURGE_MS);
+  await Promise.all(stale.map(([sid]) =>
+    fetch(`${base}/orbital_presence/${sid}.json`, { method: 'DELETE', keepalive: true }).catch(() => null)
+  ));
+}
+
 async function refreshPresenceSection(): Promise<void> {
   if (!panelEl) return;
-  const presence = await fbReadPresence();
   const sec = document.getElementById('ap-presence-section');
   if (!sec) return;
 
-  const STALE_MS = 90_000; // 90s — 3× heartbeat interval
+  const all = await fbReadPresence() ?? {};
+
+  // Silently purge entries older than 5 min
+  purgeStalePresence(all).catch(() => null);
+
   const now = Date.now();
+  const online = Object.values(all).filter(e => e && now - (e.lastSeen ?? 0) < PRESENCE_STALE_MS);
 
-  const online = Object.values(presence ?? {})
-    .filter(e => e && now - (e.lastSeen ?? 0) < STALE_MS);
-
-  // Group by country
   const byCountry = online.reduce<Record<string, number>>((acc, e) => {
-    const c = e.country || 'XX';
+    const c = (e.country === 'XX' || !e.country) ? '??' : e.country;
     acc[c] = (acc[c] ?? 0) + 1;
     return acc;
   }, {});
 
   const total = online.length;
+  const resetBtn = `<button id="ap-presence-reset" class="ap-tool-btn ap-tool-btn--danger"
+    style="padding:3px 9px;font-size:0.68rem;margin:0">Temizle</button>`;
 
   if (total === 0) {
     sec.innerHTML = `
-      <h4 class="ap-section-title">
-        🟢 Şu An Online
-        <span class="ap-online-count ap-online-zero">0</span>
+      <h4 class="ap-section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>🟢 Şu An Online <span class="ap-online-count ap-online-zero">0</span>
+          <span class="ap-sub-hint">her 20sn güncellenir</span></span>
+        ${resetBtn}
       </h4>
       <p class="ap-note-text" style="margin:0;font-size:0.73rem">Aktif ziyaretçi yok.</p>`;
-    return;
+  } else {
+    const rows = Object.entries(byCountry)
+      .sort(([, a], [, b]) => b - a)
+      .map(([code, cnt]) => `
+        <div class="ap-country-row">
+          <span class="ap-country-flag">${code === '??' ? '🌐' : countryFlag(code)}</span>
+          <span class="ap-country-name">${code === '??' ? 'Bilinmiyor' : countryName(code)}</span>
+          <span class="ap-country-bar-wrap">
+            <span class="ap-country-bar" style="width:${Math.round((cnt / total) * 100)}%"></span>
+          </span>
+          <span class="ap-country-count">${cnt}</span>
+        </div>`).join('');
+
+    sec.innerHTML = `
+      <h4 class="ap-section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>🟢 Şu An Online <span class="ap-online-count">${total}</span>
+          <span class="ap-sub-hint">her 20sn güncellenir</span></span>
+        ${resetBtn}
+      </h4>
+      <div class="ap-country-list">${rows}</div>`;
   }
 
-  const rows = Object.entries(byCountry)
-    .sort(([, a], [, b]) => b - a)
-    .map(([code, cnt]) => `
-      <div class="ap-country-row">
-        <span class="ap-country-flag">${countryFlag(code)}</span>
-        <span class="ap-country-name">${countryName(code)}</span>
-        <span class="ap-country-bar-wrap">
-          <span class="ap-country-bar" style="width:${Math.round((cnt / total) * 100)}%"></span>
-        </span>
-        <span class="ap-country-count">${cnt}</span>
-      </div>`).join('');
-
-  sec.innerHTML = `
-    <h4 class="ap-section-title">
-      🟢 Şu An Online
-      <span class="ap-online-count">${total}</span>
-      <span class="ap-sub-hint">her 20sn'de güncellenir</span>
-    </h4>
-    <div class="ap-country-list">${rows}</div>`;
+  sec.querySelector('#ap-presence-reset')?.addEventListener('click', async () => {
+    if (!confirm('Firebase\'deki tüm aktif oturum kayıtları silinsin mi?')) return;
+    const base = getFirebaseUrl();
+    await fetch(`${base}/orbital_presence.json`, { method: 'DELETE' }).catch(() => null);
+    sessionStorage.removeItem('orbital_presence_init');
+    await initPresence().catch(() => null);
+    await refreshPresenceSection();
+  });
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
@@ -600,48 +623,12 @@ function metricBox(val: string | number, label: string): string {
     </div>`;
 }
 
-function renderCountryList(countries: CountryMap | null): string {
-  if (!countries || Object.keys(countries).length === 0) {
-    return '<p class="ap-note-text" style="margin:4px 0 0;font-size:0.73rem">Henüz ülke verisi yok — ziyaretçi bekleniyor.</p>';
-  }
-  // Support both new keys ("TR") and legacy keys ("TR|Turkey", "US|United%20States")
-  const parsed = Object.entries(countries)
-    .map(([key, count]) => {
-      let code = key;
-      if (key.includes('|')) {
-        code = key.split('|')[0]; // extract just the 2-letter code
-      }
-      code = code.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'XX';
-      return { code, name: countryName(code), count };
-    })
-    // Merge duplicates (old + new keys for same country)
-    .reduce<{ code: string; name: string; count: number }[]>((acc, cur) => {
-      const existing = acc.find(r => r.code === cur.code);
-      if (existing) existing.count += cur.count;
-      else acc.push({ ...cur });
-      return acc;
-    }, [])
-    .sort((a, b) => b.count - a.count);
-
-  const rows = parsed.map(({ code, name, count }) =>
-    `<div class="ap-country-row">
-      <span class="ap-country-flag">${countryFlag(code)}</span>
-      <span class="ap-country-name">${name}</span>
-      <span class="ap-country-bar-wrap">
-        <span class="ap-country-bar" style="width:${Math.round((count / parsed[0].count) * 100)}%"></span>
-      </span>
-      <span class="ap-country-count">${count}</span>
-    </div>`
-  ).join('');
-
-  return `<div class="ap-country-list">${rows}</div>`;
-}
 
 function updateGlobalSection(result: FbReadResult): void {
   const sec = document.getElementById('ap-global-section');
   if (!sec) return;
   const url = getFirebaseUrl();
-  const { data: fb, countries, error } = result;
+  const { data: fb, error } = result;
 
   // url is now always at least DEFAULT_FIREBASE_URL, so this branch rarely fires
   if (!url) {
@@ -684,14 +671,6 @@ function updateGlobalSection(result: FbReadResult): void {
       ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
       ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
     </div>
-    <div class="ap-country-heading" style="display:flex;align-items:center;justify-content:space-between">
-      <span>🗺 Ülkelere Göre Ziyaretçi</span>
-      <button id="ap-country-reset" class="ap-tool-btn ap-tool-btn--danger"
-        style="padding:3px 9px;font-size:0.68rem;margin:0">
-        Sıfırla
-      </button>
-    </div>
-    ${renderCountryList(countries)}
     ${!isDefault ? `
     <div style="text-align:right;margin-top:10px">
       <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger" style="padding:4px 10px;font-size:0.72rem">
@@ -701,16 +680,6 @@ function updateGlobalSection(result: FbReadResult): void {
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
     updateGlobalSection({ data: null, countries: null, error: null });
-  });
-
-  // "Sıfırla" button — deletes orbital_countries node from Firebase
-  sec.querySelector('#ap-country-reset')?.addEventListener('click', async () => {
-    if (!confirm('Tüm ülke ziyaret verisi Firebase\'den silinsin mi?')) return;
-    const base = getFirebaseUrl();
-    await fetch(`${base}/orbital_countries.json`, { method: 'DELETE' }).catch(() => null);
-    sessionStorage.removeItem('orbital_geo_tracked');
-    const res = await fbRead();
-    updateGlobalSection(res);
   });
 }
 
