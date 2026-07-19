@@ -76,22 +76,41 @@ interface FbReadResult {
 async function fbRead(): Promise<FbReadResult> {
   const base = getFirebaseUrl();
   if (!base) return { data: null, error: null };
+
+  // Manual timeout — AbortSignal.timeout() has inconsistent browser support
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 8000);
+
   try {
-    const r = await fetch(`${base}/orbital_metrics.json`, { signal: AbortSignal.timeout(6000) });
+    const r = await fetch(`${base}/orbital_metrics.json`, { signal: controller.signal });
+    clearTimeout(tid);
+
     if (r.status === 401 || r.status === 403) {
-      return { data: null, error: `Erişim reddedildi (HTTP ${r.status}) — Firebase Realtime Database kurallarında ".read" ve ".write" değerlerini true yapın.` };
+      return {
+        data: null,
+        error: `Erişim reddedildi (HTTP ${r.status}) — Firebase Realtime Database kurallarında ".read" ve ".write" değerlerini true yapın.`,
+      };
     }
     if (!r.ok) {
-      return { data: null, error: `Bağlantı hatası (HTTP ${r.status})` };
+      return { data: null, error: `Firebase HTTP ${r.status} hatası` };
     }
-    const json = await r.json() as FirebaseMetrics | null;
+
+    let json: FirebaseMetrics | null = null;
+    try { json = await r.json() as FirebaseMetrics | null; }
+    catch { json = null; }
+
     return { data: json ?? { sat: 0, evt: 0, flt: 0, loads: 0 }, error: null };
   } catch (e) {
+    clearTimeout(tid);
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.includes('timeout') || msg.includes('abort')) {
-      return { data: null, error: 'Bağlantı zaman aşımına uğradı — Firebase URL\'sini ve internet bağlantınızı kontrol edin.' };
-    }
-    return { data: null, error: `Bağlantı hatası: ${msg}` };
+    const isTimeout = msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel');
+    console.error('[AdminPanel] Firebase fetch error:', e);
+    return {
+      data: null,
+      error: isTimeout
+        ? 'Bağlantı zaman aşımı (8s) — Firebase URL ve internet bağlantısını kontrol edin.'
+        : `Firebase hatası: ${msg}`,
+    };
   }
 }
 
@@ -99,16 +118,22 @@ async function fbRead(): Promise<FbReadResult> {
 async function fbInc(k: CounterKey): Promise<void> {
   const base = getFirebaseUrl();
   if (!base) return;
+  const ctl = new AbortController();
+  const tid = setTimeout(() => ctl.abort(), 4000);
   try {
-    const r = await fetch(`${base}/orbital_metrics/${k}.json`, { signal: AbortSignal.timeout(3000) });
+    const r = await fetch(`${base}/orbital_metrics/${k}.json`, { signal: ctl.signal });
     const cur = r.ok ? ((await r.json() as number | null) ?? 0) : 0;
+    clearTimeout(tid);
+    const ctl2 = new AbortController();
+    const tid2 = setTimeout(() => ctl2.abort(), 4000);
     await fetch(`${base}/orbital_metrics/${k}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cur + 1),
-      signal: AbortSignal.timeout(3000),
+      signal: ctl2.signal,
     });
-  } catch { /* non-fatal */ }
+    clearTimeout(tid2);
+  } catch { clearTimeout(tid); /* non-fatal */ }
 }
 
 // ── Simple PIN hash (djb2) ────────────────────────────────────────────────────
@@ -425,7 +450,7 @@ function updateGlobalSection(result: FbReadResult): void {
 
 function bindFirebaseSave(sec: HTMLElement): void {
   const saveBtn = sec.querySelector<HTMLButtonElement>('#ap-fb-save');
-  saveBtn?.addEventListener('click', () => {
+  saveBtn?.addEventListener('click', async () => {
     const inp = sec.querySelector<HTMLInputElement>('#ap-fb-url');
     if (!inp) return;
     const url = inp.value.trim().replace(/\/$/, '');
@@ -433,12 +458,15 @@ function bindFirebaseSave(sec: HTMLElement): void {
       inp.style.borderColor = 'var(--danger)';
       return;
     }
-    // Show loading state
     if (saveBtn) { saveBtn.textContent = '⏳ Test ediliyor…'; saveBtn.disabled = true; }
     setFirebaseUrl(url);
-    fbRead()
-      .then((res) => updateGlobalSection(res))
-      .catch(() => updateGlobalSection({ data: null, error: 'Beklenmedik hata oluştu.' }));
+    try {
+      const res = await fbRead();
+      updateGlobalSection(res);
+    } catch (e) {
+      console.error('[AdminPanel] updateGlobalSection error:', e);
+      updateGlobalSection({ data: null, error: `Hata: ${e instanceof Error ? e.message : String(e)}` });
+    }
   });
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
