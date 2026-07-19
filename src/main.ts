@@ -1,6 +1,6 @@
 import './style.css';
 import { loadTleDataset, createTrackedObjects, computeStats } from './data/tleLoader';
-import { initState } from './state/appState';
+import { getState, initState } from './state/appState';
 import { SceneManager } from './scene/SceneManager';
 import { createLayout } from './ui/Layout';
 import { initLeftPanel } from './ui/LeftPanel';
@@ -8,6 +8,7 @@ import { initRightPanel } from './ui/RightPanel';
 import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
+import { findConjunctions } from './orbital/conjunction';
 
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
@@ -46,6 +47,11 @@ async function main(): Promise<void> {
 
     // Admin system: keyboard shortcut Ctrl+Shift+A, auto-auth on known devices.
     initAdminSystem();
+
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__debugConjunctions = (isoTime?: string) =>
+        findConjunctions(getState().objects, isoTime ? new Date(isoTime) : new Date());
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load orbital data.';
     showError(app, message);

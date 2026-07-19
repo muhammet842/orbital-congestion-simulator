@@ -1,14 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   conjunctionPairKey,
   conjunctionSessionKey,
   findCandidatePairsWithinRadius,
+  findConjunctions,
   formatCloseApproachAlert,
   formatRelativeVelocityKmS,
+  getConjunctions,
   getRiskAssessment,
+  invalidateConjunctionCache,
   isCoOrbitingPair,
 } from './conjunction';
-import type { ConjunctionEvent } from '../types';
+import type { ConjunctionEvent, TrackedObject } from '../types';
+import * as propagatorModule from './propagator';
 
 type Vec3 = { x: number; y: number; z: number };
 
@@ -205,5 +209,186 @@ describe('formatCloseApproachAlert', () => {
     expect(formatCloseApproachAlert('SAT-A', 'SAT-B', 1.234)).toBe(
       'SAT-A vs SAT-B - 1.23 km close approach!',
     );
+  });
+});
+
+describe('getConjunctions — async refresh scheduling', () => {
+  type IdleDeadline = { didTimeout: boolean; timeRemaining: () => number };
+  type IdleCallback = (deadline: IdleDeadline) => void;
+
+  beforeEach(() => {
+    invalidateConjunctionCache();
+  });
+
+  afterEach(() => {
+    invalidateConjunctionCache();
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Regression test for a starvation bug: requestIdleCallback's `timeout`
+   * option guarantees the callback eventually fires with `didTimeout: true`,
+   * but a render-heavy page (this app draws thousands of objects every
+   * frame) may never report a genuinely idle slice, so `timeRemaining()`
+   * can stay near 0 forever. If the scheduler only checked `timeRemaining()`
+   * without also checking `didTimeout`, it would keep deferring indefinitely
+   * and the conjunction scan would never run — close approach alerts would
+   * never appear in a busy browser tab even though the underlying detection
+   * algorithm works fine.
+   */
+  it('still runs the scan once requestIdleCallback fires with didTimeout, even if timeRemaining stays near 0', () => {
+    let capturedCallback: IdleCallback | null = null;
+    const fakeRequestIdleCallback = vi.fn((cb: IdleCallback) => {
+      capturedCallback = cb;
+      return 1;
+    });
+    vi.stubGlobal('requestIdleCallback', fakeRequestIdleCallback);
+
+    const onRefresh = vi.fn();
+    const busyDeadline: IdleDeadline = { didTimeout: false, timeRemaining: () => 0 };
+
+    getConjunctions([], new Date(), 1, onRefresh);
+    expect(capturedCallback).not.toBeNull();
+
+    // Simulate several busy frames where the browser never finds idle time —
+    // each time it should defer again (schedule a new idle callback) rather
+    // than force a scan through, and the listener must not fire yet.
+    for (let i = 0; i < 5; i++) {
+      const cb = capturedCallback!;
+      capturedCallback = null;
+      cb(busyDeadline);
+      expect(capturedCallback).not.toBeNull(); // rescheduled
+    }
+    expect(onRefresh).not.toHaveBeenCalled();
+
+    // The timeout budget is exhausted: didTimeout is true. Even though
+    // timeRemaining() is still 0, the scan must run now.
+    capturedCallback!({ didTimeout: true, timeRemaining: () => 0 });
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(onRefresh).toHaveBeenCalledWith({ alerts: [], hiddenCount: 0 });
+  });
+
+  it('runs the scan immediately when the browser reports a real idle slice', () => {
+    let capturedCallback: IdleCallback | null = null;
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        capturedCallback = cb;
+        return 1;
+      }),
+    );
+
+    const onRefresh = vi.fn();
+    getConjunctions([], new Date(), 1, onRefresh);
+
+    capturedCallback!({ didTimeout: false, timeRemaining: () => 50 });
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('findConjunctions — narrow high-speed window detection', () => {
+  const CPA_MS = new Date('2026-07-08T12:00:00.000Z').getTime();
+  // 16 km/s closing speed (8 km/s each, head-on), 2.4 km minimum separation.
+  // Distance <= 3km only for |dt| <= 112.5ms around CPA — a ~225ms window,
+  // the same order of magnitude as the real 0.5-2.6s windows found for fast
+  // LEO crossings. A naive point-sample at the wrong instant would see this
+  // pair many km apart and never flag it as a candidate at all.
+  const REL_VELOCITY_KM_S = 16;
+  const MIN_SEPARATION_KM = 2.4;
+
+  function makeFastPair(): TrackedObject[] {
+    const base = {
+      country: 'US',
+      owner: 'TEST',
+      layer: 'LEO' as const,
+      color: [1, 1, 1] as [number, number, number],
+      functionGroup: 'debris' as const,
+      meanAltitudeKm: 550,
+      inclinationDeg: 53,
+    };
+    return [
+      {
+        ...base,
+        noradId: 1,
+        name: 'FAST-A',
+        line1: 'A-LINE-1',
+        line2: 'A-LINE-2',
+        category: 'debris',
+        satrec: { id: 'A' } as unknown as TrackedObject['satrec'],
+      },
+      {
+        ...base,
+        noradId: 2,
+        name: 'FAST-B',
+        line1: 'B-LINE-1',
+        line2: 'B-LINE-2',
+        category: 'debris',
+        satrec: { id: 'B' } as unknown as TrackedObject['satrec'],
+      },
+    ];
+  }
+
+  beforeEach(() => {
+    invalidateConjunctionCache();
+    // Straight-line relative motion standing in for real orbital mechanics —
+    // this test is only exercising the scan/refine scheduling logic, not
+    // SGP4 itself (that's covered elsewhere).
+    vi.spyOn(propagatorModule, 'propagateObject').mockImplementation((satrec, date) => {
+      const id = (satrec as unknown as { id: string }).id;
+      const dtSec = (date.getTime() - CPA_MS) / 1000;
+      const sign = id === 'A' ? 1 : -1;
+      return {
+        positionEci: {
+          x: sign * (REL_VELOCITY_KM_S / 2) * dtSec,
+          y: id === 'A' ? 0 : MIN_SEPARATION_KM,
+          z: 0,
+        },
+        velocityEci: { x: sign * (REL_VELOCITY_KM_S / 2), y: 0, z: 0 },
+        altitudeKm: 550,
+        velocityKmS: REL_VELOCITY_KM_S / 2,
+        inclinationDeg: 53,
+        layer: 'LEO',
+      };
+    });
+  });
+
+  afterEach(() => {
+    invalidateConjunctionCache();
+    vi.restoreAllMocks();
+  });
+
+  it('finds the close approach even when sampled ~0.7s away from the true CPA', () => {
+    const objects = makeFastPair();
+    // At dt=700ms the literal instantaneous distance is ~11.5 km — far
+    // outside the 3km alert threshold — so this only succeeds if the coarse
+    // pass casts a wider net and the fine refine locates the true 2.4km
+    // minimum nearby.
+    const sampleTime = new Date(CPA_MS + 700);
+    const result = findConjunctions(objects, sampleTime);
+
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts[0].distanceKm).toBeCloseTo(MIN_SEPARATION_KM, 1);
+    expect(Math.abs(result.alerts[0].time.getTime() - CPA_MS)).toBeLessThan(200);
+  });
+
+  it('finds the close approach when sampled ~1s away from the true CPA', () => {
+    const objects = makeFastPair();
+    const sampleTime = new Date(CPA_MS - 1000);
+    const result = findConjunctions(objects, sampleTime);
+
+    expect(result.alerts).toHaveLength(1);
+    expect(result.alerts[0].distanceKm).toBeCloseTo(MIN_SEPARATION_KM, 1);
+  });
+
+  it('does not fabricate an alert once the pair is well outside the detection net', () => {
+    const objects = makeFastPair();
+    // At dt=3s the pair is ~48km apart — outside even the widened
+    // detection radius, so no candidate should be generated at all.
+    const sampleTime = new Date(CPA_MS + 3000);
+    const result = findConjunctions(objects, sampleTime);
+
+    expect(result.alerts).toHaveLength(0);
   });
 });

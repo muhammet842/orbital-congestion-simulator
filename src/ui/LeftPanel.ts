@@ -1,8 +1,5 @@
 import { LAYER_HEX, type OrbitLayer } from '../types';
-import {
-  conjunctionSessionKey,
-  formatCloseApproachAlert,
-} from '../orbital/conjunction';
+import { conjunctionSessionKey } from '../orbital/conjunction';
 import {
   formatUtcDateTime,
   getListIndices,
@@ -328,7 +325,10 @@ function renderConjunctions(container: HTMLElement): void {
       const isNew = !previousAlertKeys.has(sessionKey);
       const isActive = sessionKey === selectedConjunctionSessionKey;
       nextKeys.add(sessionKey);
-      const message = formatCloseApproachAlert(c.objectA, c.objectB, c.distanceKm);
+      const message = t('conj.alert')
+        .replace('{a}', c.objectA)
+        .replace('{b}', c.objectB)
+        .replace('{km}', c.distanceKm.toFixed(2));
       return `
         <button
           type="button"
@@ -344,7 +344,7 @@ function renderConjunctions(container: HTMLElement): void {
 
   const overflowHtml =
     conjunctionHiddenCount > 0
-      ? `<p class="conjunction-more muted">+${conjunctionHiddenCount.toLocaleString()} more critical close approach${conjunctionHiddenCount === 1 ? '' : 'es'}</p>`
+      ? `<p class="conjunction-more muted">${t(conjunctionHiddenCount === 1 ? 'conj.more_one' : 'conj.more_other').replace('{n}', conjunctionHiddenCount.toLocaleString())}</p>`
       : '';
 
   listEl.innerHTML = alertsHtml + overflowHtml;

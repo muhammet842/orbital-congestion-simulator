@@ -86,6 +86,44 @@ function verificationRiskClass(status: string): string {
   return 'conjunction-risk--monitor';
 }
 
+/** Canonical English risk/status labels from conjunction.ts → i18n keys for display. */
+const RISK_LABEL_KEYS: Record<string, string> = {
+  'NO RISK': 'risk.no',
+  'LOW RISK': 'risk.low',
+  MONITORING: 'risk.monitoring',
+  'CRITICAL RISK': 'risk.critical',
+  PENDING: 'risk.pending',
+  APPROACHING: 'risk.approaching',
+  'COLLISION CONFIRMED': 'risk.confirmed',
+  'COLLISION AVERTED': 'risk.averted',
+  UNAVAILABLE: 'risk.unavailable',
+};
+
+function translateRiskLabel(label: string): string {
+  const key = RISK_LABEL_KEYS[label];
+  return key ? t(key, label) : label;
+}
+
+/**
+ * Rebuilds the localized hint text from the assessment's status/riskLabel
+ * rather than translating conjunction.ts's English `hint` string directly —
+ * keeps the orbital-math module UI-agnostic (see getVerificationAssessment).
+ */
+function translateVerificationHint(
+  assessment: ReturnType<typeof getVerificationAssessment>,
+  liveDistanceKm: number | null,
+): string {
+  if (assessment.riskLabel === 'UNAVAILABLE') return t('conj.hint_unavailable');
+  if (assessment.status === 'COLLISION CONFIRMED') {
+    return t('conj.hint_confirmed').replace('{km}', (liveDistanceKm ?? 0).toFixed(3));
+  }
+  if (assessment.status === 'COLLISION AVERTED') {
+    return t('conj.hint_averted').replace('{km}', (liveDistanceKm ?? 0).toFixed(3));
+  }
+  if (assessment.status === 'APPROACHING') return t('conj.hint_approaching');
+  return t('conj.hint_paused');
+}
+
 export function initRightPanel(container: HTMLElement): void {
   container.innerHTML = `<div id="object-detail" class="object-detail"></div>`;
 
@@ -248,17 +286,16 @@ function refreshConjunctionVerification(container: HTMLElement, conjunction: Con
   }
   if (timeToCpaEl) {
     const msToCpa = conjunction.time.getTime() - simTime.getTime();
-    if (msToCpa > 0) {
-      timeToCpaEl.textContent = `T−${Math.ceil(msToCpa / 1000)}s to CPA`;
-    } else {
-      timeToCpaEl.textContent = `T+${Math.ceil(-msToCpa / 1000)}s past CPA`;
-    }
+    timeToCpaEl.textContent =
+      msToCpa > 0
+        ? t('conj.t_minus').replace('{s}', String(Math.ceil(msToCpa / 1000)))
+        : t('conj.t_plus').replace('{s}', String(Math.ceil(-msToCpa / 1000)));
   }
   if (riskEl) {
-    riskEl.textContent = assessment.riskLabel;
+    riskEl.textContent = translateRiskLabel(assessment.riskLabel);
     riskEl.className = verificationRiskClass(assessment.riskLabel);
   }
-  if (hintEl) hintEl.textContent = assessment.hint;
+  if (hintEl) hintEl.textContent = translateVerificationHint(assessment, liveDistance);
 }
 
 function render(container: HTMLElement): void {
@@ -349,35 +386,37 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
   const colocatedB = getColocatedObjectNames(state.objects, conjunction.indexB);
   let colocatedNote = '';
   if (colocatedA.length > 1 || colocatedB.length > 1) {
-    colocatedNote = `<p class="muted conjunction-colocated-note">Co-located catalog entries share the same orbit ephemeris (e.g. ISS modules). ${
+    const appearsWith =
       colocatedA.length > 1
-        ? `${escapeHtml(conjunction.objectA)} appears with: ${escapeHtml(colocatedA.filter((n) => n !== conjunction.objectA).join(', '))}. `
-        : ''
-    }They occupy the same propagated position in this simulator.</p>`;
+        ? `${t('conj.colocated_appears_with')
+            .replace('{name}', escapeHtml(conjunction.objectA))
+            .replace('{names}', escapeHtml(colocatedA.filter((n) => n !== conjunction.objectA).join(', ')))} `
+        : '';
+    colocatedNote = `<p class="muted conjunction-colocated-note">${t('conj.colocated_prefix')} ${appearsWith}${t('conj.colocated_suffix')}</p>`;
   } else if (isCoOrbitingPair(conjunction.relativeVelocityKmS)) {
-    colocatedNote = `<p class="muted conjunction-colocated-note">These vehicles are on nearly identical orbits (relative speed &lt; 50 m/s). This is co-orbiting proximity — not a hypervelocity crossing event.</p>`;
+    colocatedNote = `<p class="muted conjunction-colocated-note">${t('conj.coorbiting_note')}</p>`;
   }
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading panel-heading--alert">Conjunction Verification</h2>
+    <h2 class="panel-heading panel-heading--alert">${t('conj.heading')}</h2>
     <div class="conjunction-detail-title">
       ${escapeHtml(conjunction.objectA)} vs ${escapeHtml(conjunction.objectB)}
     </div>
     <dl class="detail-list">
-      <div class="detail-row"><dt>CPA Event (T+0)</dt><dd>${formatUtcDateTime(conjunction.time)}</dd></div>
-      <div class="detail-row"><dt>Sim Time</dt><dd data-field="sim-time">—</dd></div>
-      <div class="detail-row"><dt>Time to CPA</dt><dd data-field="time-to-cpa">—</dd></div>
-      <div class="detail-row"><dt>Live Separation</dt><dd data-field="live-distance">—</dd></div>
-      <div class="detail-row"><dt>CPA Minimum</dt><dd>${conjunction.distanceKm.toFixed(3)} km</dd></div>
-      <div class="detail-row"><dt>Relative Velocity</dt><dd data-field="relative-velocity">—</dd></div>
-      <div class="detail-row"><dt>Risk Assessment</dt><dd data-field="verification-risk" class="conjunction-risk--monitor">—</dd></div>
+      <div class="detail-row"><dt>${t('conj.cpa_event')}</dt><dd>${formatUtcDateTime(conjunction.time)}</dd></div>
+      <div class="detail-row"><dt>${t('conj.sim_time')}</dt><dd data-field="sim-time">—</dd></div>
+      <div class="detail-row"><dt>${t('conj.time_to_cpa')}</dt><dd data-field="time-to-cpa">—</dd></div>
+      <div class="detail-row"><dt>${t('conj.live_separation')}</dt><dd data-field="live-distance">—</dd></div>
+      <div class="detail-row"><dt>${t('conj.cpa_minimum')}</dt><dd>${conjunction.distanceKm.toFixed(3)} km</dd></div>
+      <div class="detail-row"><dt>${t('conj.relative_velocity')}</dt><dd data-field="relative-velocity">—</dd></div>
+      <div class="detail-row"><dt>${t('conj.risk_assessment')}</dt><dd data-field="verification-risk" class="conjunction-risk--monitor">—</dd></div>
     </dl>
     ${colocatedNote}
     <p class="muted conjunction-detail-hint" data-field="verification-hint">
-      Timeline rewound to T−${VERIFY_REWIND_MS / 1000}s. Press Play or LIVE to verify.
+      ${t('conj.hint_rewound').replace('{s}', String(VERIFY_REWIND_MS / 1000))}
     </p>
     <button type="button" id="btn-exit-conjunction" class="btn-exit-conjunction">
-      Return to Global View
+      ${t('conj.return_global')}
     </button>
   `;
 }

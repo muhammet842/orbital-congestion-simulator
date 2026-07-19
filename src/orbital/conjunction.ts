@@ -9,14 +9,33 @@ export interface ConjunctionScanResult {
 
 export const THRESHOLD_KM = 3;
 export const MIN_DISTANCE_KM = 0.1;
-export const CHECK_INTERVAL_MS = 5_000;
+export const CHECK_INTERVAL_MS = 1_500;
 /** Minimum real-time gap between conjunction recomputes (all speed modes). */
-export const CHECK_WALL_INTERVAL_MS = 5_000;
+export const CHECK_WALL_INTERVAL_MS = 1_500;
+/**
+ * Many crossing LEO pairs close at 5-12 km/s — at that speed a pair only
+ * stays inside the final THRESHOLD_KM for roughly 0.5-2s. Point-sampling the
+ * instantaneous distance every CHECK_WALL_INTERVAL_MS can step right over a
+ * window that narrow. To catch these, the coarse spatial-hash pass casts a
+ * wider net (DETECTION_RADIUS_KM) so fast-closing pairs are flagged as
+ * candidates *before* they're actually within THRESHOLD_KM, then a fine-step
+ * refine pass (see LIVE_REFINE_*) pinpoints the true minimum distance. The
+ * final alert still requires the refined distance to be <= THRESHOLD_KM —
+ * this only widens what gets a closer look, not what counts as a conjunction.
+ */
+export const DETECTION_RADIUS_KM = 20;
 /** Max close-approach alerts shown in the left panel (sorted by minimum distance). */
 export const MAX_DISPLAY_ALERTS = 5;
 export const SUBSET: OrbitLayer = 'LEO';
 export const REFINE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const REFINE_STEP_MS = 60 * 1000;
+/** Tight, fine-grained refine window used by the live scan — precise enough
+ *  to resolve sub-3-second close-approach windows, unlike the coarse
+ *  ±2h/60s window used for one-off historical/verification lookups. Combined
+ *  with the automatic zoom-in pass in refineCloseApproach, this resolves
+ *  down to ~100ms precision at negligible extra cost per candidate. */
+export const LIVE_REFINE_WINDOW_MS = 10 * 1000;
+export const LIVE_REFINE_STEP_MS = 1_000;
 export const VERIFY_REWIND_MS = 60 * 1000;
 /** Orbit preview window around CPA — 15 s before + 15 s after = 30 s total. */
 export const VERIFY_TRAIL_BACK_MS = 15 * 1000;
@@ -196,7 +215,13 @@ function scheduleConjunctionRefresh(): void {
     idle(
       (deadline) => {
         refreshScheduled = false;
-        if (deadline.timeRemaining() < 6 && pendingRefresh) {
+        // On a render-heavy page the main thread may never report a genuinely
+        // idle slice, so `timeRemaining()` can sit near 0 indefinitely. Only
+        // defer when the browser found real idle time but it was too short —
+        // once the callback fires because the `timeout` budget was exhausted
+        // (didTimeout), we must run now regardless of timeRemaining(), or the
+        // scan starves forever and no conjunction is ever detected.
+        if (!deadline.didTimeout && deadline.timeRemaining() < 6 && pendingRefresh) {
           scheduleConjunctionRefresh();
           return;
         }
@@ -367,38 +392,67 @@ export function normalizeConjunctionAlert(
   };
 }
 
+type Satrec = Parameters<typeof propagateObject>[0];
+
+interface ScanResult {
+  distance: number;
+  time: Date;
+  posA: NonNullable<ReturnType<typeof propagateObject>>;
+  posB: NonNullable<ReturnType<typeof propagateObject>>;
+}
+
+function scanForMinimumDistance(
+  satrecA: Satrec,
+  satrecB: Satrec,
+  centerMs: number,
+  windowMs: number,
+  stepMs: number,
+): ScanResult | null {
+  let best: ScanResult | null = null;
+
+  for (let t = centerMs - windowMs; t <= centerMs + windowMs; t += stepMs) {
+    const date = new Date(t);
+    const propA = propagateObject(satrecA, date);
+    const propB = propagateObject(satrecB, date);
+    if (!propA || !propB) continue;
+
+    const distance = distanceKm(propA.positionEci, propB.positionEci);
+    if (!best || distance < best.distance) {
+      best = { distance, time: date, posA: propA, posB: propB };
+    }
+  }
+
+  return best;
+}
+
 export function refineCloseApproach(
   objects: TrackedObject[],
   indexA: number,
   indexB: number,
   centerTime: Date,
+  windowMs: number = REFINE_WINDOW_MS,
+  stepMs: number = REFINE_STEP_MS,
 ): ConjunctionEvent | null {
   const objA = objects[indexA];
   const objB = objects[indexB];
   if (!objA || !objB) return null;
 
-  const centerMs = centerTime.getTime();
-  let bestDistance = Infinity;
-  let bestTime = centerTime;
-  let bestPosA = null as ReturnType<typeof propagateObject> | null;
-  let bestPosB = null as ReturnType<typeof propagateObject> | null;
+  const coarse = scanForMinimumDistance(objA.satrec, objB.satrec, centerTime.getTime(), windowMs, stepMs);
+  if (!coarse) return null;
 
-  for (let t = centerMs - REFINE_WINDOW_MS; t <= centerMs + REFINE_WINDOW_MS; t += REFINE_STEP_MS) {
-    const date = new Date(t);
-    const propA = propagateObject(objA.satrec, date);
-    const propB = propagateObject(objB.satrec, date);
-    if (!propA || !propB) continue;
+  // Zoom in around the coarse minimum with a step ~10x finer — the coarse
+  // pass alone can straddle the true minimum (especially for fast-closing
+  // pairs, where a single coarse step can span many km), so this second
+  // pass resolves sub-step precision cheaply (a handful of extra samples)
+  // without needing a uniformly fine step across the whole window.
+  const fineStepMs = Math.max(stepMs / 10, 50);
+  const best =
+    fineStepMs < stepMs
+      ? scanForMinimumDistance(objA.satrec, objB.satrec, coarse.time.getTime(), stepMs, fineStepMs) ?? coarse
+      : coarse;
+  const winner = best.distance < coarse.distance ? best : coarse;
 
-    const distance = distanceKm(propA.positionEci, propB.positionEci);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestTime = date;
-      bestPosA = propA;
-      bestPosB = propB;
-    }
-  }
-
-  if (!bestPosA || !bestPosB || bestDistance === Infinity) return null;
+  const { distance: bestDistance, time: bestTime, posA: bestPosA, posB: bestPosB } = winner;
 
   return {
     objectA: objA.name,
@@ -530,9 +584,13 @@ export function findConjunctions(objects: TrackedObject[], date: Date): Conjunct
     leoEntries.push({ index: i, name: obj.name, position: propagation.positionEci });
   }
 
+  // Cast a wider net than the final THRESHOLD_KM so fast-closing pairs are
+  // caught as candidates before they've actually crossed the threshold —
+  // see DETECTION_RADIUS_KM for why. The exact THRESHOLD_KM cutoff is
+  // re-applied below against the fine-refined minimum distance.
   const candidatePairs = findCandidatePairsWithinRadius(
     leoEntries.map((e) => e.position),
-    THRESHOLD_KM,
+    DETECTION_RADIUS_KM,
   );
 
   const pairs: ConjunctionEvent[] = [];
@@ -543,14 +601,17 @@ export function findConjunctions(objects: TrackedObject[], date: Date): Conjunct
     if (sharesOrbitData(objI, objJ)) continue;
 
     const distance = distanceKm(leoEntries[ei].position, leoEntries[ej].position);
-    if (distance >= MIN_DISTANCE_KM && distance <= THRESHOLD_KM) {
+    if (distance <= DETECTION_RADIUS_KM) {
       const refined = refineCloseApproach(
         objects,
         leoEntries[ei].index,
         leoEntries[ej].index,
         date,
+        LIVE_REFINE_WINDOW_MS,
+        LIVE_REFINE_STEP_MS,
       );
       if (!refined) continue;
+      if (refined.distanceKm < MIN_DISTANCE_KM || refined.distanceKm > THRESHOLD_KM) continue;
       if (isCoOrbitingPair(refined.relativeVelocityKmS)) continue;
       pairs.push(refined);
     }
