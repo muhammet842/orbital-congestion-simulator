@@ -6,6 +6,7 @@ import { createLayout } from './ui/Layout';
 import { initLeftPanel } from './ui/LeftPanel';
 import { initRightPanel } from './ui/RightPanel';
 import { initTimeControls } from './ui/TimeControls';
+import { initDeepLink } from './routing/deepLink';
 
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
@@ -36,6 +37,11 @@ async function main(): Promise<void> {
     const sceneManager = new SceneManager(sceneContainer);
     await sceneManager.initOrbitalMeshes(objects);
     sceneManager.start();
+
+    // Deep linking: sync ?object=NORAD / ?event=ID ↔ app state.
+    // Must run after the scene is ready so a linked satellite gets framed
+    // correctly on first load.
+    initDeepLink(objects);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load orbital data.';
     showError(app, message);
