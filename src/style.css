@@ -1913,6 +1913,30 @@ body {
 .ap-fb-input:focus { border-color: var(--accent); }
 .ap-fb-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 
+/* ── Firebase rules hint ───────────────────────────────────────────────────── */
+.ap-rules-hint {
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.ap-rules-hint strong { color: var(--warning); }
+.ap-rules-code {
+  background: rgba(0,0,0,0.35);
+  border-radius: 5px;
+  padding: 8px 10px;
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  white-space: pre;
+  color: #86efac;
+  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  overflow-x: auto;
+}
+
 /* ── Analytics note ────────────────────────────────────────────────────────── */
 .ap-note-text {
   margin: 0 0 10px;

@@ -68,32 +68,47 @@ interface FirebaseMetrics {
   loads: number;
 }
 
-async function fbRead(): Promise<FirebaseMetrics | null> {
-  const base = getFirebaseUrl();
-  if (!base) return null;
-  try {
-    const r = await fetch(`${base}/orbital_metrics.json`, { signal: AbortSignal.timeout(4000) });
-    if (!r.ok) return null;
-    const data = await r.json() as FirebaseMetrics | null;
-    return data ?? { sat: 0, evt: 0, flt: 0, loads: 0 };
-  } catch { return null; }
+interface FbReadResult {
+  data: FirebaseMetrics | null;
+  error: string | null;
 }
 
-/** Atomically increment a single counter in Firebase (+= delta via REST transaction-ish). */
+async function fbRead(): Promise<FbReadResult> {
+  const base = getFirebaseUrl();
+  if (!base) return { data: null, error: null };
+  try {
+    const r = await fetch(`${base}/orbital_metrics.json`, { signal: AbortSignal.timeout(6000) });
+    if (r.status === 401 || r.status === 403) {
+      return { data: null, error: `Erişim reddedildi (HTTP ${r.status}) — Firebase Realtime Database kurallarında ".read" ve ".write" değerlerini true yapın.` };
+    }
+    if (!r.ok) {
+      return { data: null, error: `Bağlantı hatası (HTTP ${r.status})` };
+    }
+    const json = await r.json() as FirebaseMetrics | null;
+    return { data: json ?? { sat: 0, evt: 0, flt: 0, loads: 0 }, error: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('timeout') || msg.includes('abort')) {
+      return { data: null, error: 'Bağlantı zaman aşımına uğradı — Firebase URL\'sini ve internet bağlantınızı kontrol edin.' };
+    }
+    return { data: null, error: `Bağlantı hatası: ${msg}` };
+  }
+}
+
+/** Atomically increment a single counter in Firebase (+= 1 via REST). */
 async function fbInc(k: CounterKey): Promise<void> {
   const base = getFirebaseUrl();
   if (!base) return;
   try {
-    // Read current value, then write back +1
     const r = await fetch(`${base}/orbital_metrics/${k}.json`, { signal: AbortSignal.timeout(3000) });
-    const cur = r.ok ? (await r.json() as number | null) ?? 0 : 0;
+    const cur = r.ok ? ((await r.json() as number | null) ?? 0) : 0;
     await fetch(`${base}/orbital_metrics/${k}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(cur + 1),
       signal: AbortSignal.timeout(3000),
     });
-  } catch { /* ignore — Firebase errors are non-fatal */ }
+  } catch { /* non-fatal */ }
 }
 
 // ── Simple PIN hash (djb2) ────────────────────────────────────────────────────
@@ -296,12 +311,12 @@ export function openAdminPanel(): void {
   // Fetch geo and Firebase independently — don't let one block the other
   geoTimer = setTimeout(() => {
     // Firebase: update section immediately without waiting for geo
-    fbRead().then((fb) => {
+    fbRead().then((res) => {
       if (!panelEl) return;
-      updateGlobalSection(fb);
+      updateGlobalSection(res);
     }).catch(() => {
       if (!panelEl) return;
-      updateGlobalSection(null);
+      updateGlobalSection({ data: null, error: 'Beklenmedik bağlantı hatası.' });
     });
 
     // Geo: update labels when ready
@@ -341,22 +356,22 @@ function metricBox(val: string | number, label: string): string {
     </div>`;
 }
 
-function updateGlobalSection(fb: FirebaseMetrics | null): void {
+function updateGlobalSection(result: FbReadResult): void {
   const sec = document.getElementById('ap-global-section');
   if (!sec) return;
   const url = getFirebaseUrl();
+  const { data: fb, error } = result;
 
   if (!url) {
     sec.innerHTML = `
       <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
       <p class="ap-note-text" style="margin:0 0 10px">
         Firebase Realtime Database bağlayınca tüm kullanıcıların verisi burada
-        görünür. Ücretsiz Firebase projesi oluştur ve URL\'yi aşağıya yapıştır.
+        görünür. Ücretsiz Firebase projesi oluştur ve URL'yi aşağıya yapıştır.
       </p>
       <div class="ap-firebase-row">
         <input id="ap-fb-url" class="ap-fb-input" type="text"
-          placeholder="https://PROJE-default-rtdb.firebaseio.com"
-          value="${url}" />
+          placeholder="https://PROJE-default-rtdb.firebaseio.com" value="" />
         <button id="ap-fb-save" class="ap-tool-btn">Kaydet</button>
       </div>
       <a class="ap-note-link" style="margin-top:8px;display:inline-block"
@@ -370,13 +385,19 @@ function updateGlobalSection(fb: FirebaseMetrics | null): void {
   if (!fb) {
     sec.innerHTML = `
       <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
-      <p class="ap-note-text" style="color:var(--danger);margin:0 0 8px">
-        Firebase bağlantısı kurulamadı. URL'yi kontrol et veya Firebase
-        kurallarında okuma/yazma iznini aç.
+      <p class="ap-note-text" style="color:var(--danger);margin:0 0 6px;font-size:0.76rem">
+        ⚠ ${error ?? 'Firebase bağlantısı kurulamadı.'}
       </p>
-      <div class="ap-firebase-row">
+      ${error?.includes('Erişim reddedildi') ? `
+      <div class="ap-rules-hint">
+        <strong>Nasıl düzeltilir:</strong><br>
+        Firebase Console → Realtime Database → <strong>Rules</strong> sekmesini aç ve şunu yapıştır:
+        <pre class="ap-rules-code">{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}</pre>
+        Ardından <strong>Publish</strong>'e bas ve aşağıdan tekrar dene.
+      </div>` : ''}
+      <div class="ap-firebase-row" style="margin-top:10px">
         <input id="ap-fb-url" class="ap-fb-input" type="text" value="${url}" />
-        <button id="ap-fb-save" class="ap-tool-btn">Güncelle</button>
+        <button id="ap-fb-save" class="ap-tool-btn">Tekrar Dene</button>
         <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger">Kaldır</button>
       </div>`;
     bindFirebaseSave(sec);
@@ -384,29 +405,27 @@ function updateGlobalSection(fb: FirebaseMetrics | null): void {
   }
 
   sec.innerHTML = `
-    <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase)</h4>
+    <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase) <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">— ${url.replace('https://', '').split('.')[0]}</span></h4>
     <div class="ap-grid-4" style="margin-bottom:12px">
       ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
       ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
       ${metricBox(fb.evt.toLocaleString(),   'Olay Tıklama')}
       ${metricBox(fb.flt.toLocaleString(),   'Filtre Değişimi')}
     </div>
-    <div class="ap-firebase-row">
-      <span class="ap-stat-label" style="font-size:0.68rem;color:var(--text-muted)">
-        Firebase: ${url.replace('https://', '').split('.')[0]}
-      </span>
+    <div style="text-align:right">
       <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger" style="padding:4px 10px;font-size:0.72rem">
         Bağlantıyı Kaldır
       </button>
     </div>`;
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection(null);
+    updateGlobalSection({ data: null, error: null });
   });
 }
 
 function bindFirebaseSave(sec: HTMLElement): void {
-  sec.querySelector('#ap-fb-save')?.addEventListener('click', () => {
+  const saveBtn = sec.querySelector<HTMLButtonElement>('#ap-fb-save');
+  saveBtn?.addEventListener('click', () => {
     const inp = sec.querySelector<HTMLInputElement>('#ap-fb-url');
     if (!inp) return;
     const url = inp.value.trim().replace(/\/$/, '');
@@ -414,13 +433,16 @@ function bindFirebaseSave(sec: HTMLElement): void {
       inp.style.borderColor = 'var(--danger)';
       return;
     }
+    // Show loading state
+    if (saveBtn) { saveBtn.textContent = '⏳ Test ediliyor…'; saveBtn.disabled = true; }
     setFirebaseUrl(url);
-    // Re-fetch and refresh
-    fbRead().then((fb) => updateGlobalSection(fb)).catch(() => updateGlobalSection(null));
+    fbRead()
+      .then((res) => updateGlobalSection(res))
+      .catch(() => updateGlobalSection({ data: null, error: 'Beklenmedik hata oluştu.' }));
   });
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection(null);
+    updateGlobalSection({ data: null, error: null });
   });
 }
 
