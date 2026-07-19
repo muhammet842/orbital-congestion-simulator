@@ -295,7 +295,7 @@ export class SceneManager {
       }
 
       this.canvasContainer.classList.add('scene-container--conjunction-focus');
-      this.earth.mesh.visible = false;
+      this.earth.mesh.visible = true;
       return;
     }
 
@@ -508,15 +508,21 @@ export class SceneManager {
 
     this.satelliteFootprint.update(footprintIndex, currentState.objects, simTime);
 
+    // Suppress the regular single-satellite selection marker and orbit trail
+    // while verifying a close approach — otherwise a satellite selected
+    // *before* opening the conjunction view lingers as an unrelated dot and
+    // trail floating in the zoomed-in verification camera.
+    const selectionIndexForOverlays = currentState.selectedConjunction ? null : currentState.selectedIndex;
+
     this.selectionMarker.update(
-      currentState.selectedIndex,
+      selectionIndexForOverlays,
       currentState.objects,
       simTime,
     );
 
     this.orbitTrail.update(
       currentState.showOrbitTrail,
-      currentState.selectedIndex,
+      selectionIndexForOverlays,
       currentState.objects,
       simTime,
     );
