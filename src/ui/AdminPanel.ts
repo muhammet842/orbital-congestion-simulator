@@ -555,6 +555,16 @@ function updateGlobalSection(result: FbReadResult): void {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
     updateGlobalSection({ data: null, countries: null, error: null });
   });
+
+  // "Sıfırla" button — deletes orbital_countries node from Firebase
+  sec.querySelector('#ap-country-reset')?.addEventListener('click', async () => {
+    if (!confirm('Tüm ülke ziyaret verisi Firebase\'den silinsin mi?')) return;
+    const base = getFirebaseUrl();
+    await fetch(`${base}/orbital_countries.json`, { method: 'DELETE' }).catch(() => null);
+    sessionStorage.removeItem('orbital_geo_tracked');
+    const res = await fbRead();
+    updateGlobalSection(res);
+  });
 }
 
 function bindFirebaseSave(sec: HTMLElement): void {
@@ -580,15 +590,6 @@ function bindFirebaseSave(sec: HTMLElement): void {
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
     updateGlobalSection({ data: null, countries: null, error: null });
-  });
-
-  sec.querySelector('#ap-country-reset')?.addEventListener('click', async () => {
-    if (!confirm('Tüm ülke ziyaret verisi Firebase\'den silinsin mi?')) return;
-    const base = getFirebaseUrl();
-    await fetch(`${base}/orbital_countries.json`, { method: 'DELETE' }).catch(() => null);
-    sessionStorage.removeItem('orbital_geo_tracked');
-    const res = await fbRead();
-    updateGlobalSection(res);
   });
 }
 
