@@ -1,0 +1,48 @@
+name: TLE Refresh
+
+# Keeps public/data/tle.json from going stale without anyone having to
+# remember to run `npm run fetch-tle` by hand. Runs every Monday and
+# Thursday at 03:00 UTC — twice a week keeps the data under the 3-day
+# "stale" warning threshold shown in the left panel (see LeftPanel.ts).
+# Can also be triggered manually from the Actions tab.
+on:
+  schedule:
+    - cron: "0 3 * * 1,4"
+  workflow_dispatch: {}
+
+jobs:
+  refresh-tle:
+    name: Fetch latest TLE data & commit if changed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch latest TLE data from CelesTrak
+        run: npm run fetch-tle
+
+      - name: Commit and push updated dataset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- public/data/tle.json; then
+            echo "tle.json unchanged — nothing to commit."
+            exit 0
+          fi
+
+          git add public/data/tle.json
+          git commit -m "chore: automated TLE data refresh"
+          git push

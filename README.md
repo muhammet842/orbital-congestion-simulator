@@ -38,17 +38,17 @@ Open `http://localhost:5173` in your browser.
 
 TLE data is fetched from [CelesTrak](https://celestrak.org/):
 
-- Active satellites
-- Debris catalog
-- Space stations (ISS, etc.)
+- Active satellites (capped at 7,000 — Starlink/OneWeb sub-capped to leave room for other constellations)
+- Debris catalog (capped at 3,000 — Cosmos 2251, Fengyun-1C, Iridium 33, analyst objects)
+- Space stations (ISS, Tiangong, etc.)
 
-Update the dataset:
+Output: `public/data/tle.json` — up to **10,000 objects**, deduplicated by NORAD ID.
+
+A [GitHub Actions workflow](.github/workflows/tle-refresh.yml) refreshes this dataset automatically twice a week (Monday & Thursday) and commits the result, so the deployed app stays under the in-app 3-day staleness warning threshold. To refresh it manually:
 
 ```bash
 npm run fetch-tle
 ```
-
-Output: `public/data/tle.json` (max 3,000 objects, deduplicated by NORAD ID).
 
 ## Orbital mechanics
 
