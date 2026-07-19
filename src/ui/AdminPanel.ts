@@ -457,9 +457,23 @@ function renderCountryList(countries: CountryMap | null): string {
   if (!countries || Object.keys(countries).length === 0) {
     return '<p class="ap-note-text" style="margin:4px 0 0;font-size:0.73rem">Henüz ülke verisi yok — ziyaretçi bekleniyor.</p>';
   }
-  // Keys are plain 2-letter ISO codes (TR, US, DE…)
+  // Support both new keys ("TR") and legacy keys ("TR|Turkey", "US|United%20States")
   const parsed = Object.entries(countries)
-    .map(([code, count]) => ({ code, name: countryName(code), count }))
+    .map(([key, count]) => {
+      let code = key;
+      if (key.includes('|')) {
+        code = key.split('|')[0]; // extract just the 2-letter code
+      }
+      code = code.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'XX';
+      return { code, name: countryName(code), count };
+    })
+    // Merge duplicates (old + new keys for same country)
+    .reduce<{ code: string; name: string; count: number }[]>((acc, cur) => {
+      const existing = acc.find(r => r.code === cur.code);
+      if (existing) existing.count += cur.count;
+      else acc.push({ ...cur });
+      return acc;
+    }, [])
     .sort((a, b) => b.count - a.count);
 
   const rows = parsed.map(({ code, name, count }) =>
@@ -523,7 +537,13 @@ function updateGlobalSection(result: FbReadResult): void {
       ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
       ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
     </div>
-    <div class="ap-country-heading">🗺 Ülkelere Göre Ziyaretçi</div>
+    <div class="ap-country-heading" style="display:flex;align-items:center;justify-content:space-between">
+      <span>🗺 Ülkelere Göre Ziyaretçi</span>
+      <button id="ap-country-reset" class="ap-tool-btn ap-tool-btn--danger"
+        style="padding:3px 9px;font-size:0.68rem;margin:0">
+        Sıfırla
+      </button>
+    </div>
     ${renderCountryList(countries)}
     ${!isDefault ? `
     <div style="text-align:right;margin-top:10px">
@@ -560,6 +580,15 @@ function bindFirebaseSave(sec: HTMLElement): void {
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
     updateGlobalSection({ data: null, countries: null, error: null });
+  });
+
+  sec.querySelector('#ap-country-reset')?.addEventListener('click', async () => {
+    if (!confirm('Tüm ülke ziyaret verisi Firebase\'den silinsin mi?')) return;
+    const base = getFirebaseUrl();
+    await fetch(`${base}/orbital_countries.json`, { method: 'DELETE' }).catch(() => null);
+    sessionStorage.removeItem('orbital_geo_tracked');
+    const res = await fbRead();
+    updateGlobalSection(res);
   });
 }
 
