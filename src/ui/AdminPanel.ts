@@ -963,7 +963,22 @@ function setupSessionTracking(): void {
 
 // ── Public init ───────────────────────────────────────────────────────────────
 
+/**
+ * True when the page is being driven by an automated browser (Playwright,
+ * Selenium, Puppeteer, headless CI runners, etc). All of these set
+ * `navigator.webdriver = true`. We must never write analytics/presence data
+ * to the shared production Firebase from CI test runs — every E2E test does
+ * a fresh `page.goto('/')` with clean storage, which would otherwise create
+ * a brand-new "visitor" + presence entry on every push.
+ */
+function isAutomatedBrowser(): boolean {
+  try { return navigator.webdriver === true; }
+  catch { return false; }
+}
+
 export function initAdminSystem(): void {
+  if (isAutomatedBrowser()) return; // never track CI/E2E runs as real visitors
+
   window.addEventListener('keydown', onShortcut);
   setupSessionTracking();
   // Presence tracked for everyone (admin too — they're also "online")
