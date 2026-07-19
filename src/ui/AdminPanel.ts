@@ -293,20 +293,28 @@ export function openAdminPanel(): void {
     if (el) el.textContent = formatDuration(Date.now() - SESSION_START);
   }, 1_000);
 
-  // Async: geo + firebase
-  geoTimer = setTimeout(async () => {
-    const [geo, fb] = await Promise.all([fetchGeo(), fbRead()]);
-    if (!panelEl) return;
-    if (geo) {
+  // Fetch geo and Firebase independently — don't let one block the other
+  geoTimer = setTimeout(() => {
+    // Firebase: update section immediately without waiting for geo
+    fbRead().then((fb) => {
+      if (!panelEl) return;
+      updateGlobalSection(fb);
+    }).catch(() => {
+      if (!panelEl) return;
+      updateGlobalSection(null);
+    });
+
+    // Geo: update labels when ready
+    fetchGeo().then((geo) => {
+      if (!panelEl || !geo) return;
       const loc = document.getElementById('ap-geo-loc');
       const ip  = document.getElementById('ap-geo-ip');
       const org = document.getElementById('ap-geo-org');
       if (loc) loc.textContent = `${geo.city}, ${geo.region}, ${geo.country_name}`;
       if (ip)  ip.textContent  = geo.ip;
       if (org) org.textContent = geo.org;
-    }
-    updateGlobalSection(fb);
-  }, 100);
+    }).catch(() => { /* non-fatal */ });
+  }, 50);
 
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeAdminPanel(); });
   document.addEventListener('keydown', handleEsc);
@@ -528,16 +536,6 @@ function renderPanelContent(panel: HTMLElement): void {
         </div>
       </section>
 
-      <!-- ── Bu Oturumda ──────────────────────────────── -->
-      <section class="ap-section">
-        <h4 class="ap-section-title">📊 Bu Oturumda <span class="ap-sub-hint">(sekmeyi kapat → sıfırlanır)</span></h4>
-        <div class="ap-grid-3">
-          ${metricBox(sesSat, 'Uydu Tıklama')}
-          ${metricBox(sesEvt, 'Olay Tıklama')}
-          ${metricBox(sesFlt, 'Filtre Değişimi')}
-        </div>
-      </section>
-
       <!-- ── Bu Cihazda (Toplam) ──────────────────────── -->
       <section class="ap-section">
         <h4 class="ap-section-title">💾 Bu Cihazda (Tüm Oturumlar)</h4>
@@ -634,20 +632,24 @@ function setupSessionTracking(): void {
   subscribe(() => {
     const st = getState();
 
+    // Admin's own interactions are tracked locally but excluded from Firebase
+    // so the global counters only reflect regular (non-admin) users.
+    const sendToFirebase = !isAdminMode();
+
     if (st.selectedIndex !== null && st.selectedIndex !== _lastSel) {
       inc('sat');
       _lastSel = st.selectedIndex;
-      fbInc('sat').catch(() => {/* non-fatal */});
+      if (sendToFirebase) fbInc('sat').catch(() => {/* non-fatal */});
     }
     if (st.selectedEventId !== null && st.selectedEventId !== _lastEvt) {
       inc('evt');
       _lastEvt = st.selectedEventId;
-      fbInc('evt').catch(() => {/* non-fatal */});
+      if (sendToFirebase) fbInc('evt').catch(() => {/* non-fatal */});
     }
     if (st.altitudeFilter !== _lastAlt) {
       if (st.altitudeFilter !== null) {
         inc('flt');
-        fbInc('flt').catch(() => {/* non-fatal */});
+        if (sendToFirebase) fbInc('flt').catch(() => {/* non-fatal */});
       }
       _lastAlt = st.altitudeFilter;
     }
@@ -659,7 +661,7 @@ function setupSessionTracking(): void {
 export function initAdminSystem(): void {
   window.addEventListener('keydown', onShortcut);
   setupSessionTracking();
-  // Also increment Firebase page-load counter asynchronously
-  fbInc('loads').catch(() => {/* non-fatal */});
+  // Increment Firebase page-load counter for non-admin users only
+  if (!isAdminMode()) fbInc('loads').catch(() => {/* non-fatal */});
   if (isAdminMode()) requestAnimationFrame(refreshAdminButton);
 }
