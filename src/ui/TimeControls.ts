@@ -133,7 +133,12 @@ export function initTimeControls(container: HTMLElement): void {
       const { time } = getState();
 
       if (isConjunctionVerificationActive()) {
-        setVerificationPartial({ speed });
+        // Verification starts paused by design (T-60s preview before the
+        // user commits to watching it play out). Picking a speed is a clear
+        // signal of intent to watch it run — auto-resume so the objects
+        // actually move, instead of silently changing a speed that has no
+        // effect until Play is pressed separately.
+        setVerificationPartial({ speed, playing: true });
         return;
       }
 
