@@ -37,8 +37,14 @@ export const REFINE_STEP_MS = 60 * 1000;
 export const LIVE_REFINE_WINDOW_MS = 10 * 1000;
 export const LIVE_REFINE_STEP_MS = 1_000;
 export const VERIFY_REWIND_MS = 60 * 1000;
-/** Orbit preview window around CPA — 15 s before + 15 s after = 30 s total. */
-export const VERIFY_TRAIL_BACK_MS = 15 * 1000;
+/**
+ * Orbit preview window around CPA. Verification playback starts at
+ * `CPA - VERIFY_REWIND_MS` and the object markers move continuously from
+ * there, so the trail must cover at least that whole span — otherwise for
+ * most of the playback the marker sits ahead of (or behind) the drawn line
+ * entirely, looking like a disconnected, unrelated trail floating nearby.
+ */
+export const VERIFY_TRAIL_BACK_MS = VERIFY_REWIND_MS;
 export const VERIFY_TRAIL_FORWARD_MS = 15 * 1000;
 export const VERIFY_TRAIL_STEP_MS = 2_000;
 export const COLLISION_THRESHOLD_KM = 0.1;
@@ -287,6 +293,12 @@ function findObjectIndex(objects: TrackedObject[], name: string): number {
   return objects.findIndex((o) => o.name.toUpperCase() === upper);
 }
 
+/** Debris fields routinely contain many objects sharing the exact same
+ *  display name — NORAD ID is the only identity that's actually unique. */
+function findObjectIndexByNoradId(objects: TrackedObject[], noradId: number): number {
+  return objects.findIndex((o) => o.noradId === noradId);
+}
+
 /** TLE identity — ISS modules often share identical ephemeris lines. */
 export function orbitFingerprint(obj: TrackedObject): string {
   return `${obj.line1}|${obj.line2}`;
@@ -365,15 +377,17 @@ function deduplicatePhysicalConjunctions(
   return Array.from(seen.values()).sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
-/** Freeze alert CPA metadata — always resolve indices by name, never reuse stale indices. */
+/** Freeze alert CPA metadata — always resolve indices by NORAD ID, never
+ *  by name (debris fields have many same-named fragments) and never reuse
+ *  stale indices. */
 export function normalizeConjunctionAlert(
   alert: ConjunctionEvent,
   objects: TrackedObject[],
 ): ConjunctionEvent | null {
-  const indexA = findObjectIndex(objects, alert.objectA);
-  const indexB = findObjectIndex(objects, alert.objectB);
+  const indexA = findObjectIndexByNoradId(objects, alert.noradIdA);
+  const indexB = findObjectIndexByNoradId(objects, alert.noradIdB);
 
-  if (indexA < 0 || indexB < 0) return null;
+  if (indexA < 0 || indexB < 0 || indexA === indexB) return null;
 
   const time = new Date(alert.time.getTime());
   const propA = propagateObject(objects[indexA].satrec, time);
@@ -383,6 +397,8 @@ export function normalizeConjunctionAlert(
   return {
     objectA: alert.objectA,
     objectB: alert.objectB,
+    noradIdA: alert.noradIdA,
+    noradIdB: alert.noradIdB,
     indexA,
     indexB,
     distanceKm: alert.distanceKm,
@@ -457,6 +473,8 @@ export function refineCloseApproach(
   return {
     objectA: objA.name,
     objectB: objB.name,
+    noradIdA: objA.noradId,
+    noradIdB: objB.noradId,
     indexA,
     indexB,
     distanceKm: bestDistance,

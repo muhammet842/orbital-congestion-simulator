@@ -50,6 +50,12 @@ export interface ObjectSnapshot {
 export interface ConjunctionEvent {
   objectA: string;
   objectB: string;
+  /** NORAD catalog IDs — the only reliable identity, since debris fields
+   *  routinely contain many objects sharing the exact same display name
+   *  (e.g. dozens of "FENGYUN 1C DEB" fragments). Never re-resolve a stored
+   *  alert back to live indices by name alone. */
+  noradIdA: number;
+  noradIdB: number;
   indexA: number;
   indexB: number;
   distanceKm: number;

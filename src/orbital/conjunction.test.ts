@@ -10,6 +10,7 @@ import {
   getRiskAssessment,
   invalidateConjunctionCache,
   isCoOrbitingPair,
+  normalizeConjunctionAlert,
 } from './conjunction';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 import * as propagatorModule from './propagator';
@@ -53,6 +54,8 @@ function makeEvent(overrides: Partial<ConjunctionEvent> = {}): ConjunctionEvent 
   return {
     objectA: 'SAT-A',
     objectB: 'SAT-B',
+    noradIdA: 100,
+    noradIdB: 200,
     indexA: 0,
     indexB: 1,
     distanceKm: 1.5,
@@ -390,5 +393,92 @@ describe('findConjunctions — narrow high-speed window detection', () => {
     const result = findConjunctions(objects, sampleTime);
 
     expect(result.alerts).toHaveLength(0);
+  });
+});
+
+describe('normalizeConjunctionAlert — duplicate display names', () => {
+  /**
+   * Regression test: debris fields routinely contain dozens of fragments
+   * that all share the exact same catalog display name (e.g. "FENGYUN 1C
+   * DEB"). Re-resolving a stored alert's indices by name alone collapses
+   * both objects to whichever one the array scan hits first, comparing an
+   * object against itself — live separation reads 0.000 km, relative
+   * velocity reads 0, while the frozen CPA distance (computed correctly at
+   * detection time, before re-resolution) still shows its real value. NORAD
+   * ID is the only field that's actually unique per object.
+   */
+  function makeDuplicateNamedObjects(): TrackedObject[] {
+    const base = {
+      name: 'FENGYUN 1C DEB',
+      country: 'PRC',
+      owner: 'PRC',
+      layer: 'LEO' as const,
+      color: [1, 1, 1] as [number, number, number],
+      functionGroup: 'debris' as const,
+      meanAltitudeKm: 850,
+      inclinationDeg: 98.8,
+      category: 'debris' as const,
+      satrec: {} as unknown as TrackedObject['satrec'],
+    };
+    return [
+      { ...base, noradId: 111, line1: 'LINE-1-A', line2: 'LINE-2-A' },
+      { ...base, noradId: 222, line1: 'LINE-1-B', line2: 'LINE-2-B' },
+    ];
+  }
+
+  beforeEach(() => {
+    vi.spyOn(propagatorModule, 'propagateObject').mockImplementation(() => ({
+      positionEci: { x: 1, y: 2, z: 3 },
+      velocityEci: { x: 1, y: 0, z: 0 },
+      altitudeKm: 850,
+      velocityKmS: 7.5,
+      inclinationDeg: 98.8,
+      layer: 'LEO',
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('resolves same-named objects to their distinct indices via NORAD ID, not the first name match', () => {
+    const objects = makeDuplicateNamedObjects();
+    const alert: ConjunctionEvent = {
+      objectA: 'FENGYUN 1C DEB',
+      objectB: 'FENGYUN 1C DEB',
+      noradIdA: 222,
+      noradIdB: 111,
+      indexA: 1,
+      indexB: 0,
+      distanceKm: 2.55,
+      relativeVelocityKmS: 6.2,
+      time: new Date('2026-07-19T18:15:56.000Z'),
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+
+    const frozen = normalizeConjunctionAlert(alert, objects);
+
+    expect(frozen).not.toBeNull();
+    expect(frozen!.indexA).toBe(1);
+    expect(frozen!.indexB).toBe(0);
+    expect(frozen!.indexA).not.toBe(frozen!.indexB);
+  });
+
+  it('refuses to resolve when NORAD ID lookup degenerates to the same object', () => {
+    const objects = makeDuplicateNamedObjects();
+    const alert: ConjunctionEvent = {
+      objectA: 'FENGYUN 1C DEB',
+      objectB: 'FENGYUN 1C DEB',
+      noradIdA: 111,
+      noradIdB: 111,
+      indexA: 0,
+      indexB: 0,
+      distanceKm: 2.55,
+      relativeVelocityKmS: 6.2,
+      time: new Date('2026-07-19T18:15:56.000Z'),
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+
+    expect(normalizeConjunctionAlert(alert, objects)).toBeNull();
   });
 });
