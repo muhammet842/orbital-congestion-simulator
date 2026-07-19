@@ -95,11 +95,20 @@ async function fbRead(): Promise<FbReadResult> {
       return { data: null, error: `Firebase HTTP ${r.status} hatası` };
     }
 
-    let json: FirebaseMetrics | null = null;
-    try { json = await r.json() as FirebaseMetrics | null; }
-    catch { json = null; }
+    let raw: Partial<FirebaseMetrics> | null = null;
+    try { raw = await r.json() as Partial<FirebaseMetrics> | null; }
+    catch { raw = null; }
 
-    return { data: json ?? { sat: 0, evt: 0, flt: 0, loads: 0 }, error: null };
+    // Normalize: each field may be missing if Firebase received only partial writes
+    return {
+      data: {
+        sat:   raw?.sat   ?? 0,
+        evt:   raw?.evt   ?? 0,
+        flt:   raw?.flt   ?? 0,
+        loads: raw?.loads ?? 0,
+      },
+      error: null,
+    };
   } catch (e) {
     clearTimeout(tid);
     const msg = e instanceof Error ? e.message : String(e);
