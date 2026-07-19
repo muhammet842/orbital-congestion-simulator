@@ -482,6 +482,22 @@ export class SceneManager {
     const debrisStride = getDebrisUpdateStride(timeSpeed);
     const skipPointsUpdate = this.debrisFrameCounter++ % debrisStride !== 0;
 
+    // Real-world separation for the two verified objects, used to cap their
+    // model size below (see conjunctionLiveDistanceKm in updatePositions) —
+    // otherwise the ~25km-wide exaggerated satellite model dwarfs genuine
+    // multi-km near-misses and makes them look like a physical collision.
+    let conjunctionLiveDistanceKm: number | null = null;
+    if (currentState.selectedConjunction) {
+      const propA = propagations[currentState.selectedConjunction.indexA];
+      const propB = propagations[currentState.selectedConjunction.indexB];
+      if (propA && propB) {
+        const dx = propA.positionEci.x - propB.positionEci.x;
+        const dy = propA.positionEci.y - propB.positionEci.y;
+        const dz = propA.positionEci.z - propB.positionEci.z;
+        conjunctionLiveDistanceKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      }
+    }
+
     if (this.orbitalMeshes) {
       this.orbitalMeshes.updatePositions(
         currentState.objects,
@@ -497,6 +513,7 @@ export class SceneManager {
           colorByFunction: currentState.colorByFunction,
           altitudeFilter: currentState.altitudeFilter,
           inclinationFilter: currentState.inclinationFilter,
+          conjunctionLiveDistanceKm,
         },
       );
     }

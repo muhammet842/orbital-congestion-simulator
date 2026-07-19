@@ -17,12 +17,21 @@ import {
 } from '../orbital/classify';
 import { propagateObject, type PropagationResult } from '../orbital/propagator';
 import type { TrackedObject, OrbitLayer } from '../types';
+import { ORBIT_DISPLAY_SCALE } from '../types';
 import { matchesSearchQuery } from '../state/appState';
 import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
 import { resolveModelKey } from './modelResolver';
-import { satelliteModelLoader } from './SatelliteModelLoader';
+import { satelliteModelLoader, TARGET_MODEL_SIZE } from './SatelliteModelLoader';
 
 const SELECTED_SCALE = 3;
+const DEFAULT_CONJUNCTION_SCALE = 2.2;
+/** Absolute floor so the model never shrinks to an unclickable speck even
+ *  for a genuine near-collision (tens to low hundreds of meters apart). */
+const MIN_CONJUNCTION_SCALE = 0.02;
+/** Keep each model's rendered footprint under this fraction of the real
+ *  separation so two objects that are merely close (not colliding) still
+ *  show a visible gap instead of their oversized models overlapping. */
+const CONJUNCTION_SIZE_FRACTION_OF_SEPARATION = 0.3;
 const scratchVel = new Vector3();
 const scratchDir = new Vector3();
 const scratchUp = new Vector3();
@@ -88,11 +97,16 @@ export class OrbitalMeshes {
       colorByFunction?: boolean;
       altitudeFilter?: { minKm: number; maxKm: number } | null;
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
+      /** Real-world km between the two conjunction-highlighted objects right
+       *  now — caps their model scale so it never visually dwarfs a genuine
+       *  multi-km near-miss (see CONJUNCTION_SIZE_FRACTION_OF_SEPARATION). */
+      conjunctionLiveDistanceKm?: number | null;
     },
   ): void {
     const colorByFunction = options?.colorByFunction ?? false;
     const altitudeFilter = options?.altitudeFilter ?? null;
     const inclinationFilter = options?.inclinationFilter ?? null;
+    const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
     const gltfDetailIndices = this.resolveGltfDetailIndices(
@@ -115,7 +129,7 @@ export class OrbitalMeshes {
       );
     }
 
-    this.syncDetailWrappers(objects, propagations, gltfDetailIndices, layerFilters, searchQuery, conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs, colorByFunction);
+    this.syncDetailWrappers(objects, propagations, gltfDetailIndices, layerFilters, searchQuery, conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs, colorByFunction, conjunctionLiveDistanceKm);
 
     const nextVisible: Object3D[] = [];
     for (const wrapper of this.detailWrappers.values()) {
@@ -184,6 +198,7 @@ export class OrbitalMeshes {
     cameraPosition: { x: number; y: number; z: number },
     pulseTimeMs: number,
     colorByFunction: boolean,
+    conjunctionLiveDistanceKm: number | null,
   ): void {
     for (const [index, wrapper] of this.detailWrappers) {
       if (!gltfDetailIndices.has(index)) {
@@ -246,7 +261,9 @@ export class OrbitalMeshes {
       scratchVel.set(vel.x, vel.y, vel.z);
 
       let scaleMul = isSelected ? SELECTED_SCALE : getCategoryScale(obj.category, obj.country);
-      if (isConjunction) scaleMul = 2.2;
+      if (isConjunction) {
+        scaleMul = conjunctionModelScale(conjunctionLiveDistanceKm);
+      }
       scaleMul *= isConjunction ? 1 : getCategoryPulse(obj.category, pulseTimeMs, obj.country);
 
       const baseScale = (wrapper.userData.baseScale as number) ?? 1;
@@ -257,6 +274,25 @@ export class OrbitalMeshes {
       wrapper.visible = true;
     }
   }
+}
+
+/**
+ * The base satellite model is exaggerated to ~25km wide (TARGET_MODEL_SIZE)
+ * so it's visible at normal global-view zoom. That's meaningless — even
+ * harmful — once the conjunction verification camera zooms in tight enough
+ * to resolve a multi-km near-miss: at the default 2.2x scale the model alone
+ * is ~55km wide, dwarfing separations of just a few km and making a real
+ * (non-collision) close approach look like the two objects merged. Cap the
+ * scale so each model's footprint stays a modest fraction of the real
+ * distance between them, revealing the actual gap.
+ */
+export function conjunctionModelScale(liveDistanceKm: number | null): number {
+  if (liveDistanceKm == null || !Number.isFinite(liveDistanceKm) || liveDistanceKm <= 0) {
+    return DEFAULT_CONJUNCTION_SCALE;
+  }
+  const maxModelSizeScene = liveDistanceKm * ORBIT_DISPLAY_SCALE * CONJUNCTION_SIZE_FRACTION_OF_SEPARATION;
+  const distanceCappedScale = maxModelSizeScene / TARGET_MODEL_SIZE;
+  return Math.min(DEFAULT_CONJUNCTION_SCALE, Math.max(MIN_CONJUNCTION_SCALE, distanceCappedScale));
 }
 
 function orientAlongVelocity(wrapper: Group, velocityScene: Vector3): void {
