@@ -30,6 +30,94 @@ const SS_SESSION_PREFIX= 'orbital_ses_';     // current tab/session
  */
 const DEFAULT_FIREBASE_URL = 'https://orbital-congestion-sim-default-rtdb.firebaseio.com';
 
+// ── Real-time Presence ────────────────────────────────────────────────────────
+
+/** Unique ID for this browser tab — persists across F5, resets on tab close. */
+function getSessionId(): string {
+  let id = sessionStorage.getItem('orbital_sid');
+  if (!id) {
+    id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    sessionStorage.setItem('orbital_sid', id);
+  }
+  return id;
+}
+
+let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+async function writePresence(countryCode: string): Promise<void> {
+  const base = getFirebaseUrl();
+  const sid  = getSessionId();
+  const payload = JSON.stringify({
+    country: countryCode,
+    since: Date.now(),
+    lastSeen: Date.now(),
+  });
+  await fetch(`${base}/orbital_presence/${sid}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+  }).catch(() => null);
+}
+
+async function updatePresenceHeartbeat(): Promise<void> {
+  const base = getFirebaseUrl();
+  const sid  = getSessionId();
+  await fetch(`${base}/orbital_presence/${sid}/lastSeen.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Date.now()),
+  }).catch(() => null);
+}
+
+function deletePresence(): void {
+  const base = getFirebaseUrl();
+  const sid  = getSessionId();
+  // keepalive ensures the request completes even during page unload
+  fetch(`${base}/orbital_presence/${sid}.json`, {
+    method: 'DELETE',
+    keepalive: true,
+  }).catch(() => null);
+}
+
+async function initPresence(): Promise<void> {
+  // Already initialized this session
+  if (sessionStorage.getItem('orbital_presence_init')) {
+    startPresenceHeartbeat();
+    return;
+  }
+  sessionStorage.setItem('orbital_presence_init', '1');
+
+  try {
+    const geo = await fetchGeo();
+    const code = geo?.country_code ?? 'XX';
+    await writePresence(code);
+  } catch {
+    await writePresence('XX');
+  }
+
+  startPresenceHeartbeat();
+  window.addEventListener('beforeunload', deletePresence);
+  window.addEventListener('pagehide', deletePresence);
+}
+
+function startPresenceHeartbeat(): void {
+  if (presenceHeartbeatTimer) return;
+  presenceHeartbeatTimer = setInterval(updatePresenceHeartbeat, 30_000);
+}
+
+interface PresenceEntry {
+  country: string;
+  since: number;
+  lastSeen: number;
+}
+
+async function fbReadPresence(): Promise<Record<string, PresenceEntry> | null> {
+  const r = await fbFetch('/orbital_presence.json');
+  if (!r || !r.ok) return null;
+  try { return await r.json() as Record<string, PresenceEntry> | null; }
+  catch { return null; }
+}
+
 // ── Counter helpers ───────────────────────────────────────────────────────────
 
 type CounterKey = 'sat' | 'evt' | 'loads';
@@ -378,6 +466,7 @@ function showPinDialog(): void {
 let panelEl: HTMLElement | null = null;
 let durationTimer: ReturnType<typeof setInterval> | null = null;
 let geoTimer: ReturnType<typeof setTimeout> | null = null;
+let presenceRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 export function openAdminPanel(): void {
   if (!isAdminMode()) { showPinDialog(); return; }
@@ -405,9 +494,8 @@ export function openAdminPanel(): void {
     if (el) el.textContent = formatDuration(Date.now() - SESSION_START);
   }, 1_000);
 
-  // Fetch geo and Firebase independently — don't let one block the other
   geoTimer = setTimeout(() => {
-    // Firebase: update section immediately without waiting for geo
+    // Firebase metrics + countries
     fbRead().then((res) => {
       if (!panelEl) return;
       updateGlobalSection(res);
@@ -416,7 +504,7 @@ export function openAdminPanel(): void {
       updateGlobalSection({ data: null, countries: null, error: 'Beklenmedik bağlantı hatası.' });
     });
 
-    // Geo: update labels when ready
+    // Geo labels for session info
     fetchGeo().then((geo) => {
       if (!panelEl || !geo) return;
       const loc = document.getElementById('ap-geo-loc');
@@ -426,7 +514,13 @@ export function openAdminPanel(): void {
       if (ip)  ip.textContent  = geo.ip;
       if (org) org.textContent = geo.org;
     }).catch(() => { /* non-fatal */ });
+
+    // Initial presence fetch
+    refreshPresenceSection();
   }, 50);
+
+  // Auto-refresh online users every 20 seconds while panel is open
+  presenceRefreshTimer = setInterval(refreshPresenceSection, 20_000);
 
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeAdminPanel(); });
   document.addEventListener('keydown', handleEsc);
@@ -438,9 +532,62 @@ function handleEsc(e: KeyboardEvent): void {
 
 export function closeAdminPanel(): void {
   panelEl?.remove(); panelEl = null;
-  if (durationTimer) { clearInterval(durationTimer); durationTimer = null; }
-  if (geoTimer)      { clearTimeout(geoTimer);       geoTimer = null; }
+  if (durationTimer)       { clearInterval(durationTimer);       durationTimer = null; }
+  if (geoTimer)            { clearTimeout(geoTimer);             geoTimer = null; }
+  if (presenceRefreshTimer){ clearInterval(presenceRefreshTimer); presenceRefreshTimer = null; }
   document.removeEventListener('keydown', handleEsc);
+}
+
+async function refreshPresenceSection(): Promise<void> {
+  if (!panelEl) return;
+  const presence = await fbReadPresence();
+  const sec = document.getElementById('ap-presence-section');
+  if (!sec) return;
+
+  const STALE_MS = 90_000; // 90s — 3× heartbeat interval
+  const now = Date.now();
+
+  const online = Object.values(presence ?? {})
+    .filter(e => e && now - (e.lastSeen ?? 0) < STALE_MS);
+
+  // Group by country
+  const byCountry = online.reduce<Record<string, number>>((acc, e) => {
+    const c = e.country || 'XX';
+    acc[c] = (acc[c] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const total = online.length;
+
+  if (total === 0) {
+    sec.innerHTML = `
+      <h4 class="ap-section-title">
+        🟢 Şu An Online
+        <span class="ap-online-count ap-online-zero">0</span>
+      </h4>
+      <p class="ap-note-text" style="margin:0;font-size:0.73rem">Aktif ziyaretçi yok.</p>`;
+    return;
+  }
+
+  const rows = Object.entries(byCountry)
+    .sort(([, a], [, b]) => b - a)
+    .map(([code, cnt]) => `
+      <div class="ap-country-row">
+        <span class="ap-country-flag">${countryFlag(code)}</span>
+        <span class="ap-country-name">${countryName(code)}</span>
+        <span class="ap-country-bar-wrap">
+          <span class="ap-country-bar" style="width:${Math.round((cnt / total) * 100)}%"></span>
+        </span>
+        <span class="ap-country-count">${cnt}</span>
+      </div>`).join('');
+
+  sec.innerHTML = `
+    <h4 class="ap-section-title">
+      🟢 Şu An Online
+      <span class="ap-online-count">${total}</span>
+      <span class="ap-sub-hint">her 20sn'de güncellenir</span>
+    </h4>
+    <div class="ap-country-list">${rows}</div>`;
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
@@ -719,6 +866,11 @@ function renderPanelContent(panel: HTMLElement): void {
         </div>
       </section>
 
+      <!-- ── Şu An Online ──────────────────────────────── -->
+      <section class="ap-section ap-section--online" id="ap-presence-section">
+        <h4 class="ap-section-title">🟢 Şu An Online <span class="ap-sub-hint">yükleniyor…</span></h4>
+      </section>
+
       <!-- ── Tüm Kullanıcılar (Firebase) ─────────────── -->
       <section class="ap-section ap-section--note" id="ap-global-section">
         <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
@@ -820,6 +972,9 @@ function setupSessionTracking(): void {
 export function initAdminSystem(): void {
   window.addEventListener('keydown', onShortcut);
   setupSessionTracking();
+  // Presence tracked for everyone (admin too — they're also "online")
+  initPresence().catch(() => {/* non-fatal */});
+
   if (!isAdminMode()) {
     fbInc('loads').catch(() => {/* non-fatal */});
     trackCountry().catch(() => {/* non-fatal */});
