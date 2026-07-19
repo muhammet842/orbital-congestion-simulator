@@ -1913,6 +1913,59 @@ body {
 .ap-fb-input:focus { border-color: var(--accent); }
 .ap-fb-input::placeholder { color: var(--text-muted); opacity: 0.6; }
 
+/* ── Country list ──────────────────────────────────────────────────────────── */
+.ap-country-heading {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+.ap-country-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34,211,238,.2) transparent;
+}
+.ap-country-list::-webkit-scrollbar { width: 4px; }
+.ap-country-list::-webkit-scrollbar-thumb { background: rgba(34,211,238,.2); border-radius: 2px; }
+.ap-country-row {
+  display: grid;
+  grid-template-columns: 1.4rem 1fr auto auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+}
+.ap-country-flag { font-size: 1rem; line-height: 1; }
+.ap-country-name { color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-country-bar-wrap {
+  height: 5px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 40px;
+}
+.ap-country-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  min-width: 4px;
+  transition: width 0.4s ease;
+}
+.ap-country-count {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 0.8rem;
+  min-width: 20px;
+  text-align: right;
+}
+
 /* ── Firebase rules hint ───────────────────────────────────────────────────── */
 .ap-rules-hint {
   background: rgba(251, 191, 36, 0.07);

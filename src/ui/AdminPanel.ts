@@ -32,7 +32,7 @@ const DEFAULT_FIREBASE_URL = 'https://orbital-congestion-sim-default-rtdb.fireba
 
 // ── Counter helpers ───────────────────────────────────────────────────────────
 
-type CounterKey = 'sat' | 'evt' | 'flt' | 'loads';
+type CounterKey = 'sat' | 'evt' | 'loads';
 
 function sesGet(k: CounterKey): number {
   return parseInt(sessionStorage.getItem(SS_SESSION_PREFIX + k) ?? '0', 10);
@@ -73,64 +73,105 @@ function setFirebaseUrl(url: string): void {
 
 interface FirebaseMetrics {
   sat:   number;
-  evt:   number;
-  flt:   number;
   loads: number;
 }
+type CountryMap = Record<string, number>;
 
 interface FbReadResult {
   data: FirebaseMetrics | null;
+  countries: CountryMap | null;
   error: string | null;
 }
 
-async function fbRead(): Promise<FbReadResult> {
+async function fbFetch(path: string): Promise<Response | null> {
   const base = getFirebaseUrl();
-  if (!base) return { data: null, error: null };
-
-  // Manual timeout — AbortSignal.timeout() has inconsistent browser support
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 8000);
-
+  if (!base) return null;
+  const ctl = new AbortController();
+  const tid = setTimeout(() => ctl.abort(), 8000);
   try {
-    const r = await fetch(`${base}/orbital_metrics.json`, { signal: controller.signal });
+    const r = await fetch(`${base}${path}`, { signal: ctl.signal });
     clearTimeout(tid);
-
-    if (r.status === 401 || r.status === 403) {
-      return {
-        data: null,
-        error: `Erişim reddedildi (HTTP ${r.status}) — Firebase Realtime Database kurallarında ".read" ve ".write" değerlerini true yapın.`,
-      };
-    }
-    if (!r.ok) {
-      return { data: null, error: `Firebase HTTP ${r.status} hatası` };
-    }
-
-    let raw: Partial<FirebaseMetrics> | null = null;
-    try { raw = await r.json() as Partial<FirebaseMetrics> | null; }
-    catch { raw = null; }
-
-    // Normalize: each field may be missing if Firebase received only partial writes
-    return {
-      data: {
-        sat:   raw?.sat   ?? 0,
-        evt:   raw?.evt   ?? 0,
-        flt:   raw?.flt   ?? 0,
-        loads: raw?.loads ?? 0,
-      },
-      error: null,
-    };
+    return r;
   } catch (e) {
     clearTimeout(tid);
-    const msg = e instanceof Error ? e.message : String(e);
-    const isTimeout = msg.toLowerCase().includes('abort') || msg.toLowerCase().includes('cancel');
     console.error('[AdminPanel] Firebase fetch error:', e);
+    return null;
+  }
+}
+
+async function fbRead(): Promise<FbReadResult> {
+  const [metricsRes, countriesRes] = await Promise.all([
+    fbFetch('/orbital_metrics.json'),
+    fbFetch('/orbital_countries.json'),
+  ]);
+
+  if (!metricsRes) {
+    return { data: null, countries: null, error: 'Firebase bağlantısı kurulamadı — internet bağlantını kontrol et.' };
+  }
+  if (metricsRes.status === 401 || metricsRes.status === 403) {
     return {
-      data: null,
-      error: isTimeout
-        ? 'Bağlantı zaman aşımı (8s) — Firebase URL ve internet bağlantısını kontrol edin.'
-        : `Firebase hatası: ${msg}`,
+      data: null, countries: null,
+      error: `Erişim reddedildi (HTTP ${metricsRes.status}) — Firebase Rules sekmesinde ".read" ve ".write" değerlerini true yapın.`,
     };
   }
+  if (!metricsRes.ok) {
+    return { data: null, countries: null, error: `Firebase HTTP ${metricsRes.status} hatası` };
+  }
+
+  let raw: Record<string, number> | null = null;
+  try { raw = await metricsRes.json() as Record<string, number> | null; }
+  catch { raw = null; }
+
+  let countryRaw: CountryMap | null = null;
+  try { if (countriesRes?.ok) countryRaw = await countriesRes.json() as CountryMap | null; }
+  catch { countryRaw = null; }
+
+  return {
+    data: { sat: raw?.sat ?? 0, loads: raw?.loads ?? 0 },
+    countries: countryRaw,
+    error: null,
+  };
+}
+
+/** Convert ISO 3166-1 alpha-2 code to flag emoji (e.g. "TR" → "🇹🇷"). */
+function countryFlag(code: string): string {
+  try {
+    return [...code.toUpperCase()].map(c => String.fromCodePoint(c.charCodeAt(0) + 127397)).join('');
+  } catch { return '🌐'; }
+}
+
+/** Increment a country visit counter in Firebase (once per session). */
+async function fbIncCountry(code: string, name: string): Promise<void> {
+  // Store as "CODE|Name" so we can display the name alongside the flag
+  const key = `${code}|${encodeURIComponent(name)}`;
+  const r = await fbFetch(`/orbital_countries/${encodeURIComponent(key)}.json`);
+  if (!r || !r.ok) return;
+  const cur = ((await r.json().catch(() => null)) as number | null) ?? 0;
+  const base = getFirebaseUrl();
+  const ctl = new AbortController();
+  const tid = setTimeout(() => ctl.abort(), 4000);
+  await fetch(`${base}/orbital_countries/${encodeURIComponent(key)}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cur + 1),
+    signal: ctl.signal,
+  }).catch(() => null);
+  clearTimeout(tid);
+}
+
+/** Track the visitor's country in Firebase (once per browser session). */
+async function trackCountry(): Promise<void> {
+  if (isAdminMode()) return;
+  const cached = sessionStorage.getItem('orbital_geo_tracked');
+  if (cached) return; // already tracked this session
+  sessionStorage.setItem('orbital_geo_tracked', '1');
+  try {
+    const geo = await fetchGeo();
+    if (geo?.country_name) {
+      const code = (geo as unknown as Record<string, string>)['country_code'] ?? 'XX';
+      await fbIncCountry(code, geo.country_name);
+    }
+  } catch { /* non-fatal */ }
 }
 
 /** Atomically increment a single counter in Firebase (+= 1 via REST). */
@@ -360,7 +401,7 @@ export function openAdminPanel(): void {
       updateGlobalSection(res);
     }).catch(() => {
       if (!panelEl) return;
-      updateGlobalSection({ data: null, error: 'Beklenmedik bağlantı hatası.' });
+      updateGlobalSection({ data: null, countries: null, error: 'Beklenmedik bağlantı hatası.' });
     });
 
     // Geo: update labels when ready
@@ -400,11 +441,38 @@ function metricBox(val: string | number, label: string): string {
     </div>`;
 }
 
+function renderCountryList(countries: CountryMap | null): string {
+  if (!countries || Object.keys(countries).length === 0) {
+    return '<p class="ap-note-text" style="margin:4px 0 0;font-size:0.73rem">Henüz ülke verisi yok — ziyaretçi bekleniyor.</p>';
+  }
+  // Parse "CODE|Name" keys
+  const parsed = Object.entries(countries)
+    .map(([key, count]) => {
+      const [code, encodedName] = key.split('|');
+      const name = encodedName ? decodeURIComponent(encodedName) : code;
+      return { code, name, count };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const rows = parsed.map(({ code, name, count }) =>
+    `<div class="ap-country-row">
+      <span class="ap-country-flag">${countryFlag(code)}</span>
+      <span class="ap-country-name">${name}</span>
+      <span class="ap-country-bar-wrap">
+        <span class="ap-country-bar" style="width:${Math.round((count / parsed[0].count) * 100)}%"></span>
+      </span>
+      <span class="ap-country-count">${count}</span>
+    </div>`
+  ).join('');
+
+  return `<div class="ap-country-list">${rows}</div>`;
+}
+
 function updateGlobalSection(result: FbReadResult): void {
   const sec = document.getElementById('ap-global-section');
   if (!sec) return;
   const url = getFirebaseUrl();
-  const { data: fb, error } = result;
+  const { data: fb, countries, error } = result;
 
   // url is now always at least DEFAULT_FIREBASE_URL, so this branch rarely fires
   if (!url) {
@@ -440,24 +508,24 @@ function updateGlobalSection(result: FbReadResult): void {
   sec.innerHTML = `
     <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase)
       <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">
-        — ${url.replace('https://', '').split('.')[0]}${isDefault ? ' (varsayılan)' : ''}
+        — ${url.replace('https://', '').split('.')[0]}
       </span>
     </h4>
-    <div class="ap-grid-4" style="margin-bottom:12px">
+    <div class="ap-grid-2" style="margin-bottom:16px">
       ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
       ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
-      ${metricBox(fb.evt.toLocaleString(),   'Olay Tıklama')}
-      ${metricBox(fb.flt.toLocaleString(),   'Filtre Değişimi')}
     </div>
+    <div class="ap-country-heading">🗺 Ülkelere Göre Ziyaretçi</div>
+    ${renderCountryList(countries)}
     ${!isDefault ? `
-    <div style="text-align:right">
+    <div style="text-align:right;margin-top:10px">
       <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger" style="padding:4px 10px;font-size:0.72rem">
         Varsayılana Dön
       </button>
     </div>` : ''}`;
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection({ data: null, error: null });
+    updateGlobalSection({ data: null, countries: null, error: null });
   });
 }
 
@@ -478,12 +546,12 @@ function bindFirebaseSave(sec: HTMLElement): void {
       updateGlobalSection(res);
     } catch (e) {
       console.error('[AdminPanel] updateGlobalSection error:', e);
-      updateGlobalSection({ data: null, error: `Hata: ${e instanceof Error ? e.message : String(e)}` });
+      updateGlobalSection({ data: null, countries: null, error: `Hata: ${e instanceof Error ? e.message : String(e)}` });
     }
   });
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection({ data: null, error: null });
+    updateGlobalSection({ data: null, countries: null, error: null });
   });
 }
 
@@ -511,11 +579,9 @@ function renderPanelContent(panel: HTMLElement): void {
   const activeFilters = Object.entries(state.layerFilters).filter(([, v]) => !v).map(([k]) => k);
   const filterLabel   = activeFilters.length === 0 ? 'Tümü görünür' : `Gizli: ${activeFilters.join(', ')}`;
 
-  // Session counters (from sessionStorage — persists across F5)
-  const sesSat = sesGet('sat'); const sesTot_sat = totGet('sat');
-  const sesEvt = sesGet('evt'); const sesTot_evt = totGet('evt');
-  const sesFlt = sesGet('flt'); const sesTot_flt = totGet('flt');
-  const totLds = totGet('loads');
+  const sesTot_sat = totGet('sat');
+  const sesTot_evt = totGet('evt');
+  const totLds     = totGet('loads');
 
   panel.innerHTML = `
     <div class="ap-header">
@@ -602,11 +668,10 @@ function renderPanelContent(panel: HTMLElement): void {
       <!-- ── Bu Cihazda (Toplam) ──────────────────────── -->
       <section class="ap-section">
         <h4 class="ap-section-title">💾 Bu Cihazda (Tüm Oturumlar)</h4>
-        <div class="ap-grid-4">
+        <div class="ap-grid-3">
           ${metricBox(totLds.toLocaleString(),     'Sayfa Yükleme')}
           ${metricBox(sesTot_sat.toLocaleString(), 'Uydu Tıklama')}
           ${metricBox(sesTot_evt.toLocaleString(), 'Olay Tıklama')}
-          ${metricBox(sesTot_flt.toLocaleString(), 'Filtre Değişimi')}
         </div>
         <div style="margin-top:8px;text-align:right">
           <button id="ap-reset-device" class="ap-tool-btn ap-tool-btn--danger"
@@ -645,7 +710,7 @@ function renderPanelContent(panel: HTMLElement): void {
 
   panel.querySelector('#ap-reset-device')!.addEventListener('click', () => {
     if (!confirm('Bu cihazın tüm istatistikleri sıfırlansın mı?')) return;
-    (['sat','evt','flt','loads'] as CounterKey[]).forEach(k => {
+    (['sat','evt','loads'] as CounterKey[]).forEach(k => {
       try { localStorage.removeItem(LS_TOTAL_PREFIX + k); } catch { /* ignore */ }
       sessionStorage.removeItem(SS_SESSION_PREFIX + k);
     });
@@ -657,8 +722,8 @@ function renderPanelContent(panel: HTMLElement): void {
   panel.querySelector('#ap-copy-state')!.addEventListener('click', () => {
     const snap = JSON.stringify({
       timestamp: new Date().toISOString(),
-      session: { sat: sesSat, evt: sesEvt, flt: sesFlt, durationMs: Date.now() - SESSION_START },
-      deviceTotal: { loads: totLds, sat: sesTot_sat, evt: sesTot_evt, flt: sesTot_flt },
+      session: { durationMs: Date.now() - SESSION_START },
+      deviceTotal: { loads: totLds, sat: sesTot_sat, evt: sesTot_evt },
       simulation: { totalObjects: totalCount, visibleObjects: visibleCount, tleAge, speed: state.time.speed },
       device: { browser: detectBrowser(), os: detectOS(), resolution: `${screen.width}×${screen.height}` },
       geo: geoCache ?? 'not-fetched',
@@ -689,7 +754,6 @@ function onShortcut(e: KeyboardEvent): void {
 
 let _lastSel: number | null = null;
 let _lastEvt: string | null = null;
-let _lastAlt: unknown = null;
 
 function setupSessionTracking(): void {
   subscribe(() => {
@@ -709,13 +773,7 @@ function setupSessionTracking(): void {
       _lastEvt = st.selectedEventId;
       if (sendToFirebase) fbInc('evt').catch(() => {/* non-fatal */});
     }
-    if (st.altitudeFilter !== _lastAlt) {
-      if (st.altitudeFilter !== null) {
-        inc('flt');
-        if (sendToFirebase) fbInc('flt').catch(() => {/* non-fatal */});
-      }
-      _lastAlt = st.altitudeFilter;
-    }
+    void st.altitudeFilter; // filter changes no longer tracked
   });
 }
 
@@ -724,7 +782,9 @@ function setupSessionTracking(): void {
 export function initAdminSystem(): void {
   window.addEventListener('keydown', onShortcut);
   setupSessionTracking();
-  // Increment Firebase page-load counter for non-admin users only
-  if (!isAdminMode()) fbInc('loads').catch(() => {/* non-fatal */});
+  if (!isAdminMode()) {
+    fbInc('loads').catch(() => {/* non-fatal */});
+    trackCountry().catch(() => {/* non-fatal */});
+  }
   if (isAdminMode()) requestAnimationFrame(refreshAdminButton);
 }
