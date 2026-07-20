@@ -68,6 +68,24 @@ describe('projectKesslerTimeline', () => {
     expect(lastRisky.cumulativeCollisions).toBeGreaterThan(lastBase.cumulativeCollisions);
   });
 
+  it('never lets debris exceed the total population, even in an extreme runaway scenario', () => {
+    const points = projectKesslerTimeline(2025, 2100, REAL_WORLD_BASELINE_OBJECTS, {
+      launchRateMultiplier: 6,
+      mitigationRate: 0,
+      collisionRiskMultiplier: 6,
+    });
+    for (const p of points) {
+      expect(p.debrisObjects).toBeLessThanOrEqual(p.totalObjects);
+    }
+  });
+
+  it('seeds debris at a realistic non-zero fraction of the starting population', () => {
+    const points = projectKesslerTimeline(2025, 2026, REAL_WORLD_BASELINE_OBJECTS);
+    // Today's real-world catalog is already roughly half debris, not zero —
+    // the very first projected year should reflect that starting point.
+    expect(points[0].debrisObjects).toBeGreaterThan(REAL_WORLD_BASELINE_OBJECTS * 0.3);
+  });
+
   it('never lets the population collapse below 10% of the baseline', () => {
     const points = projectKesslerTimeline(2025, 2100, 12000, {
       launchRateMultiplier: 0,
@@ -146,10 +164,10 @@ describe('classifyOutlook', () => {
     expect(classifyOutlook(0)).toBe('stable');
     expect(classifyOutlook(149)).toBe('stable');
     expect(classifyOutlook(150)).toBe('concerning');
-    expect(classifyOutlook(399)).toBe('concerning');
-    expect(classifyOutlook(400)).toBe('critical');
-    expect(classifyOutlook(999)).toBe('critical');
-    expect(classifyOutlook(1000)).toBe('runaway');
-    expect(classifyOutlook(5000)).toBe('runaway');
+    expect(classifyOutlook(799)).toBe('concerning');
+    expect(classifyOutlook(800)).toBe('critical');
+    expect(classifyOutlook(2999)).toBe('critical');
+    expect(classifyOutlook(3000)).toBe('runaway');
+    expect(classifyOutlook(50000)).toBe('runaway');
   });
 });

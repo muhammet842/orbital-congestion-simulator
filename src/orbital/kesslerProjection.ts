@@ -39,7 +39,7 @@ export interface KesslerYearPoint {
   year: number;
   /** Cumulative tracked objects (active + debris) at the end of this year. */
   totalObjects: number;
-  /** Of which are collision-fragment debris accumulated since the start year. */
+  /** Of which are debris (today's already-fragmented baseline + new collision fragments). Always ≤ totalObjects. */
   debrisObjects: number;
   /** Expected (fractional) number of catastrophic fragmentation events during this year. */
   expectedCollisionsThisYear: number;
@@ -67,6 +67,14 @@ const BASELINE_ANNUAL_COLLISION_PROBABILITY = 0.11;
 const DEBRIS_PER_COLLISION = 1500;
 /** Debris decays out of orbit much more slowly than a maneuverable satellite. */
 const DEBRIS_DEORBIT_FACTOR = 0.5;
+/**
+ * Of today's ~40k tracked objects, roughly half are already non-functional
+ * fragmentation/mission-related debris (per ESA's Space Environment Report),
+ * not active satellites. Seeding `debris` at this fraction — instead of 0 —
+ * makes the "Debris Objects" stat represent the real total debris population
+ * rather than only debris created *after* the projection starts.
+ */
+const INITIAL_DEBRIS_FRACTION = 0.55;
 /** Hard ceiling so an extreme scenario asymptotes instead of overflowing to Infinity/NaN. */
 const MAX_TOTAL_OBJECTS = 5_000_000;
 
@@ -101,7 +109,7 @@ export function projectKesslerTimeline(
   const baseline = Math.max(startingObjectCount, 1);
 
   let total = baseline;
-  let debris = 0;
+  let debris = baseline * INITIAL_DEBRIS_FRACTION;
   let cumulativeCollisions = 0;
   const points: KesslerYearPoint[] = [];
 
@@ -119,7 +127,9 @@ export function projectKesslerTimeline(
     );
 
     total = clamp(total + newLaunches - deorbited + newDebrisFromCollisions, baseline * 0.1, MAX_TOTAL_OBJECTS);
-    debris = Math.max(0, Math.min(debris + newDebrisFromCollisions - debrisDeorbited, MAX_TOTAL_OBJECTS));
+    // Debris is a subset of the total population by definition — never let it
+    // exceed `total`, even when both are independently approaching the hard cap.
+    debris = Math.max(0, Math.min(debris + newDebrisFromCollisions - debrisDeorbited, total));
     cumulativeCollisions += expectedCollisionsThisYear;
 
     points.push({
@@ -135,10 +145,19 @@ export function projectKesslerTimeline(
   return points;
 }
 
-/** Buckets a risk index into a coarse narrative outlook used to pick UI copy. */
+/**
+ * Buckets a risk index into a coarse narrative outlook used to pick UI copy.
+ *
+ * Because riskIndex scales with density-ratio *squared*, a merely 3-4×
+ * increase in population already produces an index of ~1,000-1,600 — that's
+ * a serious, attention-worthy trend but not yet the literal, self-sustaining
+ * "runaway cascade" Kessler syndrome describes. The "runaway" band is
+ * reserved for indices reachable only via genuinely extreme scenarios
+ * (≥6× density growth and/or a materially elevated collision-risk slider).
+ */
 export function classifyOutlook(riskIndex: number): KesslerOutlookBand {
-  if (riskIndex >= 1000) return 'runaway';
-  if (riskIndex >= 400) return 'critical';
+  if (riskIndex >= 3000) return 'runaway';
+  if (riskIndex >= 800) return 'critical';
   if (riskIndex >= 150) return 'concerning';
   return 'stable';
 }
