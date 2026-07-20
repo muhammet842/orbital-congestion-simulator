@@ -406,8 +406,17 @@ async function main() {
     try {
       const objects = await fetchActiveGroup(group);
       const cap = GROUP_CAPS[group] ?? Infinity;
+      // Celestrak returns each group roughly ordered by catalog number
+      // (oldest first). For a capped, fast-growing constellation like
+      // Starlink — currently ~10,800 objects against a 4,500 cap — taking
+      // them in that order means we'd only ever keep satellites from
+      // 2019-2021 and would *never* see this week's launches, silently
+      // breaking "new launch" detection for the group that launches most
+      // often. Sort newest-first so a cap (or the global MAX_SATELLITES
+      // budget) always drops the *oldest* objects, not the newest.
+      const newestFirst = [...objects].sort((a, b) => b.noradId - a.noradId);
       let added = 0;
-      for (const obj of objects) {
+      for (const obj of newestFirst) {
         if (spacecraftCount(seen) >= MAX_SATELLITES) break;
         if (groupCount(seen, group) >= cap) break;
         if (seen.has(obj.noradId)) continue;
