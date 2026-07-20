@@ -81,6 +81,45 @@ describe('initLeftPanel – DOM smoke', () => {
     expect(container.querySelector('#color-by-function')).not.toBeNull();
     document.body.removeChild(container);
   });
+
+  it('hides the "recently launched" toggle when no object qualifies as recently launched', () => {
+    setState({ objects: [] });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+    expect(container.querySelector('#show-recent-launches')).toBeNull();
+    document.body.removeChild(container);
+  });
+
+  it('shows the "recently launched" toggle when at least one object was seen in the last 14 days', () => {
+    const recentIso = new Date().toISOString();
+    setState({
+      objects: [
+        {
+          noradId: 1,
+          name: 'TEST-NEW-SAT',
+          line1: '',
+          line2: '',
+          category: 'active',
+          country: 'Unknown',
+          owner: 'Unknown',
+          satrec: {} as never,
+          layer: 'LEO',
+          color: [1, 1, 1],
+          functionGroup: 'active',
+          meanAltitudeKm: 500,
+          inclinationDeg: 50,
+          firstSeenAt: recentIso,
+        },
+      ],
+    });
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+    expect(container.querySelector('#show-recent-launches')).not.toBeNull();
+    document.body.removeChild(container);
+    setState({ objects: [] });
+  });
 });
 
 describe('renderConjunctions — predicted (future) close approaches', () => {

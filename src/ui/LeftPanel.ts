@@ -19,7 +19,7 @@ import {
 } from '../state/appState';
 import { initEventCards } from './EventCards';
 import { t, applyTranslations, onLangChange } from '../i18n/i18n';
-import { isRecentlyLaunched } from '../data/newLaunches';
+import { isRecentlyLaunched, hasAnyRecentlyLaunched } from '../data/newLaunches';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const LIST_ITEM_HEIGHT = 36;
@@ -242,6 +242,8 @@ function renderLayerFilters(container: HTMLElement): void {
 
 function renderDisplayOptions(container: HTMLElement): void {
   const optionsEl = container.querySelector('#display-options')!;
+  const showRecentToggle = hasAnyRecentlyLaunched(getState().objects);
+
   optionsEl.innerHTML = `
     <label class="filter-row filter-row--toggle">
       <input type="checkbox" id="color-by-function" />
@@ -254,11 +256,17 @@ function renderDisplayOptions(container: HTMLElement): void {
       ${t('ui.color_by_function')}
     </label>
     <p class="display-options-hint muted">${t('ui.cbf_hint')}</p>
+    ${
+      showRecentToggle
+        ? `
     <label class="filter-row filter-row--toggle">
       <input type="checkbox" id="show-recent-launches" />
       <span class="new-launch-badge" aria-hidden="true">${t('badge.new_launch')}</span>
       ${t('ui.recent_launches')}
     </label>
+    `
+        : ''
+    }
   `;
 
   const checkbox = optionsEl.querySelector('#color-by-function') as HTMLInputElement;
@@ -266,14 +274,21 @@ function renderDisplayOptions(container: HTMLElement): void {
     setColorByFunction(checkbox.checked);
   });
 
-  const recentCheckbox = optionsEl.querySelector('#show-recent-launches') as HTMLInputElement;
-  recentCheckbox.addEventListener('change', () => {
+  const recentCheckbox = optionsEl.querySelector('#show-recent-launches') as HTMLInputElement | null;
+  recentCheckbox?.addEventListener('change', () => {
     setShowOnlyRecentLaunches(recentCheckbox.checked);
   });
 
+  // If the toggle just got hidden (e.g. the recent-launch window rolled past
+  // for every object), make sure we're not left silently filtering the list
+  // down to nothing via a now-invisible control.
+  if (!showRecentToggle && getState().showOnlyRecentLaunches) {
+    setShowOnlyRecentLaunches(false);
+  }
+
   subscribe(() => {
     checkbox.checked = getState().colorByFunction;
-    recentCheckbox.checked = getState().showOnlyRecentLaunches;
+    if (recentCheckbox) recentCheckbox.checked = getState().showOnlyRecentLaunches;
   });
 }
 

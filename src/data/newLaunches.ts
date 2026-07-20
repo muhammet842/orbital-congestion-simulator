@@ -17,3 +17,13 @@ export function isRecentlyLaunched(obj: Pick<TrackedObject, 'firstSeenAt'>, nowM
   if (Number.isNaN(seenMs)) return false;
   return nowMs - seenMs < RECENT_LAUNCH_WINDOW_MS && nowMs >= seenMs;
 }
+
+/** True when at least one object in the catalog currently qualifies as
+ *  "recently launched" — used to hide the filter toggle entirely when it
+ *  would just produce an empty list. */
+export function hasAnyRecentlyLaunched(
+  objects: ReadonlyArray<Pick<TrackedObject, 'firstSeenAt'>>,
+  nowMs: number = Date.now(),
+): boolean {
+  return objects.some((obj) => isRecentlyLaunched(obj, nowMs));
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isRecentlyLaunched, RECENT_LAUNCH_WINDOW_MS } from './newLaunches';
+import { isRecentlyLaunched, hasAnyRecentlyLaunched, RECENT_LAUNCH_WINDOW_MS } from './newLaunches';
 
 describe('isRecentlyLaunched', () => {
   const now = new Date('2026-07-20T00:00:00Z').getTime();
@@ -30,5 +30,29 @@ describe('isRecentlyLaunched', () => {
   it('is false for a firstSeenAt in the future (clock skew guard)', () => {
     const future = new Date(now + 60_000).toISOString();
     expect(isRecentlyLaunched({ firstSeenAt: future }, now)).toBe(false);
+  });
+});
+
+describe('hasAnyRecentlyLaunched', () => {
+  const now = new Date('2026-07-20T00:00:00Z').getTime();
+
+  it('is false for an empty catalog', () => {
+    expect(hasAnyRecentlyLaunched([], now)).toBe(false);
+  });
+
+  it('is false when no object has firstSeenAt (the entire pre-existing catalog)', () => {
+    const objects = [{ firstSeenAt: undefined }, { firstSeenAt: undefined }];
+    expect(hasAnyRecentlyLaunched(objects, now)).toBe(false);
+  });
+
+  it('is false when every firstSeenAt is stale (older than the window)', () => {
+    const stale = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(hasAnyRecentlyLaunched([{ firstSeenAt: stale }], now)).toBe(false);
+  });
+
+  it('is true when at least one object is within the recent-launch window', () => {
+    const recent = new Date(now - 60 * 60 * 1000).toISOString();
+    const stale = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(hasAnyRecentlyLaunched([{ firstSeenAt: stale }, { firstSeenAt: recent }], now)).toBe(true);
   });
 });
