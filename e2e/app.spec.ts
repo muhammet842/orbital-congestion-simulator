@@ -83,6 +83,38 @@ test.describe('Language switcher', () => {
   });
 });
 
+test.describe('Future Projection panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#kessler-panel-btn').waitFor({ timeout: 10_000 });
+  });
+
+  test('opens from the header button and shows the scenario sliders', async ({ page }) => {
+    await page.locator('#kessler-panel-btn').click();
+    await expect(page.locator('#kessler-panel')).toBeVisible();
+    await expect(page.locator('#kp-launch')).toBeVisible();
+    await expect(page.locator('#kp-mitigation')).toBeVisible();
+    await expect(page.locator('#kp-risk')).toBeVisible();
+    await expect(page.locator('#kp-target-year')).toBeVisible();
+  });
+
+  test('running a projection reveals results and a narrative', async ({ page }) => {
+    await page.locator('#kessler-panel-btn').click();
+    await page.locator('#kp-run').click();
+    await expect(page.locator('#kp-results-section')).toBeVisible();
+    const narrative = page.locator('#kp-narrative');
+    await expect(narrative).toBeVisible();
+    await expect(narrative).not.toHaveText('');
+  });
+
+  test('closes on Escape', async ({ page }) => {
+    await page.locator('#kessler-panel-btn').click();
+    await expect(page.locator('#kessler-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#kessler-panel')).toHaveCount(0);
+  });
+});
+
 test.describe('Left panel filters', () => {
   test('four orbit-layer checkboxes are present and checked by default', async ({ page }) => {
     await page.goto('/');

@@ -8,6 +8,7 @@ import { initRightPanel } from './ui/RightPanel';
 import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
+import { initKesslerPanel } from './ui/KesslerPanel';
 import { findConjunctions } from './orbital/conjunction';
 import { applyTranslations } from './i18n/i18n';
 
@@ -55,6 +56,9 @@ async function main(): Promise<void> {
 
     // Admin system: keyboard shortcut Ctrl+Shift+A, auto-auth on known devices.
     initAdminSystem();
+
+    // Future Projection: header button opening the Kessler-syndrome "what if" panel.
+    initKesslerPanel();
 
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__debugConjunctions = (isoTime?: string) =>

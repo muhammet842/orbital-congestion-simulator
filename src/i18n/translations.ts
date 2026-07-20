@@ -17,6 +17,7 @@ export type Translations = Record<string, string>;
      detail.*    — right-panel detail labels
      sat.*       — satellite detail labels
      event.<id>.info.*  — per-event background card
+     kessler.*   — Kessler-syndrome future-projection panel
 ───────────────────────────────────────────────────────────────────────── */
 
 const en: Translations = {
@@ -196,6 +197,44 @@ const en: Translations = {
     "Without any external impact or missile strike, the satellite suddenly broke apart on orbit — most likely due to an internal pressure failure, such as a battery or propellant tank rupture. Russia made no official statement explaining the cause.",
   'event.kosmos-2499-breakup.info.outcome':
     "Part of Russia's classified manoeuvring satellite programme, the vehicle abruptly split into dozens of pieces, leaving behind a difficult-to-track debris cloud. The event reignited concerns about on-orbit manoeuvrable inspector or co-orbital weapon satellites and their fragmentation risk.",
+
+  // ── Kessler-syndrome future-projection panel ───────────────────────────
+  'kessler.button':                    'Future Projection',
+  'kessler.close':                     'Close',
+  'kessler.title':                     'Orbital Congestion Projection',
+  'kessler.subtitle':
+    'A "what if" model: adjust the sliders to see how launch rate, debris mitigation, and collision risk could reshape orbit over the coming decades. Educational simulation, not an official forecast.',
+  'kessler.scenario_heading':          'Scenario Parameters',
+  'kessler.param.launch_rate':         'Launch Rate',
+  'kessler.param.launch_rate_hint':    "vs. today's ~2,600 payloads/year",
+  'kessler.param.mitigation':          'Deorbit & Mitigation Effort',
+  'kessler.param.mitigation_hint':     'Active debris removal & end-of-life disposal',
+  'kessler.param.collision_risk':      'Collision / ASAT Risk',
+  'kessler.param.collision_risk_hint': 'Accidental collisions & anti-satellite tests',
+  'kessler.param.target_year':         'Projection Horizon',
+  'kessler.param.target_year_hint':    'How far into the future to project',
+  'kessler.run':                       '▶ Run Projection',
+  'kessler.run_prompt':                'Adjust the scenario above, then run the projection to see the outlook.',
+  'kessler.results_heading':           'Projected Outlook',
+  'kessler.stat.total_objects':        'Tracked Objects',
+  'kessler.stat.debris_objects':       'Debris Objects',
+  'kessler.stat.collisions':           'Cumulative Collisions',
+  'kessler.stat.risk_index':           'Collision Risk Index',
+  'kessler.year_scrub':                'Timeline Year',
+  'kessler.play':                      '▶ Animate',
+  'kessler.pause':                     '⏸ Pause',
+  'kessler.today_baseline':            'Starting point ({year}): ~{n} tracked objects (real-world estimate)',
+  'kessler.chart_heading':             'Tracked Objects Over Time',
+  'kessler.density_heading':           'Orbital Shell Density',
+  'kessler.disclaimer':                'Simplified educational model — not an official orbital-debris forecast.',
+  'kessler.narrative.stable':
+    "By {year}, the population grows to roughly {total} tracked objects — about {mult}× today's level. Collision risk stays close to today's baseline.",
+  'kessler.narrative.concerning':
+    "By {year}, the population could reach roughly {total} tracked objects — about {mult}× today's level — with a collision-risk index {risk}× higher than today. Mitigation needs to keep pace with launch growth.",
+  'kessler.narrative.critical':
+    "By {year}, congestion could climb to roughly {total} tracked objects — about {mult}× today's level — with a collision-risk index {risk}× higher than today. Early signs of a Kessler cascade: collisions creating debris faster than it can be removed.",
+  'kessler.narrative.runaway':
+    'By {year}, this scenario models a runaway Kessler cascade: roughly {total} tracked objects ({mult}× today), collision-risk index {risk}× higher than today. Debris is outpacing removal — key orbital shells risk becoming unusable.',
 };
 
 // ── TURKISH ────────────────────────────────────────────────────────────────
@@ -361,6 +400,44 @@ const tr: Translations = {
     'Dışarıdan herhangi bir etki olmaksızın uydu, büyük ihtimalle bir batarya veya yakıt tankı arızasından kaynaklanan iç basınç nedeniyle aniden parçalandı. Rusya resmi bir açıklama yapmadı.',
   'event.kosmos-2499-breakup.info.outcome':
     'Rusya\'nın gizli manevra uyduları programından olan araç aniden düzinelerce parçaya ayrılarak takibi güç bir enkaz bulutu bıraktı. Olay, uzayda manevra yapabilen askeri uyduların tehlikelerine ilişkin kaygıları yeniden alevlendirdi.',
+
+  // ── Kessler sendromu gelecek projeksiyonu paneli ───────────────────────
+  'kessler.button':                    'Gelecek Projeksiyonu',
+  'kessler.close':                     'Kapat',
+  'kessler.title':                     'Yörünge Tıkanıklığı Projeksiyonu',
+  'kessler.subtitle':
+    'Bir "ne olurdu" modeli: fırlatma hızı, enkaz azaltma ve çarpışma riskinin gelecek on yıllarda yörüngeyi nasıl şekillendirebileceğini görmek için kaydırıcıları ayarlayın. Eğitici bir simülasyondur, resmi bir tahmin değildir.',
+  'kessler.scenario_heading':          'Senaryo Parametreleri',
+  'kessler.param.launch_rate':         'Fırlatma Hızı',
+  'kessler.param.launch_rate_hint':    'bugünün ~2.600 yük/yıl hızına göre',
+  'kessler.param.mitigation':          'Yörüngeden İndirme ve Azaltma Çabası',
+  'kessler.param.mitigation_hint':     'Aktif enkaz temizliği ve ömür sonu imha',
+  'kessler.param.collision_risk':      'Çarpışma / ASAT Riski',
+  'kessler.param.collision_risk_hint': 'Kazara çarpışmalar ve uydu-avcısı füze testleri',
+  'kessler.param.target_year':         'Projeksiyon Ufku',
+  'kessler.param.target_year_hint':    'Ne kadar ileriye projeksiyon yapılacağı',
+  'kessler.run':                       '▶ Projeksiyonu Çalıştır',
+  'kessler.run_prompt':                'Yukarıdaki senaryoyu ayarlayın, ardından görünümü görmek için projeksiyonu çalıştırın.',
+  'kessler.results_heading':           'Öngörülen Görünüm',
+  'kessler.stat.total_objects':        'Takip Edilen Nesneler',
+  'kessler.stat.debris_objects':       'Enkaz Nesneleri',
+  'kessler.stat.collisions':           'Toplam Çarpışma',
+  'kessler.stat.risk_index':           'Çarpışma Risk Endeksi',
+  'kessler.year_scrub':                'Zaman Çizelgesi Yılı',
+  'kessler.play':                      '▶ Canlandır',
+  'kessler.pause':                     '⏸ Duraklat',
+  'kessler.today_baseline':            'Başlangıç noktası ({year}): ~{n} takip edilen nesne (gerçek dünya tahmini)',
+  'kessler.chart_heading':             'Zaman İçinde Takip Edilen Nesneler',
+  'kessler.density_heading':           'Yörünge Katmanı Yoğunluğu',
+  'kessler.disclaimer':                'Basitleştirilmiş eğitici bir model — resmi bir yörünge enkazı tahmini değildir.',
+  'kessler.narrative.stable':
+    '{year} yılına kadar nüfus, bugünün yaklaşık {mult}× seviyesine, yani takip edilen ~{total} nesneye ulaşır. Çarpışma riski bugünkü seviyeye yakın kalır.',
+  'kessler.narrative.concerning':
+    '{year} yılına kadar nüfus, bugünün yaklaşık {mult}× seviyesine, yani takip edilen ~{total} nesneye ulaşabilir; çarpışma risk endeksi bugünkünden {risk}× daha yüksektir. Azaltma çabalarının fırlatma artışına ayak uydurması gerekir.',
+  'kessler.narrative.critical':
+    '{year} yılına kadar tıkanıklık, bugünün yaklaşık {mult}× seviyesine, yani takip edilen ~{total} nesneye tırmanabilir; çarpışma risk endeksi bugünkünden {risk}× daha yüksektir. Bir Kessler kademesinin ilk belirtileri: çarpışmalar, temizlenebildiğinden daha hızlı enkaz üretiyor.',
+  'kessler.narrative.runaway':
+    '{year} yılına kadar bu senaryo kontrolden çıkmış bir Kessler kademesini modelliyor: yaklaşık ~{total} takip edilen nesne (bugünün {mult}×), çarpışma risk endeksi bugünkünden {risk}× daha yüksek. Enkaz, temizlenme hızını geride bırakıyor — kilit yörünge katmanları kullanılamaz hale gelme riskiyle karşı karşıya.',
 };
 
 // ── GERMAN ─────────────────────────────────────────────────────────────────
@@ -526,6 +603,44 @@ const de: Translations = {
     'Ohne äußere Einwirkung zerbrach der Satellit auf der Umlaufbahn — höchstwahrscheinlich durch ein internes Druckversagen wie ein Batterie- oder Treibstofftankdefekt. Russland machte keine offizielle Erklärung.',
   'event.kosmos-2499-breakup.info.outcome':
     'Teil des russischen geheimen Manövriersatellitenprogramms, zerbrach das Fahrzeug plötzlich in Dutzende von Stücken und hinterließ eine schwer zu verfolgende Trümmerwolke. Das Ereignis entfachte erneut Bedenken über Inspektions- und Ko-Orbital-Waffensatelliten.',
+
+  // ── Kessler-Syndrom-Zukunftsprojektion ─────────────────────────────────
+  'kessler.button':                    'Zukunftsprojektion',
+  'kessler.close':                     'Schließen',
+  'kessler.title':                     'Projektion der Umlaufbahnüberlastung',
+  'kessler.subtitle':
+    'Ein "Was-wäre-wenn"-Modell: Passen Sie die Schieberegler an, um zu sehen, wie Startrate, Trümmerentsorgung und Kollisionsrisiko die Umlaufbahn in den kommenden Jahrzehnten verändern könnten. Ein Lehrmodell, keine offizielle Prognose.',
+  'kessler.scenario_heading':          'Szenario-Parameter',
+  'kessler.param.launch_rate':         'Startrate',
+  'kessler.param.launch_rate_hint':    'gegenüber heute ~2.600 Nutzlasten/Jahr',
+  'kessler.param.mitigation':          'Deorbit- & Entsorgungsaufwand',
+  'kessler.param.mitigation_hint':     'Aktive Trümmerbeseitigung & Entsorgung am Lebensende',
+  'kessler.param.collision_risk':      'Kollisions- / ASAT-Risiko',
+  'kessler.param.collision_risk_hint': 'Unfallkollisionen & Anti-Satelliten-Tests',
+  'kessler.param.target_year':         'Projektionshorizont',
+  'kessler.param.target_year_hint':    'Wie weit in die Zukunft projiziert wird',
+  'kessler.run':                       '▶ Projektion ausführen',
+  'kessler.run_prompt':                'Passen Sie oben das Szenario an und führen Sie dann die Projektion aus, um die Prognose zu sehen.',
+  'kessler.results_heading':           'Prognostizierte Entwicklung',
+  'kessler.stat.total_objects':        'Erfasste Objekte',
+  'kessler.stat.debris_objects':       'Trümmerobjekte',
+  'kessler.stat.collisions':           'Kumulierte Kollisionen',
+  'kessler.stat.risk_index':           'Kollisionsrisiko-Index',
+  'kessler.year_scrub':                'Zeitleistenjahr',
+  'kessler.play':                      '▶ Animieren',
+  'kessler.pause':                     '⏸ Pause',
+  'kessler.today_baseline':            'Ausgangspunkt ({year}): ~{n} erfasste Objekte (reale Schätzung)',
+  'kessler.chart_heading':             'Erfasste Objekte im Zeitverlauf',
+  'kessler.density_heading':           'Dichte der Orbitalschichten',
+  'kessler.disclaimer':                'Vereinfachtes Lehrmodell — keine offizielle Weltraumschrott-Prognose.',
+  'kessler.narrative.stable':
+    'Bis {year} wächst die Population auf etwa {total} erfasste Objekte — rund das {mult}-Fache von heute. Das Kollisionsrisiko bleibt nahe am heutigen Niveau.',
+  'kessler.narrative.concerning':
+    'Bis {year} könnte die Population auf etwa {total} erfasste Objekte steigen — rund das {mult}-Fache von heute — bei einem Kollisionsrisiko-Index, der {risk}-mal höher ist als heute. Die Entsorgungsmaßnahmen müssen mit dem Startwachstum Schritt halten.',
+  'kessler.narrative.critical':
+    'Bis {year} könnte die Überlastung auf etwa {total} erfasste Objekte ansteigen — rund das {mult}-Fache von heute — bei einem Kollisionsrisiko-Index, der {risk}-mal höher ist als heute. Erste Anzeichen einer Kessler-Kaskade: Kollisionen erzeugen schneller Trümmer, als sie entfernt werden können.',
+  'kessler.narrative.runaway':
+    'Bis {year} modelliert dieses Szenario eine außer Kontrolle geratene Kessler-Kaskade: etwa {total} erfasste Objekte ({mult}-mal so viele wie heute), Kollisionsrisiko-Index {risk}-mal höher als heute. Trümmer entstehen schneller, als sie entfernt werden können — zentrale Orbitalschichten drohen unbrauchbar zu werden.',
 };
 
 // ── RUSSIAN ────────────────────────────────────────────────────────────────
@@ -691,6 +806,44 @@ const ru: Translations = {
     'Без какого-либо внешнего воздействия спутник внезапно разрушился на орбите — по всей видимости, из-за внутреннего сбоя давления, например, из-за разрыва батареи или топливного бака. Россия не сделала официального заявления.',
   'event.kosmos-2499-breakup.info.outcome':
     'Часть засекреченной программы манёвренных спутников России, аппарат внезапно распался на десятки частей, оставив труднообнаруживаемое облако обломков. Событие вновь вызвало обеспокоенность орбитальными инспекционными и кооорбитальными оружейными спутниками.',
+
+  // ── Панель прогноза синдрома Кесслера ──────────────────────────────────
+  'kessler.button':                    'Прогноз будущего',
+  'kessler.close':                     'Закрыть',
+  'kessler.title':                     'Прогноз орбитальной перегруженности',
+  'kessler.subtitle':
+    'Модель «что если»: измените параметры, чтобы увидеть, как темп запусков, борьба с мусором и риск столкновений могут изменить орбиту в ближайшие десятилетия. Учебная модель, а не официальный прогноз.',
+  'kessler.scenario_heading':          'Параметры сценария',
+  'kessler.param.launch_rate':         'Темп запусков',
+  'kessler.param.launch_rate_hint':    'относительно текущих ~2600 аппаратов/год',
+  'kessler.param.mitigation':          'Увод с орбиты и меры по снижению риска',
+  'kessler.param.mitigation_hint':     'Активное удаление мусора и утилизация в конце срока службы',
+  'kessler.param.collision_risk':      'Риск столкновений / испытаний ASAT',
+  'kessler.param.collision_risk_hint': 'Случайные столкновения и испытания противоспутникового оружия',
+  'kessler.param.target_year':         'Горизонт прогноза',
+  'kessler.param.target_year_hint':    'На сколько лет вперёд строится прогноз',
+  'kessler.run':                       '▶ Запустить прогноз',
+  'kessler.run_prompt':                'Настройте сценарий выше, затем запустите прогноз, чтобы увидеть результат.',
+  'kessler.results_heading':           'Прогнозируемая картина',
+  'kessler.stat.total_objects':        'Отслеживаемые объекты',
+  'kessler.stat.debris_objects':       'Объекты-обломки',
+  'kessler.stat.collisions':           'Суммарные столкновения',
+  'kessler.stat.risk_index':           'Индекс риска столкновений',
+  'kessler.year_scrub':                'Год на шкале времени',
+  'kessler.play':                      '▶ Анимация',
+  'kessler.pause':                     '⏸ Пауза',
+  'kessler.today_baseline':            'Исходная точка ({year}): ~{n} отслеживаемых объектов (реальная оценка)',
+  'kessler.chart_heading':             'Отслеживаемые объекты во времени',
+  'kessler.density_heading':           'Плотность орбитальных слоёв',
+  'kessler.disclaimer':                'Упрощённая учебная модель — не официальный прогноз космического мусора.',
+  'kessler.narrative.stable':
+    'К {year} году население орбиты вырастет примерно до {total} отслеживаемых объектов — это примерно в {mult}× больше, чем сегодня. Риск столкновений остаётся близким к текущему уровню.',
+  'kessler.narrative.concerning':
+    'К {year} году население орбиты может достичь примерно {total} отслеживаемых объектов — это примерно в {mult}× больше, чем сегодня — при индексе риска столкновений в {risk}× выше текущего. Меры по снижению риска должны идти в ногу с ростом числа запусков.',
+  'kessler.narrative.critical':
+    'К {year} году перегруженность может возрасти до примерно {total} отслеживаемых объектов — это примерно в {mult}× больше, чем сегодня — при индексе риска столкновений в {risk}× выше текущего. Первые признаки каскада Кесслера: столкновения создают мусор быстрее, чем его можно удалить.',
+  'kessler.narrative.runaway':
+    'К {year} году этот сценарий моделирует неконтролируемый каскад Кесслера: примерно {total} отслеживаемых объектов (в {mult}× больше, чем сегодня), индекс риска столкновений в {risk}× выше текущего. Мусор образуется быстрее, чем удаляется — ключевые орбитальные слои рискуют стать непригодными для использования.',
 };
 
 // ── CHINESE (Simplified) ───────────────────────────────────────────────────
@@ -856,6 +1009,44 @@ const zh: Translations = {
     '在没有任何外部撞击或导弹打击的情况下，该卫星突然在轨道上解体——最可能的原因是内部压力故障，例如电池或推进剂贮箱破裂。俄罗斯未发表官方声明。',
   'event.kosmos-2499-breakup.info.outcome':
     '作为俄罗斯机密机动卫星计划的一部分，该飞行器突然分裂成数十个碎片，留下难以追踪的碎片云。此事件再次引发对轨道机动巡视卫星和共轨武器卫星碎裂风险的担忧。',
+
+  // ── 凯斯勒综合症未来预测面板 ─────────────────────────────────────────
+  'kessler.button':                    '未来预测',
+  'kessler.close':                     '关闭',
+  'kessler.title':                     '轨道拥堵预测',
+  'kessler.subtitle':
+    '一个"假设"模型：调整滑块，查看发射速率、碎片清理和碰撞风险在未来几十年内可能如何改变轨道环境。这是教育性模拟，并非官方预测。',
+  'kessler.scenario_heading':          '情景参数',
+  'kessler.param.launch_rate':         '发射速率',
+  'kessler.param.launch_rate_hint':    '相对于目前每年约2,600个载荷',
+  'kessler.param.mitigation':          '离轨与减缓力度',
+  'kessler.param.mitigation_hint':     '主动碎片清除与寿命末期处置',
+  'kessler.param.collision_risk':      '碰撞 / 反卫星试验风险',
+  'kessler.param.collision_risk_hint': '意外碰撞与反卫星武器试验',
+  'kessler.param.target_year':         '预测时间跨度',
+  'kessler.param.target_year_hint':    '向未来预测的年数',
+  'kessler.run':                       '▶ 运行预测',
+  'kessler.run_prompt':                '先调整上方的情景参数，然后运行预测查看结果。',
+  'kessler.results_heading':           '预测结果',
+  'kessler.stat.total_objects':        '追踪的对象数',
+  'kessler.stat.debris_objects':       '碎片对象数',
+  'kessler.stat.collisions':           '累计碰撞次数',
+  'kessler.stat.risk_index':           '碰撞风险指数',
+  'kessler.year_scrub':                '时间轴年份',
+  'kessler.play':                      '▶ 动画播放',
+  'kessler.pause':                     '⏸ 暂停',
+  'kessler.today_baseline':            '起点（{year}年）：约 {n} 个追踪对象（现实世界估计值）',
+  'kessler.chart_heading':             '追踪对象数量变化趋势',
+  'kessler.density_heading':           '轨道层密度',
+  'kessler.disclaimer':                '简化的教育模型 — 并非官方空间碎片预测。',
+  'kessler.narrative.stable':
+    '到{year}年，对象数量将增长至约{total}个追踪对象——约为目前的{mult}倍。碰撞风险仍接近目前水平。',
+  'kessler.narrative.concerning':
+    '到{year}年，对象数量可能达到约{total}个追踪对象——约为目前的{mult}倍——碰撞风险指数比目前高{risk}倍。减缓措施需要跟上发射增长的步伐。',
+  'kessler.narrative.critical':
+    '到{year}年，拥堵程度可能攀升至约{total}个追踪对象——约为目前的{mult}倍——碰撞风险指数比目前高{risk}倍。已出现凯斯勒级联的早期迹象：碰撞产生碎片的速度超过了清除速度。',
+  'kessler.narrative.runaway':
+    '到{year}年，此情景模拟了失控的凯斯勒级联效应：约{total}个追踪对象（为目前的{mult}倍），碰撞风险指数比目前高{risk}倍。碎片产生速度超过清除速度——关键轨道层面临无法使用的风险。',
 };
 
 export const translations: Record<Lang, Translations> = { en, tr, de, ru, zh };
