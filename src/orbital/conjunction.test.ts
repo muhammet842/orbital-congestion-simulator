@@ -522,7 +522,7 @@ describe('getUpcomingConjunctions — async, incremental scheduling', () => {
     vi.unstubAllGlobals();
   });
 
-  it('spreads a full sweep across one idle callback per snapshot before reporting a result', () => {
+  it('spreads a full sweep across many small idle-time slices before reporting a result', () => {
     const scheduled: IdleCallback[] = [];
     vi.stubGlobal(
       'requestIdleCallback',
@@ -534,15 +534,15 @@ describe('getUpcomingConjunctions — async, incremental scheduling', () => {
 
     const onUpdate = vi.fn();
     // Empty object list keeps every snapshot trivial (no LEO entries to
-    // propagate) — this test only exercises the *scheduling* shape (one
-    // idle slice per snapshot, self-rescheduling until done), not the scan.
+    // propagate) — this test only exercises the *scheduling* shape (many
+    // small slices, self-rescheduling until done), not the scan itself.
     getUpcomingConjunctions([], new Date(), onUpdate);
 
     expect(scheduled.length).toBe(1);
     expect(onUpdate).not.toHaveBeenCalled();
 
     let guard = 0;
-    while (onUpdate.mock.calls.length === 0 && guard < 1000) {
+    while (onUpdate.mock.calls.length === 0 && guard < 5000) {
       const cb = scheduled[scheduled.length - 1];
       cb({ didTimeout: false, timeRemaining: () => 50 });
       guard++;
@@ -552,6 +552,128 @@ describe('getUpcomingConjunctions — async, incremental scheduling', () => {
     expect(onUpdate).toHaveBeenCalledWith({ alerts: [], hiddenCount: 0 });
     // A real sweep is many snapshots — this must not have finished in one shot.
     expect(guard).toBeGreaterThan(1);
+  });
+
+  it('regression: propagating one snapshot is itself chunked across multiple idle slices for a large catalog', () => {
+    // This is the actual fix for a reported stutter: previously a single
+    // idle callback propagated *every* LEO object for a snapshot in one
+    // synchronous burst (thousands of SGP4 calls, 50-150ms+ on a real
+    // catalog) before yielding back to the browser. It must instead take
+    // several small idle slices to get through just one snapshot's worth
+    // of objects when the catalog is large.
+    const bigCatalog: TrackedObject[] = Array.from({ length: 1200 }, (_, i) => ({
+      noradId: i,
+      name: `OBJ-${i}`,
+      line1: 'LINE-1',
+      line2: 'LINE-2',
+      category: 'debris' as const,
+      country: 'US',
+      owner: 'TEST',
+      layer: 'LEO' as const,
+      color: [1, 1, 1] as [number, number, number],
+      functionGroup: 'debris' as const,
+      meanAltitudeKm: 550,
+      inclinationDeg: 53,
+      satrec: { id: i } as unknown as TrackedObject['satrec'],
+    }));
+
+    const propagateSpy = vi.spyOn(propagatorModule, 'propagateObject').mockReturnValue({
+      positionEci: { x: 0, y: 0, z: 0 },
+      velocityEci: { x: 0, y: 0, z: 0 },
+      altitudeKm: 550,
+      velocityKmS: 7.5,
+      inclinationDeg: 53,
+      layer: 'LEO',
+    });
+
+    const scheduled: IdleCallback[] = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        scheduled.push(cb);
+        return scheduled.length;
+      }),
+    );
+
+    getUpcomingConjunctions(bigCatalog, new Date(), vi.fn());
+    expect(scheduled.length).toBe(1);
+
+    // Fire exactly one idle slice — with 1200 objects and a chunk size well
+    // under that, this must NOT have propagated the entire catalog yet.
+    scheduled[0]({ didTimeout: false, timeRemaining: () => 50 });
+    expect(propagateSpy.mock.calls.length).toBeGreaterThan(0);
+    expect(propagateSpy.mock.calls.length).toBeLessThan(bigCatalog.length);
+
+    propagateSpy.mockRestore();
+  });
+
+  it('regression: no single idle-time slice takes long enough to visibly stutter, even for a large, spread-out catalog', () => {
+    // This targets a second stutter source found after the fix above: the
+    // spatial-hash candidate search (grid build + neighbor query) for one
+    // snapshot was still run as a single synchronous, unchunked call and
+    // measured ~20-35ms on the real ~9,800-object catalog by itself — on
+    // top of propagation, that's enough to blow a frame budget. Objects are
+    // spread far apart here (no real candidates) so the refine phase stays
+    // cheap and this isolates the search-phase cost specifically.
+    const N = 3000;
+    const bigCatalog: TrackedObject[] = Array.from({ length: N }, (_, i) => ({
+      noradId: i,
+      name: `OBJ-${i}`,
+      line1: 'LINE-1',
+      line2: 'LINE-2',
+      category: 'debris' as const,
+      country: 'US',
+      owner: 'TEST',
+      layer: 'LEO' as const,
+      color: [1, 1, 1] as [number, number, number],
+      functionGroup: 'debris' as const,
+      meanAltitudeKm: 550,
+      inclinationDeg: 53,
+      satrec: { id: i } as unknown as TrackedObject['satrec'],
+    }));
+
+    vi.spyOn(propagatorModule, 'propagateObject').mockImplementation((satrec) => {
+      const id = (satrec as unknown as { id: number }).id;
+      return {
+        positionEci: { x: id * 10_000, y: 0, z: 0 },
+        velocityEci: { x: 0, y: 0, z: 0 },
+        altitudeKm: 550,
+        velocityKmS: 7.5,
+        inclinationDeg: 53,
+        layer: 'LEO',
+      };
+    });
+
+    const scheduled: IdleCallback[] = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        scheduled.push(cb);
+        return scheduled.length;
+      }),
+    );
+
+    let finished = false;
+    getUpcomingConjunctions(bigCatalog, new Date(), () => {
+      finished = true;
+    });
+
+    let maxCallMs = 0;
+    let guard = 0;
+    while (!finished && guard < 30_000) {
+      const cb = scheduled[scheduled.length - 1];
+      const t0 = performance.now();
+      cb({ didTimeout: false, timeRemaining: () => 50 });
+      maxCallMs = Math.max(maxCallMs, performance.now() - t0);
+      guard++;
+    }
+
+    expect(finished).toBe(true);
+    // Generous ceiling for a slow CI machine — the pre-fix unchunked search
+    // alone measured 20-35ms on a real catalog a third this size, so this
+    // comfortably catches a regression back to "search the whole grid in
+    // one call" without being flaky on timing noise.
+    expect(maxCallMs).toBeLessThan(100);
   });
 
   it('does not start a second sweep while one is still in progress', () => {

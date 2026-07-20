@@ -712,6 +712,49 @@ export const UPCOMING_REFINE_STEP_MS = 15_000;
  *  far too expensive to repeat every tick, so re-run it at most this often. */
 export const UPCOMING_RESCAN_INTERVAL_MS = 5 * 60 * 1000;
 
+type ScenePosition = { x: number; y: number; z: number };
+type UpcomingSampleEntry = { index: number; position: ScenePosition };
+
+/** Shared by both the synchronous (test-only) scan and the chunked production
+ *  scanner below — checks one candidate pair found at `sampleDate` and, if it
+ *  survives all filters, records it as the best known approach for that pair. */
+function evaluateUpcomingCandidate(
+  objects: TrackedObject[],
+  entries: UpcomingSampleEntry[],
+  ei: number,
+  ej: number,
+  sampleDate: Date,
+  startMs: number,
+  horizonMs: number,
+  bestByPair: Map<string, ConjunctionEvent>,
+): void {
+  const objI = objects[entries[ei].index];
+  const objJ = objects[entries[ej].index];
+  if (sharesOrbitData(objI, objJ)) return;
+
+  const refined = refineCloseApproach(
+    objects,
+    entries[ei].index,
+    entries[ej].index,
+    sampleDate,
+    UPCOMING_REFINE_WINDOW_MS,
+    UPCOMING_REFINE_STEP_MS,
+  );
+  if (!refined) return;
+  // A refine pass can walk slightly outside [start, start+horizon] near
+  // the edges of the sweep — don't report a "predicted" approach that's
+  // actually already in the past relative to the scan's own start time.
+  if (refined.time.getTime() < startMs || refined.time.getTime() > startMs + horizonMs) return;
+  if (refined.distanceKm < MIN_DISTANCE_KM || refined.distanceKm > THRESHOLD_KM) return;
+  if (isCoOrbitingPair(refined.relativeVelocityKmS)) return;
+
+  const pairKey = conjunctionPairKey(String(refined.noradIdA), String(refined.noradIdB));
+  const existing = bestByPair.get(pairKey);
+  if (!existing || refined.distanceKm < existing.distanceKm) {
+    bestByPair.set(pairKey, refined);
+  }
+}
+
 function scanUpcomingSample(
   objects: TrackedObject[],
   sampleMs: number,
@@ -720,7 +763,7 @@ function scanUpcomingSample(
   bestByPair: Map<string, ConjunctionEvent>,
 ): void {
   const sampleDate = new Date(sampleMs);
-  const leoEntries: { index: number; position: { x: number; y: number; z: number } }[] = [];
+  const leoEntries: UpcomingSampleEntry[] = [];
 
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
@@ -736,31 +779,7 @@ function scanUpcomingSample(
   );
 
   for (const [ei, ej] of candidatePairs) {
-    const objI = objects[leoEntries[ei].index];
-    const objJ = objects[leoEntries[ej].index];
-    if (sharesOrbitData(objI, objJ)) continue;
-
-    const refined = refineCloseApproach(
-      objects,
-      leoEntries[ei].index,
-      leoEntries[ej].index,
-      sampleDate,
-      UPCOMING_REFINE_WINDOW_MS,
-      UPCOMING_REFINE_STEP_MS,
-    );
-    if (!refined) continue;
-    // A refine pass can walk slightly outside [start, start+horizon] near
-    // the edges of the sweep — don't report a "predicted" approach that's
-    // actually already in the past relative to the scan's own start time.
-    if (refined.time.getTime() < startMs || refined.time.getTime() > startMs + horizonMs) continue;
-    if (refined.distanceKm < MIN_DISTANCE_KM || refined.distanceKm > THRESHOLD_KM) continue;
-    if (isCoOrbitingPair(refined.relativeVelocityKmS)) continue;
-
-    const pairKey = conjunctionPairKey(String(refined.noradIdA), String(refined.noradIdB));
-    const existing = bestByPair.get(pairKey);
-    if (!existing || refined.distanceKm < existing.distanceKm) {
-      bestByPair.set(pairKey, refined);
-    }
+    evaluateUpcomingCandidate(objects, leoEntries, ei, ej, sampleDate, startMs, horizonMs, bestByPair);
   }
 }
 
@@ -791,20 +810,65 @@ export function findUpcomingConjunctions(
   };
 }
 
+/**
+ * Cap on how much work happens per idle-time slice: objects propagated,
+ * spatial-hash grid cells bucketed/queried, or candidates refined. A full
+ * snapshot touches every LEO object (thousands) — doing any of these steps
+ * "all at once" per snapshot, even spread one-snapshot-per-idle-callback,
+ * blocked the main thread for tens to 100ms+ at a time and was clearly
+ * visible as stutter (measured: ~100ms to propagate + ~20-35ms just for the
+ * spatial-hash candidate search alone, on the real ~9,800-object catalog).
+ * Chunking at this finer grain — including the candidate search itself,
+ * split into a bucket-build pass and a neighbor-query pass — keeps every
+ * single slice of work comfortably under a frame budget, at the cost of the
+ * full 24h sweep taking longer in wall-clock time to finish in the
+ * background.
+ */
+const UPCOMING_PROPAGATE_CHUNK = 500;
+const UPCOMING_GRID_CHUNK = 1500;
+const UPCOMING_QUERY_CHUNK = 500;
+const UPCOMING_REFINE_CHUNK = 2;
+
 interface UpcomingScanState {
   objects: TrackedObject[];
+  /** Indices into `objects` that are in the tracked (LEO) subset — computed
+   *  once up front so every snapshot doesn't re-filter the whole catalog. */
+  leoIndices: number[];
   startMs: number;
   horizonMs: number;
   sampleStepMs: number;
   totalSamples: number;
-  stepIndex: number;
+  sampleIndex: number;
   bestByPair: Map<string, ConjunctionEvent>;
+
+  // Progress within the *current* sample (reset each time we move to the next one).
+  // Phase 1 — propagate this sample's LEO objects.
+  objectCursor: number;
+  sampleEntries: UpcomingSampleEntry[];
+  // Phase 2 — spatial-hash candidate search, itself split into a build pass
+  // (bucket every entry) and a query pass (check each entry's 3x3x3 cell
+  // neighborhood) so a dense sample can't cause its own multi-ten-ms stall.
+  grid: CellGrid | null;
+  cells: Array<[number, number, number]>;
+  gridCursor: number;
+  queryCursor: number;
+  pendingCandidates: Array<[number, number]> | null;
+  // Phase 3 — refine each candidate pair found in phase 2.
+  refineCursor: number;
 }
 
 let upcomingScan: UpcomingScanState | null = null;
 let upcomingResult: ConjunctionScanResult = { alerts: [], hiddenCount: 0 };
 let upcomingScanStartedWallMs = -Infinity;
 let upcomingStepScheduled = false;
+
+function buildLeoIndices(objects: TrackedObject[]): number[] {
+  const indices: number[] = [];
+  for (let i = 0; i < objects.length; i++) {
+    if (objects[i].layer === SUBSET) indices.push(i);
+  }
+  return indices;
+}
 
 function finishUpcomingScan(scan: UpcomingScanState): void {
   const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects);
@@ -815,17 +879,121 @@ function finishUpcomingScan(scan: UpcomingScanState): void {
   upcomingScan = null;
 }
 
-/** Advances the in-progress sweep by exactly one snapshot. Returns true once
- *  the whole horizon has been covered and `upcomingResult` is up to date. */
+function resetSampleProgress(scan: UpcomingScanState): void {
+  scan.objectCursor = 0;
+  scan.sampleEntries = [];
+  scan.grid = null;
+  scan.cells = [];
+  scan.gridCursor = 0;
+  scan.queryCursor = 0;
+  scan.pendingCandidates = null;
+  scan.refineCursor = 0;
+}
+
+/**
+ * Advances the in-progress sweep by one small, bounded unit of work and
+ * returns true once the whole horizon has been covered and `upcomingResult`
+ * is up to date. Every individual call is capped by one of the
+ * `UPCOMING_*_CHUNK` constants above, so it's safe to call from a single
+ * idle-time slice without risking a visible stutter.
+ */
 function stepUpcomingScanOnce(): boolean {
   const scan = upcomingScan;
   if (!scan) return true;
 
-  const sampleMs = scan.startMs + scan.stepIndex * scan.sampleStepMs;
-  scanUpcomingSample(scan.objects, sampleMs, scan.startMs, scan.horizonMs, scan.bestByPair);
-  scan.stepIndex++;
+  const sampleMs = scan.startMs + scan.sampleIndex * scan.sampleStepMs;
+  const sampleDate = new Date(sampleMs);
 
-  if (scan.stepIndex > scan.totalSamples) {
+  // Phase 1: propagate a bounded chunk of this sample's LEO objects.
+  if (scan.objectCursor < scan.leoIndices.length) {
+    const chunkEnd = Math.min(scan.objectCursor + UPCOMING_PROPAGATE_CHUNK, scan.leoIndices.length);
+    for (let k = scan.objectCursor; k < chunkEnd; k++) {
+      const idx = scan.leoIndices[k];
+      const propagation = propagateObject(scan.objects[idx].satrec, sampleDate);
+      if (propagation) scan.sampleEntries.push({ index: idx, position: propagation.positionEci });
+    }
+    scan.objectCursor = chunkEnd;
+    return false;
+  }
+
+  if (scan.grid === null) {
+    scan.grid = new Map();
+    scan.cells = new Array(scan.sampleEntries.length);
+  }
+
+  // Phase 2a: bucket a bounded chunk of this sample's positions into the grid.
+  if (scan.gridCursor < scan.sampleEntries.length) {
+    const cellSize = Math.max(UPCOMING_DETECTION_RADIUS_KM, 1e-6);
+    const chunkEnd = Math.min(scan.gridCursor + UPCOMING_GRID_CHUNK, scan.sampleEntries.length);
+    for (let i = scan.gridCursor; i < chunkEnd; i++) {
+      const { x, y, z } = scan.sampleEntries[i].position;
+      const ix = Math.floor(x / cellSize);
+      const iy = Math.floor(y / cellSize);
+      const iz = Math.floor(z / cellSize);
+      scan.cells[i] = [ix, iy, iz];
+      getOrCreateBucket(scan.grid, ix, iy, iz).push(i);
+    }
+    scan.gridCursor = chunkEnd;
+    return false;
+  }
+
+  if (scan.pendingCandidates === null) scan.pendingCandidates = [];
+
+  // Phase 2b: query a bounded chunk of entries against the (now complete) grid.
+  if (scan.queryCursor < scan.sampleEntries.length) {
+    const radiusSq = UPCOMING_DETECTION_RADIUS_KM * UPCOMING_DETECTION_RADIUS_KM;
+    const chunkEnd = Math.min(scan.queryCursor + UPCOMING_QUERY_CHUNK, scan.sampleEntries.length);
+    for (let i = scan.queryCursor; i < chunkEnd; i++) {
+      const [ix, iy, iz] = scan.cells[i];
+      const pi = scan.sampleEntries[i].position;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            const bucket = getBucket(scan.grid, ix + dx, iy + dy, iz + dz);
+            if (!bucket) continue;
+            for (const j of bucket) {
+              if (j <= i) continue;
+              const pj = scan.sampleEntries[j].position;
+              const ddx = pi.x - pj.x;
+              const ddy = pi.y - pj.y;
+              const ddz = pi.z - pj.z;
+              if (ddx * ddx + ddy * ddy + ddz * ddz <= radiusSq) {
+                scan.pendingCandidates.push([i, j]);
+              }
+            }
+          }
+        }
+      }
+    }
+    scan.queryCursor = chunkEnd;
+    return false;
+  }
+
+  // Phase 3: refine a bounded chunk of this sample's candidates.
+  if (scan.refineCursor < scan.pendingCandidates.length) {
+    const chunkEnd = Math.min(scan.refineCursor + UPCOMING_REFINE_CHUNK, scan.pendingCandidates.length);
+    for (let k = scan.refineCursor; k < chunkEnd; k++) {
+      const [ei, ej] = scan.pendingCandidates[k];
+      evaluateUpcomingCandidate(
+        scan.objects,
+        scan.sampleEntries,
+        ei,
+        ej,
+        sampleDate,
+        scan.startMs,
+        scan.horizonMs,
+        scan.bestByPair,
+      );
+    }
+    scan.refineCursor = chunkEnd;
+    return false;
+  }
+
+  // This sample is fully processed — advance to the next one.
+  scan.sampleIndex++;
+  resetSampleProgress(scan);
+
+  if (scan.sampleIndex > scan.totalSamples) {
     finishUpcomingScan(scan);
     return true;
   }
@@ -879,12 +1047,21 @@ export function getUpcomingConjunctions(
     upcomingScanStartedWallMs = nowWallMs;
     upcomingScan = {
       objects,
+      leoIndices: buildLeoIndices(objects),
       startMs: referenceTime.getTime(),
       horizonMs: UPCOMING_HORIZON_MS,
       sampleStepMs: UPCOMING_SAMPLE_STEP_MS,
       totalSamples: Math.floor(UPCOMING_HORIZON_MS / UPCOMING_SAMPLE_STEP_MS),
-      stepIndex: 0,
+      sampleIndex: 0,
       bestByPair: new Map(),
+      objectCursor: 0,
+      sampleEntries: [],
+      grid: null,
+      cells: [],
+      gridCursor: 0,
+      queryCursor: 0,
+      pendingCandidates: null,
+      refineCursor: 0,
     };
     scheduleUpcomingScanStep(onUpdate);
   }
@@ -895,4 +1072,11 @@ export function invalidateUpcomingConjunctionCache(): void {
   upcomingScan = null;
   upcomingResult = { alerts: [], hiddenCount: 0 };
   upcomingScanStartedWallMs = -Infinity;
+  // If a step was already scheduled for the sweep being torn down, its idle
+  // callback will still fire — `stepUpcomingScanOnce` handles that safely
+  // (returns "done" immediately, since `upcomingScan` is now null) — but the
+  // flag itself must be cleared here too, otherwise a subsequent call to
+  // `getUpcomingConjunctions` would find it still set and skip scheduling
+  // its own first step, silently never starting a new sweep.
+  upcomingStepScheduled = false;
 }
