@@ -15,8 +15,11 @@ import {
   startEventReplay,
   stopEventReplay,
   setColorByFunction,
+  setShowOnlyRecentLaunches,
+  computeFilteredIndices,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
+import type { TrackedObject } from '../types';
 
 /**
  * Hard-reset module state to known defaults before each test.
@@ -37,6 +40,7 @@ function resetState(): void {
     layerFilters: { LEO: true, MEO: true, GEO: true, HEO: true },
     altitudeFilter: null,
     inclinationFilter: null,
+    showOnlyRecentLaunches: false,
     showOrbitTrail: false,
     showGroundTrack: true,
     colorByFunction: false,
@@ -165,6 +169,60 @@ describe('setColorByFunction', () => {
     expect(getState().colorByFunction).toBe(true);
     setColorByFunction(false);
     expect(getState().colorByFunction).toBe(false);
+  });
+});
+
+describe('setShowOnlyRecentLaunches', () => {
+  it('defaults to false', () => {
+    expect(getState().showOnlyRecentLaunches).toBe(false);
+  });
+
+  it('can be toggled on and off', () => {
+    setShowOnlyRecentLaunches(true);
+    expect(getState().showOnlyRecentLaunches).toBe(true);
+    setShowOnlyRecentLaunches(false);
+    expect(getState().showOnlyRecentLaunches).toBe(false);
+  });
+});
+
+describe('computeFilteredIndices with showOnlyRecentLaunches', () => {
+  function makeObj(overrides: Partial<TrackedObject>): TrackedObject {
+    return {
+      noradId: 1,
+      name: 'TEST',
+      line1: '',
+      line2: '',
+      category: 'active',
+      country: 'Unknown',
+      owner: 'Unknown',
+      satrec: {} as TrackedObject['satrec'],
+      layer: 'LEO',
+      color: [1, 1, 1],
+      functionGroup: 'active',
+      meanAltitudeKm: 500,
+      inclinationDeg: 50,
+      ...overrides,
+    };
+  }
+
+  const layerFilters = { LEO: true, MEO: true, GEO: true, HEO: true };
+
+  it('includes everything when the flag is off, even objects with no firstSeenAt', () => {
+    const objects = [makeObj({ firstSeenAt: undefined }), makeObj({ noradId: 2 })];
+    const indices = computeFilteredIndices(objects, layerFilters, '', null, null, false);
+    expect(indices).toEqual([0, 1]);
+  });
+
+  it('keeps only objects first seen within the last 14 days when the flag is on', () => {
+    const recent = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const stale = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const objects = [
+      makeObj({ noradId: 1, firstSeenAt: recent }),
+      makeObj({ noradId: 2, firstSeenAt: stale }),
+      makeObj({ noradId: 3, firstSeenAt: undefined }),
+    ];
+    const indices = computeFilteredIndices(objects, layerFilters, '', null, null, true);
+    expect(indices).toEqual([0]);
   });
 });
 

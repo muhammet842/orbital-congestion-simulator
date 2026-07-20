@@ -408,6 +408,20 @@ body {
   white-space: nowrap;
 }
 
+.new-launch-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 1px 5px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #04222a;
+  background: var(--accent);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
 .object-list-norad {
   flex-shrink: 0;
   font-size: 0.7rem;

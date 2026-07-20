@@ -7,6 +7,7 @@ export const TURKISH_NORAD_IDS = new Set([
   47306,
   50212,
   60233,
+  98268, // RAFS (Rubidium Atomic Frequency Standard) — no public TLE yet, see fetch-tle.mjs
 ]);
 
 interface MetadataRule {

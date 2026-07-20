@@ -38,6 +38,9 @@ const en: Translations = {
   'filter.inclination':   'Inclination',
   'filter.reset':         'Reset Filters',
   'filter.objects_shown': '{n} objects shown',
+  'ui.recent_launches':   'Show only recently launched (last 14 days)',
+  'badge.new_launch':     'NEW',
+  'badge.new_launch_title': 'First seen in the catalog within the last 14 days',
 
   // ── Live stats ────────────────────────────────────────────────────────
   'stats.mode':         'Mode',
@@ -211,6 +214,9 @@ const tr: Translations = {
   'filter.inclination':   'Eğim Açısı',
   'filter.reset':         'Filtreleri Sıfırla',
   'filter.objects_shown': '{n} nesne gösteriliyor',
+  'ui.recent_launches':   'Sadece son 14 gündeki yeni fırlatmaları göster',
+  'badge.new_launch':     'YENİ',
+  'badge.new_launch_title': 'Son 14 gün içinde kataloğa eklendi',
 
   'stats.mode':        'Mod',
   'stats.utc_time':    'UTC saati',
@@ -373,6 +379,9 @@ const de: Translations = {
   'filter.inclination':   'Neigung',
   'filter.reset':         'Filter zurücksetzen',
   'filter.objects_shown': '{n} Objekte angezeigt',
+  'ui.recent_launches':   'Nur kürzlich gestartete anzeigen (letzte 14 Tage)',
+  'badge.new_launch':     'NEU',
+  'badge.new_launch_title': 'In den letzten 14 Tagen zum Katalog hinzugefügt',
 
   'stats.mode':        'Modus',
   'stats.utc_time':    'UTC-Zeit',
@@ -535,6 +544,9 @@ const ru: Translations = {
   'filter.inclination':   'Наклонение',
   'filter.reset':         'Сбросить фильтры',
   'filter.objects_shown': 'Показано объектов: {n}',
+  'ui.recent_launches':   'Показывать только недавние запуски (14 дней)',
+  'badge.new_launch':     'НОВ',
+  'badge.new_launch_title': 'Впервые обнаружен в каталоге за последние 14 дней',
 
   'stats.mode':        'Режим',
   'stats.utc_time':    'Время UTC',
@@ -697,6 +709,9 @@ const zh: Translations = {
   'filter.inclination':   '轨道倾角',
   'filter.reset':         '重置筛选',
   'filter.objects_shown': '显示{n}个对象',
+  'ui.recent_launches':   '仅显示最近发射的（最近14天）',
+  'badge.new_launch':     '新',
+  'badge.new_launch_title': '最近14天内首次收录到目录中',
 
   'stats.mode':        '模式',
   'stats.utc_time':    'UTC时间',

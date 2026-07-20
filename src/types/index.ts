@@ -12,6 +12,9 @@ export interface TleRecord {
   category: ObjectCategory;
   country?: string;
   owner?: string;
+  /** ISO timestamp of the first automated fetch that observed this NORAD ID.
+   *  Absent for objects that were already known before this field existed. */
+  firstSeenAt?: string;
 }
 
 export interface TleDataset {

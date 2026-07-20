@@ -7,6 +7,7 @@ import {
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
 import type { AppStats, ConjunctionEvent, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
+import { isRecentlyLaunched } from '../data/newLaunches';
 
 /** How far before the collision to start the replay (ms). */
 export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
@@ -49,6 +50,8 @@ export interface AppState {
   altitudeFilter: { minKm: number; maxKm: number } | null;
   /** Optional inclination band filter applied to the list and 3-D scene. */
   inclinationFilter: { minDeg: number; maxDeg: number } | null;
+  /** When true, only objects first observed in the last ~14 days are shown. */
+  showOnlyRecentLaunches: boolean;
   time: TimeState;
   stats: AppStats;
   conjunctions: ConjunctionEvent[];
@@ -81,6 +84,7 @@ let state: AppState = {
   layerFilters: { ...defaultLayerFilters },
   altitudeFilter: null,
   inclinationFilter: null,
+  showOnlyRecentLaunches: false,
   time: {
     mode: 'live',
     current: new Date(),
@@ -177,11 +181,12 @@ export function setState(partial: Partial<AppState>): void {
     partial.layerFilters !== undefined ||
     partial.searchQuery !== undefined ||
     partial.altitudeFilter !== undefined ||
-    partial.inclinationFilter !== undefined
+    partial.inclinationFilter !== undefined ||
+    partial.showOnlyRecentLaunches !== undefined
   ) {
     state.filteredIndices = computeFilteredIndices(
       state.objects, state.layerFilters, state.searchQuery,
-      state.altitudeFilter, state.inclinationFilter,
+      state.altitudeFilter, state.inclinationFilter, state.showOnlyRecentLaunches,
     );
   }
 
@@ -199,8 +204,10 @@ export function computeFilteredIndices(
   searchQuery = '',
   altitudeFilter: { minKm: number; maxKm: number } | null = null,
   inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
+  showOnlyRecentLaunches = false,
 ): number[] {
   const q = searchQuery.trim().toLowerCase();
+  const now = Date.now();
   const indices: number[] = [];
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
@@ -208,6 +215,7 @@ export function computeFilteredIndices(
     if (q && !objectMatchesQuery(obj, q)) continue;
     if (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) continue;
     if (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) continue;
+    if (showOnlyRecentLaunches && !isRecentlyLaunched(obj, now)) continue;
     indices.push(i);
   }
   return indices;
@@ -423,6 +431,11 @@ export function setShowGroundTrack(show: boolean): void {
 export function setColorByFunction(enabled: boolean): void {
   if (state.colorByFunction === enabled) return;
   setState({ colorByFunction: enabled });
+}
+
+export function setShowOnlyRecentLaunches(enabled: boolean): void {
+  if (state.showOnlyRecentLaunches === enabled) return;
+  setState({ showOnlyRecentLaunches: enabled });
 }
 
 export function setAltitudeFilter(filter: { minKm: number; maxKm: number } | null): void {

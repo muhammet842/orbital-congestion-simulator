@@ -24,6 +24,7 @@ import {
 import type { HistoricalEvent } from './EventCards';
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
+import { isRecentlyLaunched } from '../data/newLaunches';
 import { t, onLangChange } from '../i18n/i18n';
 
 /**
@@ -348,10 +349,14 @@ function render(container: HTMLElement): void {
     propagation,
   );
 
+  const newBadge = isRecentlyLaunched(obj)
+    ? `<span class="new-launch-badge" title="${escapeHtml(t('badge.new_launch_title'))}">${t('badge.new_launch')}</span>`
+    : '';
+
   detailEl.innerHTML = `
     <div class="detail-header">
       <div class="norad-id">NORAD ${snapshot.noradId}</div>
-      <div class="object-name">${escapeHtml(snapshot.name)}</div>
+      <div class="object-name">${escapeHtml(snapshot.name)}${newBadge}</div>
     </div>
     <div class="object-photo-wrap" data-object-photo hidden></div>
     <dl class="detail-list detail-list--meta">

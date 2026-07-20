@@ -12,12 +12,14 @@ import {
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
+  setShowOnlyRecentLaunches,
   setAltitudeFilter,
   setInclinationFilter,
   resetAdvancedFilters,
 } from '../state/appState';
 import { initEventCards } from './EventCards';
 import { t, applyTranslations, onLangChange } from '../i18n/i18n';
+import { isRecentlyLaunched } from '../data/newLaunches';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const LIST_ITEM_HEIGHT = 36;
@@ -183,9 +185,12 @@ function renderListItem(state: ReturnType<typeof getState>, index: number): stri
   const obj = state.objects[index];
   const selected = state.selectedIndex === index;
   const name = escapeHtml(obj.name.trim() || `NORAD ${obj.noradId}`);
+  const newBadge = isRecentlyLaunched(obj)
+    ? `<span class="new-launch-badge" title="${escapeHtml(t('badge.new_launch_title'))}">${t('badge.new_launch')}</span>`
+    : '';
   return `
     <button type="button" class="object-list-item${selected ? ' object-list-item--selected' : ''}" data-index="${index}">
-      <span class="object-list-name">${name}</span>
+      <span class="object-list-name">${name}${newBadge}</span>
       <span class="object-list-norad">${obj.noradId}</span>
     </button>
   `;
@@ -249,6 +254,11 @@ function renderDisplayOptions(container: HTMLElement): void {
       ${t('ui.color_by_function')}
     </label>
     <p class="display-options-hint muted">${t('ui.cbf_hint')}</p>
+    <label class="filter-row filter-row--toggle">
+      <input type="checkbox" id="show-recent-launches" />
+      <span class="new-launch-badge" aria-hidden="true">${t('badge.new_launch')}</span>
+      ${t('ui.recent_launches')}
+    </label>
   `;
 
   const checkbox = optionsEl.querySelector('#color-by-function') as HTMLInputElement;
@@ -256,8 +266,14 @@ function renderDisplayOptions(container: HTMLElement): void {
     setColorByFunction(checkbox.checked);
   });
 
+  const recentCheckbox = optionsEl.querySelector('#show-recent-launches') as HTMLInputElement;
+  recentCheckbox.addEventListener('change', () => {
+    setShowOnlyRecentLaunches(recentCheckbox.checked);
+  });
+
   subscribe(() => {
     checkbox.checked = getState().colorByFunction;
+    recentCheckbox.checked = getState().showOnlyRecentLaunches;
   });
 }
 

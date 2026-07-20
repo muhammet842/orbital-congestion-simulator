@@ -44,6 +44,12 @@ const PRIORITY_NORAD_IDS = [
   20580, // Hubble
   40367, // GOES-16
   25994, // GPS IIF
+  98268, // RAFS (Rubidium Atomic Frequency Standard) — TUA/TÜBİTAK 6U CubeSat,
+         // Transporter-17 rideshare (2026-07-07). Temporary catalog number;
+         // no public TLE/SupGP exists yet as of 2026-07-20 (normal for a
+         // small rideshare payload — SSN correlation across a dense
+         // multi-payload deployment can take weeks). Keeping this here so
+         // it's picked up — and flagged "NEW" — the moment data appears.
 ];
 
 /** Prevent one mega-constellation from filling the entire spacecraft budget. */
@@ -183,6 +189,35 @@ function activePriority(name) {
   if (/ONEWEB/i.test(name)) return 1;
   if (/PLANET|SPIRE|KUIPER/i.test(name)) return 2;
   return 3;
+}
+
+/**
+ * Loads the *currently published* dataset (the one about to be overwritten)
+ * purely to carry forward `firstSeenAt` timestamps. Returns a Map from
+ * noradId to its previously-recorded `firstSeenAt` (only for objects that
+ * already had one) plus the full set of previously-known NORAD IDs, so a
+ * freshly-appearing ID can be distinguished from one that was simply
+ * dropped-and-re-added by a re-ordering of the fetch groups.
+ */
+async function loadPreviousFirstSeenMap() {
+  const { readFile } = await import('node:fs/promises');
+  const { fileURLToPath } = await import('node:url');
+
+  try {
+    const raw = await readFile(fileURLToPath(OUTPUT_PATH), 'utf8');
+    const data = JSON.parse(raw);
+    if (!Array.isArray(data.objects)) return { known: new Set(), firstSeenAt: new Map() };
+
+    const known = new Set();
+    const firstSeenAt = new Map();
+    for (const obj of data.objects) {
+      known.add(obj.noradId);
+      if (obj.firstSeenAt) firstSeenAt.set(obj.noradId, obj.firstSeenAt);
+    }
+    return { known, firstSeenAt };
+  } catch {
+    return { known: new Set(), firstSeenAt: new Map() };
+  }
 }
 
 async function loadFallbackDataset() {
@@ -419,6 +454,21 @@ async function main() {
     }
   }
 
+  const fetchedAt = new Date().toISOString();
+  const previous = await loadPreviousFirstSeenMap();
+  let newlyLaunchedCount = 0;
+  for (const [noradId, obj] of seen) {
+    const carriedForward = previous.firstSeenAt.get(noradId);
+    if (carriedForward) {
+      obj.firstSeenAt = carriedForward;
+    } else if (!previous.known.has(noradId)) {
+      // Never seen in any prior fetch — genuinely new to our catalog.
+      obj.firstSeenAt = fetchedAt;
+      newlyLaunchedCount++;
+    }
+  }
+  console.log(`  new since last fetch: ${newlyLaunchedCount} object(s)`);
+
   const allObjects = Array.from(seen.values()).sort((a, b) => {
     const rank = { stations: 0, active: 1, debris: 2 };
     const diff = rank[a.category] - rank[b.category];
@@ -434,7 +484,6 @@ async function main() {
     {},
   );
 
-  const fetchedAt = new Date().toISOString();
   const dataset = {
     fetchedAt,
     source: 'celestrak.org',
