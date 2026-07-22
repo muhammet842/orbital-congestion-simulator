@@ -8,13 +8,17 @@
  *   Panel       : click ⚙ Admin or Ctrl+Shift+A → modal opens
  *
  * Counter storage
- *   sessionStorage : "Bu Oturumda" — survives refresh, resets on tab close
- *   localStorage   : "Bu Cihazda"  — all-time totals on this device
- *   Firebase RTDB  : "Tüm Kullanıcılar" — global aggregates (optional, via REST)
+ *   sessionStorage : "This Session" — survives refresh, resets on tab close
+ *   localStorage   : "On This Device" — all-time totals on this device
+ *   Firebase RTDB  : "All Users" — global aggregates (optional, via REST)
+ *
+ * All user-facing panel text goes through `t()` (src/i18n) — see the
+ * `admin.*` keys in translations.ts. Add new UI strings there, not inline.
  */
 
 import { getState, subscribe } from '../state/appState';
 import type { TrackedObject } from '../types';
+import { t, getLang, onLangChange } from '../i18n/i18n';
 
 // ── Storage keys ───────────────────────────────────────────────────────────────
 
@@ -176,10 +180,16 @@ interface FirebaseMetrics {
 }
 type CountryMap = Record<string, number>;
 
+/** Structured error reason, kept separate from the (already-localized)
+ *  `error` message so callers can branch on the *kind* of failure without
+ *  matching against translated text. */
+type FbErrorCode = 'no-connection' | 'access-denied' | 'http-error' | 'unexpected';
+
 interface FbReadResult {
   data: FirebaseMetrics | null;
   countries: CountryMap | null;
   error: string | null;
+  errorCode: FbErrorCode | null;
 }
 
 async function fbFetch(path: string): Promise<Response | null> {
@@ -205,16 +215,21 @@ async function fbRead(): Promise<FbReadResult> {
   ]);
 
   if (!metricsRes) {
-    return { data: null, countries: null, error: 'Firebase bağlantısı kurulamadı — internet bağlantını kontrol et.' };
+    return { data: null, countries: null, error: t('admin.fb_conn_error'), errorCode: 'no-connection' };
   }
   if (metricsRes.status === 401 || metricsRes.status === 403) {
     return {
       data: null, countries: null,
-      error: `Erişim reddedildi (HTTP ${metricsRes.status}) — Firebase Rules sekmesinde ".read" ve ".write" değerlerini true yapın.`,
+      error: t('admin.fb_access_denied').replace('{status}', String(metricsRes.status)),
+      errorCode: 'access-denied',
     };
   }
   if (!metricsRes.ok) {
-    return { data: null, countries: null, error: `Firebase HTTP ${metricsRes.status} hatası` };
+    return {
+      data: null, countries: null,
+      error: t('admin.fb_http_error').replace('{status}', String(metricsRes.status)),
+      errorCode: 'http-error',
+    };
   }
 
   let raw: Record<string, number> | null = null;
@@ -229,6 +244,7 @@ async function fbRead(): Promise<FbReadResult> {
     data: { sat: raw?.sat ?? 0, loads: raw?.loads ?? 0 },
     countries: countryRaw,
     error: null,
+    errorCode: null,
   };
 }
 
@@ -259,12 +275,18 @@ async function fbIncCountry(code: string): Promise<void> {
   clearTimeout(tid);
 }
 
-/** Get the display name for an ISO 3166-1 alpha-2 country code. */
+/** Get the display name for an ISO 3166-1 alpha-2 country code, localized
+ *  to the currently active UI language (falls back to English on failure —
+ *  e.g. a locale/region combo Intl.DisplayNames doesn't recognize). */
 export function countryName(code: string): string {
-  if (!code || code === 'XX' || code === '??' || code.length !== 2) return 'Unknown';
+  if (!code || code === 'XX' || code === '??' || code.length !== 2) return t('admin.unknown', 'Unknown');
   try {
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? 'Unknown';
-  } catch { return 'Unknown'; }
+    return new Intl.DisplayNames([getLang()], { type: 'region' }).of(code.toUpperCase()) ?? code.toUpperCase();
+  } catch {
+    try {
+      return new Intl.DisplayNames(['en'], { type: 'region' }).of(code.toUpperCase()) ?? code.toUpperCase();
+    } catch { return code.toUpperCase(); }
+  }
 }
 
 /** Track the visitor's country in Firebase (once per browser session). */
@@ -417,9 +439,14 @@ export function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
-  if (h > 0) return `${h}s ${m % 60}d ${s % 60}sn`;
-  if (m > 0) return `${m}d ${s % 60}sn`;
-  return `${s}sn`;
+  if (h > 0) {
+    return t('admin.dur_hms')
+      .replace('{h}', String(h)).replace('{m}', String(m % 60)).replace('{s}', String(s % 60));
+  }
+  if (m > 0) {
+    return t('admin.dur_ms').replace('{m}', String(m)).replace('{s}', String(s % 60));
+  }
+  return t('admin.dur_s').replace('{s}', String(s));
 }
 
 // ── Admin button in header ────────────────────────────────────────────────────
@@ -431,18 +458,24 @@ function refreshAdminButton(): void {
       const btn = document.createElement('button');
       btn.id = 'admin-panel-btn';
       btn.className = 'admin-header-btn';
-      btn.textContent = '⚙ Admin';
-      btn.title = 'Admin Paneli (Ctrl+Shift+A)';
       btn.addEventListener('click', openAdminPanel);
       const header = document.querySelector('.app-header');
       const langSel = document.getElementById('lang-select');
       if (header && langSel) header.insertBefore(btn, langSel);
       else header?.appendChild(btn);
     }
+    refreshAdminButtonLabel();
   } else {
     existing?.remove();
     closeAdminPanel();
   }
+}
+
+function refreshAdminButtonLabel(): void {
+  const btn = document.getElementById('admin-panel-btn');
+  if (!btn) return;
+  btn.textContent = `⚙ ${t('admin.button_label')}`;
+  btn.title = t('admin.button_title');
 }
 
 // ── PIN dialog ────────────────────────────────────────────────────────────────
@@ -457,20 +490,17 @@ function showPinDialog(): void {
   overlay.innerHTML = `
     <div class="admin-pin-card">
       <div class="admin-pin-icon">🔐</div>
-      <h3 class="admin-pin-title">${isSetup ? 'Admin PIN Oluştur' : 'Admin Girişi'}</h3>
-      <p class="admin-pin-sub">${isSetup
-        ? 'Bu cihaz için 4+ haneli bir PIN belirle. Sonraki ziyaretlerde otomatik tanınacaksın.'
-        : 'Admin erişimi için PIN\'ini gir.'
-      }</p>
+      <h3 class="admin-pin-title">${isSetup ? t('admin.pin_setup_title') : t('admin.pin_login_title')}</h3>
+      <p class="admin-pin-sub">${isSetup ? t('admin.pin_setup_sub') : t('admin.pin_login_sub')}</p>
       <input id="admin-pin-input" class="admin-pin-input" type="password"
-        placeholder="${isSetup ? 'Yeni PIN' : 'PIN'}" maxlength="16" autocomplete="off" />
+        placeholder="${isSetup ? t('admin.pin_placeholder_new') : t('admin.pin_placeholder')}" maxlength="16" autocomplete="off" />
       ${isSetup ? `<input id="admin-pin-confirm" class="admin-pin-input" type="password"
-        placeholder="PIN Tekrar" maxlength="16" autocomplete="off" />` : ''}
+        placeholder="${t('admin.pin_placeholder_confirm')}" maxlength="16" autocomplete="off" />` : ''}
       <p id="admin-pin-error" class="admin-pin-error" style="display:none"></p>
       <div class="admin-pin-actions">
-        <button id="admin-pin-cancel" class="admin-pin-btn admin-pin-btn--ghost">İptal</button>
+        <button id="admin-pin-cancel" class="admin-pin-btn admin-pin-btn--ghost">${t('admin.cancel')}</button>
         <button id="admin-pin-submit" class="admin-pin-btn admin-pin-btn--primary">
-          ${isSetup ? 'PIN Oluştur' : 'Giriş Yap'}
+          ${isSetup ? t('admin.pin_create_btn') : t('admin.pin_login_btn')}
         </button>
       </div>
     </div>
@@ -484,13 +514,13 @@ function showPinDialog(): void {
 
   const submit = (): void => {
     const pin = input.value.trim();
-    if (pin.length < 4) { showErr('PIN en az 4 karakter olmalı.'); return; }
+    if (pin.length < 4) { showErr(t('admin.pin_err_short')); return; }
     if (isSetup) {
-      if (pin !== (confirm?.value.trim() ?? '')) { showErr('PIN\'ler eşleşmiyor.'); return; }
+      if (pin !== (confirm?.value.trim() ?? '')) { showErr(t('admin.pin_err_mismatch')); return; }
       try { localStorage.setItem(LS_ADMIN_HASH, hashPin(pin)); } catch { /* ignore */ }
       setAdminActive(); overlay.remove(); openAdminPanel();
     } else {
-      if (hashPin(pin) !== storedHash) { showErr('Hatalı PIN.'); return; }
+      if (hashPin(pin) !== storedHash) { showErr(t('admin.pin_err_wrong')); return; }
       setAdminActive(); overlay.remove(); openAdminPanel();
     }
   };
@@ -521,7 +551,7 @@ export function openAdminPanel(): void {
   panel.id = 'admin-panel';
   panel.className = 'admin-panel';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Admin Panel');
+  panel.setAttribute('aria-label', t('admin.panel_title'));
 
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
@@ -535,36 +565,40 @@ export function openAdminPanel(): void {
     if (el) el.textContent = formatDuration(Date.now() - SESSION_START);
   }, 1_000);
 
-  geoTimer = setTimeout(() => {
-    // Firebase metrics + countries
-    fbRead().then((res) => {
-      if (!panelEl) return;
-      updateGlobalSection(res);
-    }).catch(() => {
-      if (!panelEl) return;
-      updateGlobalSection({ data: null, countries: null, error: 'Beklenmedik bağlantı hatası.' });
-    });
-
-    // Geo labels for session info
-    fetchGeo().then((geo) => {
-      if (!panelEl || !geo) return;
-      const loc = document.getElementById('ap-geo-loc');
-      const ip  = document.getElementById('ap-geo-ip');
-      const org = document.getElementById('ap-geo-org');
-      if (loc) loc.textContent = `${geo.city}, ${geo.region}, ${geo.country_name}`;
-      if (ip)  ip.textContent  = geo.ip;
-      if (org) org.textContent = geo.org;
-    }).catch(() => { /* non-fatal */ });
-
-    // Initial presence fetch
-    refreshPresenceSection();
-  }, 50);
+  geoTimer = setTimeout(refreshDynamicSections, 50);
 
   // Auto-refresh online users every 20 seconds while panel is open
   presenceRefreshTimer = setInterval(refreshPresenceSection, 20_000);
 
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeAdminPanel(); });
   document.addEventListener('keydown', handleEsc);
+}
+
+/** (Re-)fetches Firebase global metrics, geo labels, and presence — used
+ *  both on initial panel open and to repopulate a freshly re-rendered panel
+ *  (e.g. after a language change) without waiting for the next timer tick. */
+function refreshDynamicSections(): void {
+  fbRead().then((res) => {
+    if (!panelEl) return;
+    updateGlobalSection(res);
+  }).catch(() => {
+    if (!panelEl) return;
+    updateGlobalSection({ data: null, countries: null, error: t('admin.fb_conn_error'), errorCode: 'no-connection' });
+  });
+
+  // Geo labels for session info (fetchGeo() is cached, so a re-render after
+  // the first successful fetch resolves this immediately).
+  fetchGeo().then((geo) => {
+    if (!panelEl || !geo) return;
+    const loc = document.getElementById('ap-geo-loc');
+    const ip  = document.getElementById('ap-geo-ip');
+    const org = document.getElementById('ap-geo-org');
+    if (loc) loc.textContent = `${geo.city}, ${geo.region}, ${geo.country_name}`;
+    if (ip)  ip.textContent  = geo.ip;
+    if (org) org.textContent = geo.org;
+  }).catch(() => { /* non-fatal */ });
+
+  refreshPresenceSection();
 }
 
 function handleEsc(e: KeyboardEvent): void {
@@ -614,10 +648,10 @@ async function refreshPresenceSection(): Promise<void> {
   if (total === 0) {
     sec.innerHTML = `
       <h4 class="ap-section-title">
-        🟢 Şu An Online <span class="ap-online-count ap-online-zero">0</span>
-        <span class="ap-sub-hint">her 20sn güncellenir</span>
+        ${t('admin.online_now')} <span class="ap-online-count ap-online-zero">0</span>
+        <span class="ap-sub-hint">${t('admin.online_refresh_hint')}</span>
       </h4>
-      <p class="ap-note-text" style="margin:0;font-size:0.73rem">Aktif ziyaretçi yok.</p>`;
+      <p class="ap-note-text" style="margin:0;font-size:0.73rem">${t('admin.no_active_visitors')}</p>`;
     return;
   }
 
@@ -635,8 +669,8 @@ async function refreshPresenceSection(): Promise<void> {
 
   sec.innerHTML = `
     <h4 class="ap-section-title">
-      🟢 Şu An Online <span class="ap-online-count">${total}</span>
-      <span class="ap-sub-hint">her 20sn güncellenir</span>
+      ${t('admin.online_now')} <span class="ap-online-count">${total}</span>
+      <span class="ap-sub-hint">${t('admin.online_refresh_hint')}</span>
     </h4>
     <div class="ap-country-list">${rows}</div>`;
 }
@@ -656,33 +690,33 @@ function updateGlobalSection(result: FbReadResult): void {
   const sec = document.getElementById('ap-global-section');
   if (!sec) return;
   const url = getFirebaseUrl();
-  const { data: fb, error } = result;
+  const { data: fb, error, errorCode } = result;
 
   // url is now always at least DEFAULT_FIREBASE_URL, so this branch rarely fires
   if (!url) {
     sec.innerHTML = `
-      <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
-      <p class="ap-note-text" style="margin:0 0 10px">Firebase URL bulunamadı.</p>`;
+      <h4 class="ap-section-title">${t('admin.section_global')}</h4>
+      <p class="ap-note-text" style="margin:0 0 10px">${t('admin.fb_url_not_found')}</p>`;
     return;
   }
 
   if (!fb) {
     sec.innerHTML = `
-      <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
+      <h4 class="ap-section-title">${t('admin.section_global')}</h4>
       <p class="ap-note-text" style="color:var(--danger);margin:0 0 6px;font-size:0.76rem">
-        ⚠ ${error ?? 'Firebase bağlantısı kurulamadı.'}
+        ⚠ ${error ?? t('admin.fb_conn_error')}
       </p>
-      ${error?.includes('Erişim reddedildi') ? `
+      ${errorCode === 'access-denied' ? `
       <div class="ap-rules-hint">
-        <strong>Nasıl düzeltilir:</strong><br>
-        Firebase Console → Realtime Database → <strong>Rules</strong> sekmesini aç ve şunu yapıştır:
+        <strong>${t('admin.rules_hint_title')}</strong><br>
+        ${t('admin.rules_hint_body')}
         <pre class="ap-rules-code">{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}</pre>
-        Ardından <strong>Publish</strong>'e bas ve aşağıdan tekrar dene.
+        ${t('admin.rules_hint_footer')}
       </div>` : ''}
       <div class="ap-firebase-row" style="margin-top:10px">
         <input id="ap-fb-url" class="ap-fb-input" type="text" value="${url}" />
-        <button id="ap-fb-save" class="ap-tool-btn">Tekrar Dene</button>
-        <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger">Kaldır</button>
+        <button id="ap-fb-save" class="ap-tool-btn">${t('admin.retry_btn')}</button>
+        <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger">${t('admin.remove_btn')}</button>
       </div>`;
     bindFirebaseSave(sec);
     return;
@@ -690,24 +724,24 @@ function updateGlobalSection(result: FbReadResult): void {
 
   const isDefault = url === DEFAULT_FIREBASE_URL;
   sec.innerHTML = `
-    <h4 class="ap-section-title">🌐 Tüm Kullanıcılar (Firebase)
+    <h4 class="ap-section-title">${t('admin.section_global_fb')}
       <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">
         — ${url.replace('https://', '').split('.')[0]}
       </span>
     </h4>
     <div class="ap-grid-2" style="margin-bottom:16px">
-      ${metricBox(fb.loads.toLocaleString(), 'Sayfa Yükleme')}
-      ${metricBox(fb.sat.toLocaleString(),   'Uydu Tıklama')}
+      ${metricBox(fb.loads.toLocaleString(), t('admin.metric_page_loads'))}
+      ${metricBox(fb.sat.toLocaleString(),   t('admin.metric_sat_clicks'))}
     </div>
     ${!isDefault ? `
     <div style="text-align:right;margin-top:10px">
       <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger" style="padding:4px 10px;font-size:0.72rem">
-        Varsayılana Dön
+        ${t('admin.restore_default_btn')}
       </button>
     </div>` : ''}`;
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection({ data: null, countries: null, error: null });
+    updateGlobalSection({ data: null, countries: null, error: null, errorCode: null });
   });
 }
 
@@ -721,19 +755,23 @@ function bindFirebaseSave(sec: HTMLElement): void {
       inp.style.borderColor = 'var(--danger)';
       return;
     }
-    if (saveBtn) { saveBtn.textContent = '⏳ Test ediliyor…'; saveBtn.disabled = true; }
+    if (saveBtn) { saveBtn.textContent = t('admin.fb_testing'); saveBtn.disabled = true; }
     setFirebaseUrl(url);
     try {
       const res = await fbRead();
       updateGlobalSection(res);
     } catch (e) {
       console.error('[AdminPanel] updateGlobalSection error:', e);
-      updateGlobalSection({ data: null, countries: null, error: `Hata: ${e instanceof Error ? e.message : String(e)}` });
+      updateGlobalSection({
+        data: null, countries: null,
+        error: t('admin.fb_unexpected_error').replace('{msg}', e instanceof Error ? e.message : String(e)),
+        errorCode: 'unexpected',
+      });
     }
   });
   sec.querySelector('#ap-fb-clear')?.addEventListener('click', () => {
     try { localStorage.removeItem(LS_FIREBASE_URL); } catch { /* ignore */ }
-    updateGlobalSection({ data: null, countries: null, error: null });
+    updateGlobalSection({ data: null, countries: null, error: null, errorCode: null });
   });
 }
 
@@ -750,16 +788,24 @@ function renderPanelContent(panel: HTMLElement): void {
 
   const fetchedAt = s?.fetchedAt ? new Date(s.fetchedAt) : null;
   const tleDays   = fetchedAt ? Math.floor((Date.now() - fetchedAt.getTime()) / 86_400_000) : null;
-  const tleAge    = tleDays === null ? '—' : tleDays === 0 ? 'Bu gün' : `${tleDays} gün önce`;
+  const tleAge    = tleDays === null
+    ? '—'
+    : tleDays === 0
+      ? t('admin.tle_age_today')
+      : t('admin.tle_age_days_ago').replace('{n}', String(tleDays));
 
   const selObj: TrackedObject | null =
     state.selectedIndex != null ? (objs[state.selectedIndex] ?? null) : null;
   const selLabel = selObj
     ? `${selObj.name} (${selObj.noradId})`
-    : state.selectedEventId ? `Olay: ${state.selectedEventId}` : 'Yok';
+    : state.selectedEventId
+      ? t('admin.selected_event').replace('{id}', state.selectedEventId)
+      : t('admin.selected_none');
 
   const activeFilters = Object.entries(state.layerFilters).filter(([, v]) => !v).map(([k]) => k);
-  const filterLabel   = activeFilters.length === 0 ? 'Tümü görünür' : `Gizli: ${activeFilters.join(', ')}`;
+  const filterLabel   = activeFilters.length === 0
+    ? t('admin.filters_all_visible')
+    : t('admin.filters_hidden').replace('{list}', activeFilters.join(', '));
 
   const sesTot_sat = totGet('sat');
   const sesTot_evt = totGet('evt');
@@ -767,127 +813,127 @@ function renderPanelContent(panel: HTMLElement): void {
 
   panel.innerHTML = `
     <div class="ap-header">
-      <div class="ap-logo">🛸 <span>Admin Panel</span></div>
-      <button class="ap-close" id="ap-close-btn" title="Kapat (Esc)">✕</button>
+      <div class="ap-logo">🛸 <span>${t('admin.panel_title')}</span></div>
+      <button class="ap-close" id="ap-close-btn" title="${t('admin.close_title')}">✕</button>
     </div>
 
     <div class="ap-body">
 
-      <!-- ── Oturum Bilgisi ───────────────────────────── -->
+      <!-- ── Session Info ───────────────────────────── -->
       <section class="ap-section">
-        <h4 class="ap-section-title">👤 Oturum Bilgisi</h4>
+        <h4 class="ap-section-title">${t('admin.section_session')}</h4>
         <div class="ap-grid-2">
           <div class="ap-stat">
-            <span class="ap-stat-label">📍 Konum</span>
-            <span class="ap-stat-value" id="ap-geo-loc">Yükleniyor…</span>
+            <span class="ap-stat-label">${t('admin.loc')}</span>
+            <span class="ap-stat-value" id="ap-geo-loc">${t('admin.loading')}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🌐 IP</span>
-            <span class="ap-stat-value" id="ap-geo-ip">Yükleniyor…</span>
+            <span class="ap-stat-label">${t('admin.ip')}</span>
+            <span class="ap-stat-value" id="ap-geo-ip">${t('admin.loading')}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🏢 ISP / Org</span>
-            <span class="ap-stat-value" id="ap-geo-org">Yükleniyor…</span>
+            <span class="ap-stat-label">${t('admin.isp')}</span>
+            <span class="ap-stat-value" id="ap-geo-org">${t('admin.loading')}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">⏱ Oturum Süresi</span>
+            <span class="ap-stat-label">${t('admin.session_duration')}</span>
             <span class="ap-stat-value" id="ap-dur">${formatDuration(Date.now() - SESSION_START)}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🖥 Tarayıcı / OS</span>
+            <span class="ap-stat-label">${t('admin.browser_os')}</span>
             <span class="ap-stat-value">${detectBrowser()} / ${detectOS()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">📐 Çözünürlük</span>
+            <span class="ap-stat-label">${t('admin.resolution')}</span>
             <span class="ap-stat-value">${screen.width}×${screen.height} (${window.devicePixelRatio}x)</span>
           </div>
         </div>
       </section>
 
-      <!-- ── Simülasyon Durumu ─────────────────────────── -->
+      <!-- ── Simulation Status ─────────────────────────── -->
       <section class="ap-section">
-        <h4 class="ap-section-title">🛰 Simülasyon Durumu</h4>
+        <h4 class="ap-section-title">${t('admin.section_sim')}</h4>
         <div class="ap-grid-2">
           <div class="ap-stat">
-            <span class="ap-stat-label">📦 Toplam Nesne</span>
+            <span class="ap-stat-label">${t('admin.total_objects')}</span>
             <span class="ap-stat-value ap-accent">${totalCount.toLocaleString()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">👁 Görünen</span>
+            <span class="ap-stat-label">${t('admin.visible')}</span>
             <span class="ap-stat-value ap-accent">${visibleCount.toLocaleString()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🛸 Aktif / Roket</span>
+            <span class="ap-stat-label">${t('admin.active_rockets')}</span>
             <span class="ap-stat-value">${activeCount.toLocaleString()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">💥 Enkaz</span>
+            <span class="ap-stat-label">${t('admin.debris')}</span>
             <span class="ap-stat-value">${debrisCount.toLocaleString()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🌌 İstasyon</span>
+            <span class="ap-stat-label">${t('admin.stations')}</span>
             <span class="ap-stat-value">${stationCount.toLocaleString()}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">📡 TLE Verisi Yaşı</span>
+            <span class="ap-stat-label">${t('admin.tle_age')}</span>
             <span class="ap-stat-value ${tleDays !== null && tleDays > 3 ? 'ap-warn' : ''}">${tleAge}</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">⚡ Hız</span>
+            <span class="ap-stat-label">${t('admin.speed')}</span>
             <span class="ap-stat-value">${state.time.speed}×</span>
           </div>
           <div class="ap-stat">
-            <span class="ap-stat-label">🔍 Katman Filtreleri</span>
+            <span class="ap-stat-label">${t('admin.layer_filters')}</span>
             <span class="ap-stat-value">${filterLabel}</span>
           </div>
         </div>
         <div class="ap-stat ap-stat--full">
-          <span class="ap-stat-label">🎯 Seçili Nesne</span>
+          <span class="ap-stat-label">${t('admin.selected_object')}</span>
           <span class="ap-stat-value">${selLabel}</span>
         </div>
       </section>
 
-      <!-- ── Bu Cihazda (Toplam) ──────────────────────── -->
+      <!-- ── On This Device (Totals) ──────────────────── -->
       <section class="ap-section">
-        <h4 class="ap-section-title">💾 Bu Cihazda (Tüm Oturumlar)</h4>
+        <h4 class="ap-section-title">${t('admin.section_device')}</h4>
         <div class="ap-grid-3">
-          ${metricBox(totLds.toLocaleString(),     'Sayfa Yükleme')}
-          ${metricBox(sesTot_sat.toLocaleString(), 'Uydu Tıklama')}
-          ${metricBox(sesTot_evt.toLocaleString(), 'Olay Tıklama')}
+          ${metricBox(totLds.toLocaleString(),     t('admin.metric_page_loads'))}
+          ${metricBox(sesTot_sat.toLocaleString(), t('admin.metric_sat_clicks'))}
+          ${metricBox(sesTot_evt.toLocaleString(), t('admin.metric_event_clicks'))}
         </div>
         <div style="margin-top:8px;text-align:right">
           <button id="ap-reset-device" class="ap-tool-btn ap-tool-btn--danger"
             style="padding:4px 10px;font-size:0.72rem">
-            Bu Cihaz Verisini Sıfırla
+            ${t('admin.reset_device_btn')}
           </button>
         </div>
       </section>
 
-      <!-- ── Şu An Online ──────────────────────────────── -->
+      <!-- ── Currently Online ──────────────────────────────── -->
       <section class="ap-section ap-section--online" id="ap-presence-section">
-        <h4 class="ap-section-title">🟢 Şu An Online <span class="ap-sub-hint">yükleniyor…</span></h4>
+        <h4 class="ap-section-title">${t('admin.online_now')} <span class="ap-sub-hint">${t('admin.online_loading')}</span></h4>
       </section>
 
-      <!-- ── Tüm Kullanıcılar (Firebase) ─────────────── -->
+      <!-- ── All Users (Firebase) ─────────────── -->
       <section class="ap-section ap-section--note" id="ap-global-section">
-        <h4 class="ap-section-title">🌐 Tüm Kullanıcılar</h4>
-        <p class="ap-note-text" style="margin:0">Yükleniyor…</p>
+        <h4 class="ap-section-title">${t('admin.section_global')}</h4>
+        <p class="ap-note-text" style="margin:0">${t('admin.loading')}</p>
       </section>
 
-      <!-- ── Hızlı Araçlar ─────────────────────────────── -->
+      <!-- ── Quick Tools ─────────────────────────────── -->
       <section class="ap-section">
-        <h4 class="ap-section-title">⚙ Hızlı Araçlar</h4>
+        <h4 class="ap-section-title">${t('admin.section_tools')}</h4>
         <div class="ap-tools">
-          <button class="ap-tool-btn" id="ap-copy-state">📋 Snapshot Kopyala</button>
-          <button class="ap-tool-btn ap-tool-btn--danger" id="ap-revoke-btn">🔓 Admin Erişimini Kaldır</button>
+          <button class="ap-tool-btn" id="ap-copy-state">${t('admin.copy_snapshot_btn')}</button>
+          <button class="ap-tool-btn ap-tool-btn--danger" id="ap-revoke-btn">${t('admin.revoke_btn')}</button>
         </div>
       </section>
 
     </div>
 
     <div class="ap-footer">
-      <span>Orbital Congestion Simulator — Admin v1</span>
-      <span class="ap-footer-hint">Kısayol: Ctrl+Shift+A</span>
+      <span>${t('admin.footer_brand')}</span>
+      <span class="ap-footer-hint">${t('admin.footer_shortcut')}</span>
     </div>
   `;
 
@@ -896,7 +942,7 @@ function renderPanelContent(panel: HTMLElement): void {
   panel.querySelector('#ap-close-btn')!.addEventListener('click', closeAdminPanel);
 
   panel.querySelector('#ap-reset-device')!.addEventListener('click', () => {
-    if (!confirm('Bu cihazın tüm istatistikleri sıfırlansın mı?')) return;
+    if (!confirm(t('admin.confirm_reset_device'))) return;
     (['sat','evt','loads'] as CounterKey[]).forEach(k => {
       try { localStorage.removeItem(LS_TOTAL_PREFIX + k); } catch { /* ignore */ }
       sessionStorage.removeItem(SS_SESSION_PREFIX + k);
@@ -917,11 +963,14 @@ function renderPanelContent(panel: HTMLElement): void {
     }, null, 2);
     navigator.clipboard.writeText(snap).catch(() => {/* ignore */});
     const btn = document.getElementById('ap-copy-state');
-    if (btn) { btn.textContent = '✓ Kopyalandı'; setTimeout(() => { btn.textContent = '📋 Snapshot Kopyala'; }, 2000); }
+    if (btn) {
+      btn.textContent = t('admin.copy_snapshot_done');
+      setTimeout(() => { btn.textContent = t('admin.copy_snapshot_btn'); }, 2000);
+    }
   });
 
   panel.querySelector('#ap-revoke-btn')!.addEventListener('click', () => {
-    if (confirm('Admin erişimini bu cihazdan tamamen kaldır?')) {
+    if (confirm(t('admin.confirm_revoke'))) {
       revokeAdmin(); closeAdminPanel();
     }
   });
@@ -992,4 +1041,18 @@ export function initAdminSystem(): void {
     trackCountry().catch(() => {/* non-fatal */});
   }
   if (isAdminMode()) requestAnimationFrame(refreshAdminButton);
+
+  // Keep the header button label and an already-open panel in sync with
+  // the active UI language (mirrors the pattern used by KesslerPanel).
+  onLangChange(() => {
+    refreshAdminButtonLabel();
+    if (!panelEl) return;
+    const panel = panelEl.querySelector<HTMLElement>('#admin-panel');
+    if (!panel) return;
+    renderPanelContent(panel);
+    // renderPanelContent() resets the presence/global sections back to
+    // "Loading…" placeholders — repopulate them immediately instead of
+    // waiting for the next 20s presence tick or a manual re-open.
+    refreshDynamicSections();
+  });
 }

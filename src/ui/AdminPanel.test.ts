@@ -151,20 +151,22 @@ describe('detectOS', () => {
 // ── formatDuration ────────────────────────────────────────────────────────────
 
 describe('formatDuration', () => {
+  // Localized via admin.dur_hms/dur_ms/dur_s (src/i18n) — the test environment
+  // resolves to English by default (no stored/browser language override).
   it('formats sub-minute durations as seconds', () => {
-    expect(formatDuration(45_000)).toBe('45sn');
+    expect(formatDuration(45_000)).toBe('45s');
   });
 
   it('formats sub-hour durations as minutes + seconds', () => {
-    expect(formatDuration(2 * 60_000 + 5_000)).toBe('2d 5sn');
+    expect(formatDuration(2 * 60_000 + 5_000)).toBe('2m 5s');
   });
 
   it('formats multi-hour durations as hours + minutes + seconds', () => {
-    expect(formatDuration(3 * 3_600_000 + 4 * 60_000 + 7_000)).toBe('3s 4d 7sn');
+    expect(formatDuration(3 * 3_600_000 + 4 * 60_000 + 7_000)).toBe('3h 4m 7s');
   });
 
   it('handles zero', () => {
-    expect(formatDuration(0)).toBe('0sn');
+    expect(formatDuration(0)).toBe('0s');
   });
 });
 
