@@ -14,6 +14,10 @@
  *
  * All user-facing panel text goes through `t()` (src/i18n) — see the
  * `admin.*` keys in translations.ts. Add new UI strings there, not inline.
+ *
+ * Firebase security: never recommend root `.read/.write: true`. Deploy
+ * `firebase/database.rules.json` (increment-only counters + schema-checked
+ * presence). See `firebase/README.md`.
  */
 
 import { getState, subscribe } from '../state/appState';
@@ -29,10 +33,31 @@ const LS_TOTAL_PREFIX  = 'orbital_total_';   // all-time, this device
 const SS_SESSION_PREFIX= 'orbital_ses_';     // current tab/session
 
 /**
- * Built-in Firebase RTDB URL — used by ALL visitors automatically.
- * Admin can override this via the admin panel (stored in localStorage).
+ * Legacy fallback URL (public RTDB endpoint — not a secret; security comes
+ * from `firebase/database.rules.json`, not from hiding the host). Prefer
+ * `VITE_FIREBASE_RTDB_URL` in `.env` / Vercel so analytics can be pointed at
+ * another project or disabled entirely (empty string).
  */
 const DEFAULT_FIREBASE_URL = 'https://orbital-congestion-sim-default-rtdb.firebaseio.com';
+
+/** True for https://*.firebaseio.com and https://*.firebasedatabase.app roots. */
+export function isValidFirebaseRtdbUrl(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (u.protocol !== 'https:') return false;
+    if (u.pathname !== '/' && u.pathname !== '') return false;
+    if (u.search || u.hash) return false;
+    return u.hostname.endsWith('.firebaseio.com')
+      || u.hostname.endsWith('.firebasedatabase.app');
+  } catch {
+    return false;
+  }
+}
+
+function envFirebaseUrl(): string {
+  const raw = (import.meta.env.VITE_FIREBASE_RTDB_URL as string | undefined)?.trim() ?? '';
+  return raw && isValidFirebaseRtdbUrl(raw) ? raw.replace(/\/$/, '') : '';
+}
 
 // ── Real-time Presence ────────────────────────────────────────────────────────
 
@@ -50,11 +75,15 @@ let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function writePresence(countryCode: string): Promise<void> {
   const base = getFirebaseUrl();
+  if (!base) return;
   const sid  = getSessionId();
+  // Country must match firebase/database.rules.json: /^[A-Z?]{2}$/
+  const country = /^[A-Z?]{2}$/.test(countryCode) ? countryCode : 'XX';
+  const now = Date.now();
   const payload = JSON.stringify({
-    country: countryCode,
-    since: Date.now(),
-    lastSeen: Date.now(),
+    country,
+    since: now,
+    lastSeen: now,
   });
   await fetch(`${base}/orbital_presence/${sid}.json`, {
     method: 'PUT',
@@ -65,6 +94,7 @@ async function writePresence(countryCode: string): Promise<void> {
 
 async function updatePresenceHeartbeat(): Promise<void> {
   const base = getFirebaseUrl();
+  if (!base) return;
   const sid  = getSessionId();
   await fetch(`${base}/orbital_presence/${sid}/lastSeen.json`, {
     method: 'PUT',
@@ -75,6 +105,7 @@ async function updatePresenceHeartbeat(): Promise<void> {
 
 function deletePresence(): void {
   const base = getFirebaseUrl();
+  if (!base) return;
   const sid  = getSessionId();
   // keepalive ensures the request completes even during page unload
   fetch(`${base}/orbital_presence/${sid}.json`, {
@@ -161,17 +192,32 @@ if (!sessionStorage.getItem(SS_SESSION_PREFIX + 'loaded')) {
 
 // ── Firebase RTDB REST helpers ────────────────────────────────────────────────
 
+/**
+ * Resolve the RTDB base URL used for analytics.
+ * Priority: valid localStorage override → VITE_FIREBASE_RTDB_URL → built-in default.
+ * Returns '' when analytics should stay off (invalid / explicitly disabled).
+ */
 export function getFirebaseUrl(): string {
   try {
-    // Admin panel override takes priority; fall back to built-in URL
-    return localStorage.getItem(LS_FIREBASE_URL) || DEFAULT_FIREBASE_URL;
-  } catch {
-    return DEFAULT_FIREBASE_URL;
-  }
+    const override = localStorage.getItem(LS_FIREBASE_URL)?.trim() ?? '';
+    if (override) {
+      return isValidFirebaseRtdbUrl(override) ? override.replace(/\/$/, '') : '';
+    }
+  } catch { /* ignore */ }
+  return envFirebaseUrl() || DEFAULT_FIREBASE_URL;
 }
+
+/** Persist a custom RTDB URL override. Rejects non-HTTPS Firebase hosts. */
 export function setFirebaseUrl(url: string): void {
-  try { localStorage.setItem(LS_FIREBASE_URL, url.trim()); }
+  const cleaned = url.trim().replace(/\/$/, '');
+  if (!isValidFirebaseRtdbUrl(cleaned)) return;
+  try { localStorage.setItem(LS_FIREBASE_URL, cleaned); }
   catch { /* ignore */ }
+}
+
+/** True when the client has a usable RTDB endpoint configured. */
+export function isFirebaseConfigured(): boolean {
+  return getFirebaseUrl().length > 0;
 }
 
 interface FirebaseMetrics {
@@ -256,23 +302,13 @@ export function countryFlag(code: string): string {
   } catch { return '🌐'; }
 }
 
-/** Increment a country visit counter in Firebase.
- *  Key is the 2-letter ISO code (TR, US, DE…) — no encoding issues. */
+/**
+ * Increment a country visit counter under increment-only RTDB rules
+ * (create as 1, or existing+1). Retries on concurrent write races.
+ */
 async function fbIncCountry(code: string): Promise<void> {
   const safeCode = code.toUpperCase().replace(/[^A-Z]/g, 'X').slice(0, 2) || 'XX';
-  const r = await fbFetch(`/orbital_countries/${safeCode}.json`);
-  if (!r || !r.ok) return;
-  const cur = ((await r.json().catch(() => null)) as number | null) ?? 0;
-  const base = getFirebaseUrl();
-  const ctl = new AbortController();
-  const tid = setTimeout(() => ctl.abort(), 4000);
-  await fetch(`${base}/orbital_countries/${safeCode}.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(cur + 1),
-    signal: ctl.signal,
-  }).catch(() => null);
-  clearTimeout(tid);
+  await fbIncrementPath(`/orbital_countries/${safeCode}.json`);
 }
 
 /** Get the display name for an ISO 3166-1 alpha-2 country code, localized
@@ -302,26 +338,46 @@ async function trackCountry(): Promise<void> {
   } catch { /* non-fatal */ }
 }
 
-/** Atomically increment a single counter in Firebase (+= 1 via REST). */
+/** Increment a metrics counter under increment-only RTDB rules. */
 async function fbInc(k: CounterKey): Promise<void> {
+  await fbIncrementPath(`/orbital_metrics/${k}.json`);
+}
+
+/**
+ * Read-modify-write +1 against rules that only allow `1` (create) or
+ * `data + 1`. Concurrent visitors can race; retry a few times.
+ */
+async function fbIncrementPath(path: string, attempts = 4): Promise<void> {
   const base = getFirebaseUrl();
   if (!base) return;
-  const ctl = new AbortController();
-  const tid = setTimeout(() => ctl.abort(), 4000);
-  try {
-    const r = await fetch(`${base}/orbital_metrics/${k}.json`, { signal: ctl.signal });
-    const cur = r.ok ? ((await r.json() as number | null) ?? 0) : 0;
-    clearTimeout(tid);
-    const ctl2 = new AbortController();
-    const tid2 = setTimeout(() => ctl2.abort(), 4000);
-    await fetch(`${base}/orbital_metrics/${k}.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cur + 1),
-      signal: ctl2.signal,
-    });
-    clearTimeout(tid2);
-  } catch { clearTimeout(tid); /* non-fatal */ }
+
+  for (let i = 0; i < attempts; i++) {
+    const ctl = new AbortController();
+    const tid = setTimeout(() => ctl.abort(), 4000);
+    try {
+      const r = await fetch(`${base}${path}`, { signal: ctl.signal });
+      clearTimeout(tid);
+      // Missing node → treat as 0 so the first write is 1 (rules require that).
+      const cur = r.ok ? ((await r.json() as number | null) ?? 0) : 0;
+      if (typeof cur !== 'number' || !Number.isFinite(cur) || cur < 0) return;
+
+      const ctl2 = new AbortController();
+      const tid2 = setTimeout(() => ctl2.abort(), 4000);
+      const put = await fetch(`${base}${path}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cur + 1),
+        signal: ctl2.signal,
+      });
+      clearTimeout(tid2);
+      if (put.ok) return;
+      // 400 from rules validation usually means another client won the race.
+      if (put.status !== 400 && put.status !== 409) return;
+    } catch {
+      clearTimeout(tid);
+      return;
+    }
+  }
 }
 
 // ── Simple PIN hash (djb2) ────────────────────────────────────────────────────
@@ -618,6 +674,7 @@ const PRESENCE_PURGE_MS = 5 * 60_000; // auto-delete entries older than 5 min
 
 async function purgeStalePresence(all: Record<string, PresenceEntry>): Promise<void> {
   const base = getFirebaseUrl();
+  if (!base) return;
   const now  = Date.now();
   const stale = Object.entries(all).filter(([, e]) => now - (e.lastSeen ?? 0) > PRESENCE_PURGE_MS);
   await Promise.all(stale.map(([sid]) =>
@@ -710,11 +767,12 @@ function updateGlobalSection(result: FbReadResult): void {
       <div class="ap-rules-hint">
         <strong>${t('admin.rules_hint_title')}</strong><br>
         ${t('admin.rules_hint_body')}
-        <pre class="ap-rules-code">{\n  "rules": {\n    ".read": true,\n    ".write": true\n  }\n}</pre>
+        <pre class="ap-rules-code">firebase/database.rules.json</pre>
         ${t('admin.rules_hint_footer')}
       </div>` : ''}
       <div class="ap-firebase-row" style="margin-top:10px">
-        <input id="ap-fb-url" class="ap-fb-input" type="text" value="${url}" />
+        <input id="ap-fb-url" class="ap-fb-input" type="url" spellcheck="false"
+          placeholder="https://…firebaseio.com" value="${url}" />
         <button id="ap-fb-save" class="ap-tool-btn">${t('admin.retry_btn')}</button>
         <button id="ap-fb-clear" class="ap-tool-btn ap-tool-btn--danger">${t('admin.remove_btn')}</button>
       </div>`;
@@ -751,7 +809,7 @@ function bindFirebaseSave(sec: HTMLElement): void {
     const inp = sec.querySelector<HTMLInputElement>('#ap-fb-url');
     if (!inp) return;
     const url = inp.value.trim().replace(/\/$/, '');
-    if (!url.startsWith('https://')) {
+    if (!isValidFirebaseRtdbUrl(url)) {
       inp.style.borderColor = 'var(--danger)';
       return;
     }

@@ -10,6 +10,7 @@ import {
   isAutomatedBrowser,
   getFirebaseUrl,
   setFirebaseUrl,
+  isValidFirebaseRtdbUrl,
   isAdminMode,
   revokeAdmin,
 } from './AdminPanel';
@@ -189,7 +190,24 @@ describe('isAutomatedBrowser', () => {
   });
 });
 
-// ── Firebase URL storage ──────────────────────────────────────────────────────
+// ── Firebase URL storage / validation ─────────────────────────────────────────
+
+describe('isValidFirebaseRtdbUrl', () => {
+  it('accepts classic firebaseio.com RTDB roots', () => {
+    expect(isValidFirebaseRtdbUrl('https://demo-default-rtdb.firebaseio.com')).toBe(true);
+  });
+
+  it('accepts regional firebasedatabase.app roots', () => {
+    expect(isValidFirebaseRtdbUrl('https://demo-default-rtdb.europe-west1.firebasedatabase.app')).toBe(true);
+  });
+
+  it('rejects http, non-Firebase hosts, and URLs with a path/query', () => {
+    expect(isValidFirebaseRtdbUrl('http://demo-default-rtdb.firebaseio.com')).toBe(false);
+    expect(isValidFirebaseRtdbUrl('https://evil.example.com')).toBe(false);
+    expect(isValidFirebaseRtdbUrl('https://demo-default-rtdb.firebaseio.com/orbital_metrics.json')).toBe(false);
+    expect(isValidFirebaseRtdbUrl('https://demo-default-rtdb.firebaseio.com?x=1')).toBe(false);
+  });
+});
 
 describe('getFirebaseUrl / setFirebaseUrl', () => {
   it('falls back to the built-in default URL when nothing is stored', () => {
@@ -204,6 +222,12 @@ describe('getFirebaseUrl / setFirebaseUrl', () => {
   it('trims whitespace when storing a custom URL', () => {
     setFirebaseUrl('  https://spacey-url.firebaseio.com  ');
     expect(getFirebaseUrl()).toBe('https://spacey-url.firebaseio.com');
+  });
+
+  it('ignores invalid override attempts (does not persist them)', () => {
+    setFirebaseUrl('https://evil.example.com');
+    expect(localStorage.getItem('orbital_firebase_url')).toBeNull();
+    expect(getFirebaseUrl()).toContain('firebaseio.com');
   });
 });
 

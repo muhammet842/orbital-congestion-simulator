@@ -256,7 +256,7 @@ const en: Translations = {
   'admin.pin_login_btn':           'Log In',
 
   'admin.fb_conn_error':       'Could not connect to Firebase — check your internet connection.',
-  'admin.fb_access_denied':    'Access denied (HTTP {status}) — set ".read" and ".write" to true in the Firebase Rules tab.',
+  'admin.fb_access_denied':    'Access denied (HTTP {status}) — publish the least-privilege rules from firebase/database.rules.json (do not open the whole database).',
   'admin.fb_http_error':       'Firebase HTTP {status} error',
   'admin.fb_unexpected_error': 'Unexpected error: {msg}',
 
@@ -307,8 +307,8 @@ const en: Translations = {
   'admin.section_global':      '🌐 All Users',
   'admin.fb_url_not_found':    'Firebase URL not found.',
   'admin.rules_hint_title':    'How to fix:',
-  'admin.rules_hint_body':     'Open Firebase Console → Realtime Database → the Rules tab and paste:',
-  'admin.rules_hint_footer':   'Then click Publish and try again below.',
+  'admin.rules_hint_body':     'Publish the repo rules (increment-only metrics, schema-checked presence) — never root ".read/.write: true":',
+  'admin.rules_hint_footer':   'Firebase Console → Realtime Database → Rules, paste that file, Publish — or run: npx firebase-tools deploy --only database',
   'admin.retry_btn':           'Retry',
   'admin.remove_btn':          'Remove',
   'admin.restore_default_btn': 'Restore Default',
@@ -549,7 +549,7 @@ const tr: Translations = {
   'admin.pin_login_btn':           'Giriş Yap',
 
   'admin.fb_conn_error':       'Firebase bağlantısı kurulamadı — internet bağlantını kontrol et.',
-  'admin.fb_access_denied':    'Erişim reddedildi (HTTP {status}) — Firebase Rules sekmesinde ".read" ve ".write" değerlerini true yapın.',
+  'admin.fb_access_denied':    'Erişim reddedildi (HTTP {status}) — firebase/database.rules.json içindeki en az yetkili kuralları yayınlayın (tüm veritabanını açmayın).',
   'admin.fb_http_error':       'Firebase HTTP {status} hatası',
   'admin.fb_unexpected_error': 'Beklenmedik hata: {msg}',
 
@@ -600,8 +600,8 @@ const tr: Translations = {
   'admin.section_global':      '🌐 Tüm Kullanıcılar',
   'admin.fb_url_not_found':    'Firebase URL bulunamadı.',
   'admin.rules_hint_title':    'Nasıl düzeltilir:',
-  'admin.rules_hint_body':     'Firebase Console → Realtime Database → Rules sekmesini aç ve şunu yapıştır:',
-  'admin.rules_hint_footer':   'Ardından Publish\'e bas ve aşağıdan tekrar dene.',
+  'admin.rules_hint_body':     'Repodaki kuralları yayınlayın (yalnızca +1 sayaç / şema doğrulamalı presence) — asla kökte ".read/.write: true" kullanmayın:',
+  'admin.rules_hint_footer':   'Firebase Console → Realtime Database → Rules, dosyayı yapıştırıp Publish — veya: npx firebase-tools deploy --only database',
   'admin.retry_btn':           'Tekrar Dene',
   'admin.remove_btn':          'Kaldır',
   'admin.restore_default_btn': 'Varsayılana Dön',
@@ -842,7 +842,7 @@ const de: Translations = {
   'admin.pin_login_btn':           'Anmelden',
 
   'admin.fb_conn_error':       'Verbindung zu Firebase fehlgeschlagen — Internetverbindung prüfen.',
-  'admin.fb_access_denied':    'Zugriff verweigert (HTTP {status}) — setze ".read" und ".write" im Firebase-Rules-Tab auf true.',
+  'admin.fb_access_denied':    'Zugriff verweigert (HTTP {status}) — veröffentliche die Least-Privilege-Regeln aus firebase/database.rules.json (Datenbank nicht vollständig öffnen).',
   'admin.fb_http_error':       'Firebase-HTTP-Fehler {status}',
   'admin.fb_unexpected_error': 'Unerwarteter Fehler: {msg}',
 
@@ -893,8 +893,8 @@ const de: Translations = {
   'admin.section_global':      '🌐 Alle Nutzer',
   'admin.fb_url_not_found':    'Firebase-URL nicht gefunden.',
   'admin.rules_hint_title':    'So behebst du das:',
-  'admin.rules_hint_body':     'Öffne Firebase Console → Realtime Database → Tab Rules und füge Folgendes ein:',
-  'admin.rules_hint_footer':   'Klicke dann auf Publish und versuche es unten erneut.',
+  'admin.rules_hint_body':     'Veröffentliche die Repo-Regeln (nur +1-Zähler / schema-geprüfte Presence) — niemals Root ".read/.write: true":',
+  'admin.rules_hint_footer':   'Firebase Console → Realtime Database → Rules, Datei einfügen, Publish — oder: npx firebase-tools deploy --only database',
   'admin.retry_btn':           'Erneut versuchen',
   'admin.remove_btn':          'Entfernen',
   'admin.restore_default_btn': 'Standard wiederherstellen',
@@ -1135,7 +1135,7 @@ const ru: Translations = {
   'admin.pin_login_btn':           'Войти',
 
   'admin.fb_conn_error':       'Не удалось подключиться к Firebase — проверьте интернет-соединение.',
-  'admin.fb_access_denied':    'Доступ запрещён (HTTP {status}) — установите ".read" и ".write" в true на вкладке Firebase Rules.',
+  'admin.fb_access_denied':    'Доступ запрещён (HTTP {status}) — опубликуйте правила с минимальными правами из firebase/database.rules.json (не открывайте всю базу).',
   'admin.fb_http_error':       'Ошибка Firebase HTTP {status}',
   'admin.fb_unexpected_error': 'Неожиданная ошибка: {msg}',
 
@@ -1186,8 +1186,8 @@ const ru: Translations = {
   'admin.section_global':      '🌐 Все пользователи',
   'admin.fb_url_not_found':    'URL Firebase не найден.',
   'admin.rules_hint_title':    'Как это исправить:',
-  'admin.rules_hint_body':     'Откройте Firebase Console → Realtime Database → вкладку Rules и вставьте:',
-  'admin.rules_hint_footer':   'Затем нажмите Publish и попробуйте снова ниже.',
+  'admin.rules_hint_body':     'Опубликуйте правила из репозитория (только +1 счётчики / presence со схемой) — никогда не ставьте корневые ".read/.write: true":',
+  'admin.rules_hint_footer':   'Firebase Console → Realtime Database → Rules, вставьте файл, Publish — или: npx firebase-tools deploy --only database',
   'admin.retry_btn':           'Повторить',
   'admin.remove_btn':          'Удалить',
   'admin.restore_default_btn': 'Восстановить по умолчанию',
@@ -1428,7 +1428,7 @@ const zh: Translations = {
   'admin.pin_login_btn':           '登录',
 
   'admin.fb_conn_error':       '无法连接到Firebase — 请检查网络连接。',
-  'admin.fb_access_denied':    '访问被拒绝 (HTTP {status}) — 请在Firebase Rules选项卡中将".read"和".write"设为true。',
+  'admin.fb_access_denied':    '访问被拒绝 (HTTP {status}) — 请发布 firebase/database.rules.json 中的最小权限规则（不要开放整个数据库）。',
   'admin.fb_http_error':       'Firebase HTTP {status} 错误',
   'admin.fb_unexpected_error': '意外错误：{msg}',
 
@@ -1479,8 +1479,8 @@ const zh: Translations = {
   'admin.section_global':      '🌐 所有用户',
   'admin.fb_url_not_found':    '未找到Firebase URL。',
   'admin.rules_hint_title':    '解决方法：',
-  'admin.rules_hint_body':     '打开Firebase控制台 → Realtime Database → Rules选项卡，粘贴以下内容：',
-  'admin.rules_hint_footer':   '然后点击Publish，再在下方重试。',
+  'admin.rules_hint_body':     '发布仓库中的规则（仅允许 +1 计数 / 带模式校验的 presence）——切勿使用根级 ".read/.write: true"：',
+  'admin.rules_hint_footer':   'Firebase 控制台 → Realtime Database → Rules，粘贴该文件并 Publish — 或运行：npx firebase-tools deploy --only database',
   'admin.retry_btn':           '重试',
   'admin.remove_btn':          '移除',
   'admin.restore_default_btn': '恢复默认',
