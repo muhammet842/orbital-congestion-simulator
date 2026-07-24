@@ -67,6 +67,7 @@ const en: Translations = {
   'unit.s':   '{s}s',
 
   // ── Conjunction panel ─────────────────────────────────────────────────
+  'conj.scanning': 'Scanning the next 24 hours for close approaches…',
   'conj.empty': 'No crossing-orbit close approaches predicted in the next 24 hours (LEO, 0.1–3 km, relative speed ≥ 50 m/s). Co-orbiting stacks such as ISS or CSS modules are excluded.',
   'conj.alert':       '{a} vs {b} — {km} km close approach!',
   'conj.alert_in':    '{a} vs {b} — {km} km in {t}',
@@ -366,6 +367,7 @@ const tr: Translations = {
   'unit.m_s': '{m}dk {s}sn',
   'unit.s':   '{s}sn',
 
+  'conj.scanning': 'Önümüzdeki 24 saat için yakın geçişler taranıyor…',
   'conj.empty': 'Önümüzdeki 24 saat içinde kesişen yörüngeli yakın geçiş öngörülmedi (AYY, 0.1–3 km, göreli hız ≥ 50 m/s). ISS veya CSS gibi eş yörüngeli modüller hariç tutulmuştur.',
   'conj.alert':       '{a} - {b} arası {km} km yakın geçiş!',
   'conj.alert_in':    '{a} - {b} arası {km} km — {t} sonra',
@@ -659,6 +661,7 @@ const de: Translations = {
   'unit.m_s': '{m} Min {s} Sek',
   'unit.s':   '{s} Sek',
 
+  'conj.scanning': 'Nahflüge für die nächsten 24 Stunden werden gesucht…',
   'conj.empty': 'Für die nächsten 24 Stunden wurden keine kreuzenden Nahflüge vorhergesagt (LEO, 0,1–3 km, Relativgeschwindigkeit ≥ 50 m/s). Ko-orbitale Module wie ISS oder CSS sind ausgeschlossen.',
   'conj.alert':       '{a} vs {b} — {km} km enge Annäherung!',
   'conj.alert_in':    '{a} vs {b} — {km} km in {t}',
@@ -952,6 +955,7 @@ const ru: Translations = {
   'unit.m_s': '{m} мин {s} с',
   'unit.s':   '{s} с',
 
+  'conj.scanning': 'Идёт поиск сближений на ближайшие 24 часа…',
   'conj.empty': 'На ближайшие 24 часа пересекающихся сближений не спрогнозировано (НОО, 0,1–3 км, скорость ≥ 50 м/с). Совместно орбитальные модули, такие как МКС или CSS, исключены.',
   'conj.alert':       '{a} и {b} — сближение на {km} км!',
   'conj.alert_in':    '{a} и {b} — сближение на {km} км через {t}',
@@ -1245,6 +1249,7 @@ const zh: Translations = {
   'unit.m_s': '{m}分{s}秒',
   'unit.s':   '{s}秒',
 
+  'conj.scanning': '正在扫描未来24小时的近距离接近…',
   'conj.empty': '未来24小时内未预测到交叉轨道的近距离接近（低轨道，0.1–3公里，相对速度 ≥ 50米/秒）。国际空间站或CSS等共轨模块已排除。',
   'conj.alert':       '{a} 与 {b} —— 近距离接近 {km} 公里！',
   'conj.alert_in':    '{a} 与 {b} —— {km} 公里，{t} 后',

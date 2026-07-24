@@ -861,6 +861,27 @@ let upcomingScan: UpcomingScanState | null = null;
 let upcomingResult: ConjunctionScanResult = { alerts: [], hiddenCount: 0 };
 let upcomingScanStartedWallMs = -Infinity;
 let upcomingStepScheduled = false;
+/** True once at least one sweep has finished since the last hard reset.
+ *  Distinguishes "still scanning on first load" from "scan finished, none found". */
+let upcomingScanCompletedOnce = false;
+
+function snapshotUpcomingResult(scan: UpcomingScanState): ConjunctionScanResult {
+  const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects);
+  return {
+    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+  };
+}
+
+/** True while a 24h predictive sweep is mid-flight. */
+export function isUpcomingConjunctionScanPending(): boolean {
+  return upcomingScan != null;
+}
+
+/** False until the first sweep after load/invalidate has produced a final result. */
+export function hasUpcomingConjunctionScanCompleted(): boolean {
+  return upcomingScanCompletedOnce;
+}
 
 function buildLeoIndices(objects: TrackedObject[]): number[] {
   const indices: number[] = [];
@@ -871,12 +892,9 @@ function buildLeoIndices(objects: TrackedObject[]): number[] {
 }
 
 function finishUpcomingScan(scan: UpcomingScanState): void {
-  const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects);
-  upcomingResult = {
-    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
-    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
-  };
+  upcomingResult = snapshotUpcomingResult(scan);
   upcomingScan = null;
+  upcomingScanCompletedOnce = true;
 }
 
 function resetSampleProgress(scan: UpcomingScanState): void {
@@ -1006,11 +1024,29 @@ function scheduleUpcomingScanStep(onUpdate: ConjunctionRefreshListener): void {
 
   const runStep = (): void => {
     upcomingStepScheduled = false;
+    // A prior invalidate() may have torn the sweep down while this idle
+    // callback was already queued. Publishing in that case used to push an
+    // empty result into the UI and wipe cards that a brand-new sweep was
+    // about to rebuild — never call onUpdate for a cancelled step.
+    if (!upcomingScan) return;
+
+    const sampleJustFinished =
+      upcomingScan.objectCursor >= upcomingScan.leoIndices.length &&
+      upcomingScan.pendingCandidates !== null &&
+      upcomingScan.refineCursor >= upcomingScan.pendingCandidates.length;
+
     const done = stepUpcomingScanOnce();
     if (done) {
       onUpdate(upcomingResult);
       return;
     }
+
+    // Stream partial hits as soon as a sample finishes refining so the left
+    // panel isn't blank for the whole multi-minute first sweep after refresh.
+    if (sampleJustFinished && upcomingScan && upcomingScan.bestByPair.size > 0) {
+      onUpdate(snapshotUpcomingResult(upcomingScan));
+    }
+
     scheduleUpcomingScanStep(onUpdate);
   };
 
@@ -1070,13 +1106,14 @@ export function getUpcomingConjunctions(
 
 export function invalidateUpcomingConjunctionCache(): void {
   upcomingScan = null;
-  upcomingResult = { alerts: [], hiddenCount: 0 };
+  // Keep the last published alerts visible until the replacement sweep
+  // finishes — wiping them here made a refresh/exit look like "no approaches
+  // exist" for the entire (slow) recompute window.
   upcomingScanStartedWallMs = -Infinity;
+  upcomingScanCompletedOnce = false;
   // If a step was already scheduled for the sweep being torn down, its idle
-  // callback will still fire — `stepUpcomingScanOnce` handles that safely
-  // (returns "done" immediately, since `upcomingScan` is now null) — but the
-  // flag itself must be cleared here too, otherwise a subsequent call to
-  // `getUpcomingConjunctions` would find it still set and skip scheduling
-  // its own first step, silently never starting a new sweep.
+  // callback will still fire — `runStep` now no-ops when `upcomingScan` is
+  // null instead of publishing an empty result. Clear the flag so a fresh
+  // `getUpcomingConjunctions` can schedule its first step.
   upcomingStepScheduled = false;
 }

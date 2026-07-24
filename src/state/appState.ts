@@ -463,6 +463,10 @@ export function setConjunctions({ alerts, hiddenCount }: ConjunctionScanResult):
         Math.abs(c.distanceKm - alerts[i].distanceKm) < 0.001,
     )
   ) {
+    // Still wake subscribers: after a first sweep finishes with zero hits,
+    // the left panel needs to leave the "Scanning…" placeholder even though
+    // `conjunctions` was already `[]`.
+    listeners.forEach((fn) => fn());
     return;
   }
   setState({ conjunctions: alerts, conjunctionHiddenCount: hiddenCount });

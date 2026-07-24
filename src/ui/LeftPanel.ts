@@ -1,5 +1,9 @@
 import { LAYER_HEX, type OrbitLayer } from '../types';
-import { conjunctionSessionKey } from '../orbital/conjunction';
+import {
+  conjunctionSessionKey,
+  hasUpcomingConjunctionScanCompleted,
+  isUpcomingConjunctionScanPending,
+} from '../orbital/conjunction';
 import {
   formatUtcDateTime,
   getListIndices,
@@ -345,7 +349,11 @@ function renderConjunctions(container: HTMLElement): void {
 
   if (conjunctions.length === 0) {
     previousAlertKeys.clear();
-    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.empty')}</p>`;
+    const stillScanning =
+      isUpcomingConjunctionScanPending() || !hasUpcomingConjunctionScanCompleted();
+    listEl.innerHTML = `<p class="muted conjunction-empty">${t(
+      stillScanning ? 'conj.scanning' : 'conj.empty',
+    )}</p>`;
     return;
   }
 

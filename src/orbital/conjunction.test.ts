@@ -698,6 +698,28 @@ describe('getUpcomingConjunctions — async, incremental scheduling', () => {
     getUpcomingConjunctions([], new Date(), onUpdate);
     expect(scheduled.length).toBe(1);
   });
+
+  it('regression: a stale idle callback after invalidate must not publish an empty wipe', () => {
+    const scheduled: IdleCallback[] = [];
+    vi.stubGlobal(
+      'requestIdleCallback',
+      vi.fn((cb: IdleCallback) => {
+        scheduled.push(cb);
+        return scheduled.length;
+      }),
+    );
+
+    const onUpdate = vi.fn();
+    getUpcomingConjunctions([], new Date(), onUpdate);
+    expect(scheduled.length).toBe(1);
+
+    // Tear the sweep down the way exiting verification / refreshing does.
+    // The already-queued idle callback must not then push `{ alerts: [] }`
+    // into the UI and blank out cards.
+    invalidateUpcomingConjunctionCache();
+    scheduled[0]!({ didTimeout: false, timeRemaining: () => 50 });
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe('normalizeConjunctionAlert — duplicate display names', () => {
