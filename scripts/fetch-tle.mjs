@@ -1,3 +1,5 @@
+import { applyFirstSeenAt } from './applyFirstSeenAt.mjs';
+
 const STATION_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', category: 'stations' },
 ];
@@ -465,16 +467,16 @@ async function main() {
 
   const fetchedAt = new Date().toISOString();
   const previous = await loadPreviousFirstSeenMap();
-  let newlyLaunchedCount = 0;
-  for (const [noradId, obj] of seen) {
-    const carriedForward = previous.firstSeenAt.get(noradId);
-    if (carriedForward) {
-      obj.firstSeenAt = carriedForward;
-    } else if (!previous.known.has(noradId)) {
-      // Never seen in any prior fetch — genuinely new to our catalog.
-      obj.firstSeenAt = fetchedAt;
-      newlyLaunchedCount++;
-    }
+  const { newlyLaunchedCount, skippedReason, droppedCorrupt } = applyFirstSeenAt(
+    seen,
+    previous,
+    fetchedAt,
+  );
+  if (droppedCorrupt > 0) {
+    console.log(`  dropped ${droppedCorrupt} bulk-corrupt firstSeenAt stamp(s) from previous catalog`);
+  }
+  if (skippedReason) {
+    console.log(`  new-launch stamping skipped (${skippedReason})`);
   }
   console.log(`  new since last fetch: ${newlyLaunchedCount} object(s)`);
 
