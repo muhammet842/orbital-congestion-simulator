@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getState,
   setState,
@@ -17,9 +17,12 @@ import {
   setColorByFunction,
   setShowOnlyRecentLaunches,
   computeFilteredIndices,
+  selectConjunctionFromAlert,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
-import type { TrackedObject } from '../types';
+import { VERIFY_REWIND_MS } from '../orbital/conjunction';
+import * as propagatorModule from '../orbital/propagator';
+import type { ConjunctionEvent, TrackedObject } from '../types';
 
 /**
  * Hard-reset module state to known defaults before each test.
@@ -299,5 +302,66 @@ describe('resetAdvancedFilters', () => {
     resetAdvancedFilters();
     expect(getState().altitudeFilter).toBeNull();
     expect(getState().inclinationFilter).toBeNull();
+  });
+});
+
+describe('selectConjunctionFromAlert', () => {
+  function makeObj(overrides: Partial<TrackedObject>): TrackedObject {
+    return {
+      noradId: 1,
+      name: 'TEST',
+      line1: '',
+      line2: '',
+      category: 'active',
+      country: 'Unknown',
+      owner: 'Unknown',
+      satrec: {} as TrackedObject['satrec'],
+      layer: 'LEO',
+      color: [1, 1, 1],
+      functionGroup: 'active',
+      meanAltitudeKm: 500,
+      inclinationDeg: 50,
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.spyOn(propagatorModule, 'propagateObject').mockImplementation(() => ({
+      positionEci: { x: 1, y: 2, z: 3 },
+      velocityEci: { x: 1, y: 0, z: 0 },
+      altitudeKm: 500,
+      velocityKmS: 7.5,
+    }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('starts verification playback automatically from T−60s', () => {
+    setState({
+      objects: [makeObj({ noradId: 1, name: 'A' }), makeObj({ noradId: 2, name: 'B' })],
+    });
+    const cpa = new Date('2026-07-25T02:12:25.000Z');
+    const alert: ConjunctionEvent = {
+      objectA: 'A',
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      distanceKm: 0.34,
+      relativeVelocityKmS: 0.4,
+      time: cpa,
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+
+    selectConjunctionFromAlert(alert);
+
+    const vt = getState().verificationTime;
+    expect(vt).not.toBeNull();
+    expect(vt!.playing).toBe(true);
+    expect(vt!.speed).toBe(1);
+    expect(vt!.currentMs).toBe(cpa.getTime() - VERIFY_REWIND_MS);
   });
 });

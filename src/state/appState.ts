@@ -365,7 +365,9 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     verificationTime: {
       cpaTimeMs,
       currentMs: cpaTimeMs - VERIFY_REWIND_MS,
-      playing: false,
+      // Auto-play from T−60s so selecting an alert immediately shows the
+      // approach — users shouldn't need a second click on VERIFY/Play.
+      playing: true,
       speed: 1,
     },
     selectedIndex: null,
