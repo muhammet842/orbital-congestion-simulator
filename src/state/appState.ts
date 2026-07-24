@@ -124,13 +124,12 @@ export function getSimulationTime(): Date {
 
 export function formatUtcDateTime(date: Date): string {
   const utcTime = date.toISOString().slice(11, 19);
-  const utcDate = date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-  return `${utcTime} UTC · ${utcDate}`;
+  // Zero-pad the day so the string width does not jump between "3 Jan"
+  // and "13 Jan" (which was shoving wrapped labels up/down every second).
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+  const year = date.getUTCFullYear();
+  return `${utcTime} UTC · ${day} ${month} ${year}`;
 }
 
 export function enterLiveMode(): void {

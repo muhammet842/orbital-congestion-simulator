@@ -300,9 +300,9 @@ function renderStats(container: HTMLElement): void {
 
   const categoryEl = container.querySelector('#category-stats')!;
   categoryEl.innerHTML = `
-    <li>${t('cat.active')}: <strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
-    <li>${t('cat.debris')}: <strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
-    <li>${t('cat.stations')}: <strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
+    <li><span>${t('cat.active')}</span><strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
+    <li><span>${t('cat.debris')}</span><strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
+    <li><span>${t('cat.stations')}</span><strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
   `;
 
   const fetchedDate = stats.fetchedAt
