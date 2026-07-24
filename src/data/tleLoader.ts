@@ -5,7 +5,10 @@ import { enrichRecord } from './objectMetadata';
 import type { TleDataset, TrackedObject, ObjectCategory } from '../types';
 
 export async function loadTleDataset(): Promise<TleDataset> {
-  const response = await fetch('/data/tle.json');
+  // Always revalidate with the server. tle.json is covered by a CDN
+  // Cache-Control that can otherwise keep a stale catalog (and its
+  // firstSeenAt stamps) in the browser for hours after a deploy.
+  const response = await fetch('/data/tle.json', { cache: 'no-cache' });
   if (!response.ok) {
     throw new Error('Orbital data not found. Run: npm run fetch-tle');
   }
