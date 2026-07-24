@@ -40,7 +40,7 @@ body {
   grid-template:
     'header header header' 48px
     'left scene right' 1fr
-    'time time time' 64px / minmax(300px, 22vw) 1fr minmax(320px, 24vw);
+    'time time time' 64px / 260px 1fr 280px;
 }
 
 .app-header {
