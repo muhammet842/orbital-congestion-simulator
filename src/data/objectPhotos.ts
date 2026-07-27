@@ -61,30 +61,6 @@ const PHOTO_TURKSAT_6A: CuratedPhoto = {
   credit: 'TAI / Türksat A.Ş. (artist impression)',
 };
 
-/** Pool for unknown active spacecraft — spread by NORAD ID so they do not all look identical. */
-const ACTIVE_RENDER_POOL: CuratedPhoto[] = [
-  {
-    url: THUMB('e/e1/DubaiSat-2.jpg'),
-    credit: 'MBRSC / Wikimedia Commons (artist impression)',
-  },
-  {
-    url: THUMB('3/3d/Sentinel_2-IMG_5873-white_(crop).jpg'),
-    credit: 'ESA / Wikimedia Commons (Sentinel-2 model)',
-  },
-  {
-    url: THUMB('d/d6/Spot-5.jpg'),
-    credit: 'Airbus / Wikimedia Commons (SPOT-5 artist impression)',
-  },
-  {
-    url: THUMB('2/29/Starlink_01.webp'),
-    credit: 'SpaceX / Wikimedia Commons (3D render)',
-  },
-];
-
-function getActiveRenderPoolPhoto(noradId: number): CuratedPhoto {
-  return ACTIVE_RENDER_POOL[Math.abs(noradId) % ACTIVE_RENDER_POOL.length];
-}
-
 /** Direct URLs for well-known spacecraft (Wikimedia Commons / NASA). */
 const NORAD_PHOTOS = new Map<number, CuratedPhoto>([
   [
@@ -122,57 +98,57 @@ const NAME_PHOTO_RULES: NamePhotoRule[] = [
     photo: NORAD_PHOTOS.get(25544)!,
   },
   {
-    pattern: /CSS|TIANGONG|TIANHE|WENTIAN|MENGTIAN/i,
+    pattern: /\bCSS\b|TIANGONG|TIANHE|WENTIAN|MENGTIAN/i,
     photo: NORAD_PHOTOS.get(48274)!,
   },
   {
-    pattern: /HUBBLE|^HST$/i,
+    pattern: /\bHUBBLE\b|^HST$/i,
     photo: NORAD_PHOTOS.get(20580)!,
   },
   {
-    pattern: /STARLINK/i,
+    pattern: /\bSTARLINK\b/i,
     photo: {
       url: THUMB('2/29/Starlink_01.webp'),
       credit: 'SpaceX / Wikimedia Commons (3D render)',
     },
   },
   {
-    pattern: /CYGNUS/i,
+    pattern: /\bCYGNUS\b/i,
     photo: {
       url: THUMB('1/17/Cygnus_Enhanced_spacecraft.jpg'),
       credit: 'Northrop Grumman / NASA / Wikimedia Commons',
     },
   },
   {
-    pattern: /PROGRESS/i,
+    pattern: /\bPROGRESS\b/i,
     photo: {
       url: THUMB('e/e7/Progress_spacecraft.jpg'),
       credit: 'Roscosmos / Wikimedia Commons (artist impression)',
     },
   },
   {
-    pattern: /DRAGON/i,
+    pattern: /\b(CREW\s*)?DRAGON\b|\bSPX[- ]?CRS\b/i,
     photo: {
       url: THUMB('9/9e/CRS-20_Dragon%E2%80%93Enhanced.jpg'),
       credit: 'SpaceX / NASA / Wikimedia Commons',
     },
   },
   {
-    pattern: /SOYUZ/i,
+    pattern: /\bSOYUZ\b/i,
     photo: {
       url: THUMB('f/fa/Soyuz_MS.jpg'),
       credit: 'Roscosmos / NASA / Wikimedia Commons',
     },
   },
   {
-    pattern: /SHENZHOU/i,
+    pattern: /\bSHENZHOU\b/i,
     photo: {
       url: THUMB('8/8c/Shenzhou_spacecraft_ground_test.png'),
       credit: 'CNSA / Wikimedia Commons',
     },
   },
   {
-    pattern: /TIANZHOU/i,
+    pattern: /\bTIANZHOU\b/i,
     photo: {
       url: THUMB('c/c9/Tianzhou_Cargo_Spaceship.jpg'),
       credit: 'CNSA / Wikimedia Commons',
@@ -191,7 +167,7 @@ const NAME_PHOTO_RULES: NamePhotoRule[] = [
     photo: PHOTO_GOKTURK2,
   },
   {
-    pattern: /IMECE|İMECE/i,
+    pattern: /\bIMECE\b|\bİMECE\b/i,
     photo: PHOTO_IMECE,
   },
   {
@@ -206,18 +182,7 @@ const NAME_PHOTO_RULES: NamePhotoRule[] = [
     pattern: /TURKSAT\s*6A|TÜRKSAT\s*6A/i,
     photo: PHOTO_TURKSAT_6A,
   },
-  {
-    pattern: /RASAT|BILSAT|BİLSAT/i,
-    photo: {
-      url: THUMB('3/3d/Sentinel_2-IMG_5873-white_(crop).jpg'),
-      credit: 'TÜBİTAK UZAY / ESA (representative EO render)',
-    },
-  },
 ];
-
-const CATEGORY_FALLBACKS: Partial<Record<TrackedObject['category'], CuratedPhoto>> = {
-  stations: NORAD_PHOTOS.get(25544)!,
-};
 
 let photoRequestId = 0;
 
@@ -228,7 +193,10 @@ function getNamePhotoRule(obj: TrackedObject): CuratedPhoto | null {
   return null;
 }
 
-/** Resolve a curated render URL for the selected spacecraft (not debris). */
+/**
+ * Resolve a curated render for the selected spacecraft (not debris).
+ * Unknown objects get a generic silhouette — never another satellite's photo.
+ */
 export function resolveObjectPhoto(obj: TrackedObject): ObjectPhoto | null {
   if (obj.category === 'debris') return null;
 
@@ -238,10 +206,7 @@ export function resolveObjectPhoto(obj: TrackedObject): ObjectPhoto | null {
   const namePhoto = getNamePhotoRule(obj);
   if (namePhoto) return namePhoto;
 
-  const categoryFallback = CATEGORY_FALLBACKS[obj.category];
-  if (categoryFallback) return categoryFallback;
-
-  return getActiveRenderPoolPhoto(obj.noradId);
+  return LOCAL_FALLBACK;
 }
 
 function renderPhotoFigure(photo: ObjectPhoto, alt: string): string {
