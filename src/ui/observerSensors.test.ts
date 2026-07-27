@@ -45,12 +45,12 @@ describe('headingFromOrientationEvent', () => {
 });
 
 describe('lookElevationFromEuler', () => {
-  it('is ~0 when phone is upright (beta 90)', () => {
-    expect(lookElevationFromEuler(90, 0)).toBeCloseTo(0, 5);
+  it('is ~90 when phone is upright (beta 90) — aim over the top bezel', () => {
+    expect(lookElevationFromEuler(90, 0)).toBeCloseTo(90, 5);
   });
 
-  it('is ~90 when phone is flat screen-up (beta 0)', () => {
-    expect(lookElevationFromEuler(0, 0)).toBeCloseTo(90, 5);
+  it('is ~0 when phone is flat screen-up (beta 0)', () => {
+    expect(lookElevationFromEuler(0, 0)).toBeCloseTo(0, 5);
   });
 
   it('is ~45 when tilted halfway', () => {

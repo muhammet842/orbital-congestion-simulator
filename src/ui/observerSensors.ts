@@ -182,16 +182,18 @@ export function compassHeadingFromEuler(alpha: number, beta: number, gamma: numb
  * Phone aiming elevation above the horizon (degrees).
  * 0 = aimed at horizon, +90 = zenith, negative = below horizon.
  *
- * Uses the screen-normal (out-of-screen) direction so tilting the phone up to
- * “look at” a satellite matches the satellite elevation angle.
+ * Spotter is held like a compass (screen toward the user). The look direction
+ * is over the top edge of the phone — the complement of the screen-normal
+ * elevation. Using the screen-normal alone inverted “tilt up/down” cues.
  */
 export function lookElevationFromEuler(beta: number, gamma: number): number {
   const toRad = Math.PI / 180;
   const b = beta * toRad;
   const g = gamma * toRad;
-  const up = Math.cos(b) * Math.cos(g);
-  const elev = Math.asin(clamp(up, -1, 1)) * (180 / Math.PI);
-  return clamp(elev, -90, 90);
+  // Screen-normal elevation (out of the screen): upright → 0, flat face-up → 90.
+  const screenNormalElev = Math.asin(clamp(Math.cos(b) * Math.cos(g), -1, 1)) * (180 / Math.PI);
+  // Aiming over the top bezel while reading the screen: upright → zenith (90).
+  return clamp(90 - screenNormalElev, -90, 90);
 }
 
 function screenOrientationOffsetDeg(): number {
