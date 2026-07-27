@@ -2827,6 +2827,15 @@ body {
   line-height: 1.4;
   text-align: center;
 }
+.spotter-photo--warn {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+.spotter-photo--good {
+  color: #67e8f9;
+  font-weight: 600;
+}
 .spotter-photo:empty,
 .spotter-pass:empty { display: none; }
 

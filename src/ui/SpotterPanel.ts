@@ -12,7 +12,6 @@ import {
   GOOD_ELEV_DEG,
   headingDelta,
   type LookAngles,
-  type ObserverLocation,
   type PassEvent,
 } from '../orbital/lookAngles';
 import { getSimulationTime, getState, subscribe } from '../state/appState';
@@ -258,14 +257,24 @@ function updateLiveUi(): void {
   lastLook = look;
   refreshPassCache();
 
-  updateGuide(look, sensors);
-  updateChips(look, sensors);
-  updatePhotoHint(obj.satrec, sensors.location, time, look);
+  const photo = look?.visible
+      ? assessPhotoConditions(obj.satrec, sensors.location, time, getSunEci(time))
+      : null;
+
+  updateGuide(look, sensors, photo);
+  updateChips(look, sensors, photo);
+  updatePhotoHint(look, photo);
   updatePassHint(look);
   drawRadar(look, sensors.headingDeg);
 }
 
-function updateGuide(look: LookAngles | null, sensors: SensorSnapshot): void {
+type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
+
+function updateGuide(
+  look: LookAngles | null,
+  sensors: SensorSnapshot,
+  photo: PhotoAssessment | null,
+): void {
   if (!look) {
     setText('spotter-guide', t('spotter.propagate_fail'));
     return;
@@ -303,10 +312,20 @@ function updateGuide(look: LookAngles | null, sensors: SensorSnapshot): void {
 
   const delta = headingDelta(sensors.headingDeg, look.azimuthDeg);
   const abs = Math.abs(delta).toFixed(0);
-  if (Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG) {
+  const aimed = Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG;
+  if (aimed) {
+    // Geometric lock ≠ naked-eye visibility. Only celebrate when lighting is favorable.
+    const lockKey =
+      photo?.favorable
+        ? 'spotter.guide_locked'
+        : !photo?.satelliteLit
+          ? 'spotter.guide_aimed_eclipse'
+          : !photo?.observerDark
+            ? 'spotter.guide_aimed_day'
+            : 'spotter.guide_aimed_dim';
     setText(
       'spotter-guide',
-      t('spotter.guide_locked').replace('{el}', elev).replace('{range}', range),
+      t(lockKey).replace('{el}', elev).replace('{range}', range),
     );
     return;
   }
@@ -327,12 +346,23 @@ function updateGuide(look: LookAngles | null, sensors: SensorSnapshot): void {
   );
 }
 
-function updateChips(look: LookAngles | null, sensors: SensorSnapshot): void {
+function updateChips(
+  look: LookAngles | null,
+  sensors: SensorSnapshot,
+  photo: PhotoAssessment | null,
+): void {
   const chips: string[] = [];
   if (look?.visible) {
     chips.push(chip(look.elevationDeg >= GOOD_ELEV_DEG ? 'ok' : 'warn', t('spotter.chip_visible')));
     if (look.elevationDeg < GOOD_ELEV_DEG) {
       chips.push(chip('warn', t('spotter.chip_low_elev')));
+    }
+    if (photo?.favorable) {
+      chips.push(chip('ok', t('spotter.chip_eye_good')));
+    } else if (photo && !photo.satelliteLit) {
+      chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
+    } else if (photo && !photo.observerDark) {
+      chips.push(chip('warn', t('spotter.chip_eye_day')));
     }
   } else {
     chips.push(chip('muted', t('spotter.chip_below')));
@@ -346,30 +376,32 @@ function chip(kind: string, label: string): string {
   return `<span class="spotter-chip spotter-chip--${kind}">${escapeHtml(label)}</span>`;
 }
 
-function updatePhotoHint(
-  satrec: import('satellite.js').SatRec,
-  location: ObserverLocation,
-  time: Date,
-  look: LookAngles | null,
-): void {
-  if (!look?.visible) {
-    setText('spotter-photo', '');
+function updatePhotoHint(look: LookAngles | null, photo: PhotoAssessment | null): void {
+  const el = panelEl?.querySelector<HTMLElement>('#spotter-photo');
+  if (!el) return;
+
+  if (!look?.visible || !photo) {
+    el.textContent = '';
+    el.classList.remove('spotter-photo--warn', 'spotter-photo--good');
     return;
   }
-  const sun = getSunEci(time);
-  const photo = assessPhotoConditions(satrec, location, time, sun);
-  if (!photo) {
-    setText('spotter-photo', '');
-    return;
-  }
+
   if (photo.favorable) {
-    setText('spotter-photo', t('spotter.photo_good'));
+    el.textContent = t('spotter.photo_good');
+    el.classList.remove('spotter-photo--warn');
+    el.classList.add('spotter-photo--good');
   } else if (!photo.satelliteLit) {
-    setText('spotter-photo', t('spotter.photo_eclipse'));
+    el.textContent = t('spotter.photo_eclipse');
+    el.classList.remove('spotter-photo--good');
+    el.classList.add('spotter-photo--warn');
   } else if (!photo.observerDark) {
-    setText('spotter-photo', t('spotter.photo_daytime'));
+    el.textContent = t('spotter.photo_daytime');
+    el.classList.remove('spotter-photo--good');
+    el.classList.add('spotter-photo--warn');
   } else {
-    setText('spotter-photo', '');
+    el.textContent = t('spotter.photo_dim');
+    el.classList.remove('spotter-photo--good');
+    el.classList.add('spotter-photo--warn');
   }
 }
 
