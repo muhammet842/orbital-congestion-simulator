@@ -9,6 +9,9 @@ import type { ObserverLocation } from '../orbital/lookAngles';
 
 const LS_LOCATION_KEY = 'orbital-spotter-location';
 
+/** Near ±90° beta the Euler frame hits gimbal lock — freeze last stable heading. */
+const GIMBAL_LOCK_BETA_DEG = 85;
+
 export interface SensorSnapshot {
   location: ObserverLocation | null;
   locationSource: 'gps' | 'manual' | 'cached' | null;
@@ -24,6 +27,10 @@ type Listener = (snap: SensorSnapshot) => void;
 let watchId: number | null = null;
 let orientationBound = false;
 let listeners = new Set<Listener>();
+/** Last heading accepted outside gimbal lock (looking straight up). */
+let lastStableHeadingDeg: number | null = null;
+/** Prefer absolute events when the browser provides them (Android). */
+let preferAbsoluteHeading = false;
 
 let snapshot: SensorSnapshot = {
   location: loadCachedLocation(),
@@ -100,6 +107,79 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, v));
 }
 
+function wrap360(deg: number): number {
+  return ((deg % 360) + 360) % 360;
+}
+
+/**
+ * Compass heading (degrees from true/magnetic north) that stays stable when the
+ * phone is tilted to look at the sky — unlike raw `360 - alpha`, which flips
+ * around β ≈ ±90° (gimbal lock).
+ *
+ * Based on the W3C / Opera deviceorientation compass derivation.
+ */
+export function compassHeadingFromEuler(alpha: number, beta: number, gamma: number): number {
+  const toRad = Math.PI / 180;
+  const x = beta * toRad;
+  const y = gamma * toRad;
+  const z = alpha * toRad;
+
+  const cY = Math.cos(y);
+  const cZ = Math.cos(z);
+  const sX = Math.sin(x);
+  const sY = Math.sin(y);
+  const sZ = Math.sin(z);
+
+  const Vx = -cZ * sY - sZ * sX * cY;
+  const Vy = -sZ * sY + cZ * sX * cY;
+
+  return wrap360(Math.atan2(Vx, Vy) * (180 / Math.PI));
+}
+
+function screenOrientationOffsetDeg(): number {
+  if (typeof window === 'undefined') return 0;
+  const so = window.screen?.orientation?.angle;
+  if (typeof so === 'number' && Number.isFinite(so)) return so;
+  const legacy = (window as Window & { orientation?: number }).orientation;
+  if (typeof legacy === 'number' && Number.isFinite(legacy)) return legacy;
+  return 0;
+}
+
+/**
+ * Extract compass heading (degrees from north) from a DeviceOrientation event.
+ * Prefers iOS webkitCompassHeading; otherwise uses alpha/beta/gamma so looking
+ * up past ~90° does not invert the dial.
+ */
+export function headingFromOrientationEvent(event: DeviceOrientationEvent): number | null {
+  const beta = typeof event.beta === 'number' && Number.isFinite(event.beta) ? event.beta : null;
+
+  // Near zenith pointing, Euler angles are singular — keep last stable heading.
+  if (beta != null && Math.abs(beta) >= GIMBAL_LOCK_BETA_DEG) {
+    return lastStableHeadingDeg;
+  }
+
+  const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+  if (typeof webkit === 'number' && Number.isFinite(webkit)) {
+    // iOS heading is relative to the top of the device; compensate screen rotation.
+    const heading = wrap360(webkit - screenOrientationOffsetDeg());
+    lastStableHeadingDeg = heading;
+    return heading;
+  }
+
+  if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) return null;
+
+  const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
+  const b = beta ?? 0;
+  // Prefer tilt-aware Euler heading when beta/gamma exist; raw 360-alpha flips at 90°.
+  const heading =
+    beta != null
+      ? compassHeadingFromEuler(event.alpha, b, gamma)
+      : wrap360(360 - event.alpha);
+
+  lastStableHeadingDeg = heading;
+  return heading;
+}
+
 export function startGeolocation(): void {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     setPartial({ locationError: 'unsupported' });
@@ -141,18 +221,15 @@ export function stopGeolocation(): void {
   }
 }
 
-/**
- * Extract compass heading (degrees from true north) from a DeviceOrientation event.
- * Prefers webkitCompassHeading (iOS); falls back to absolute alpha.
- */
-export function headingFromOrientationEvent(event: DeviceOrientationEvent): number | null {
-  const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
-  if (typeof webkit === 'number' && Number.isFinite(webkit)) {
-    return ((webkit % 360) + 360) % 360;
-  }
-  if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) return null;
-  // When absolute is true, alpha is degrees from north (CW when looking down — invert).
-  return ((360 - event.alpha) % 360 + 360) % 360;
+function onOrientationAbsolute(event: DeviceOrientationEvent): void {
+  preferAbsoluteHeading = true;
+  onOrientation(event);
+}
+
+function onOrientationRelative(event: DeviceOrientationEvent): void {
+  // Ignore relative alpha once absolute stream is available — it flips at tilt.
+  if (preferAbsoluteHeading) return;
+  onOrientation(event);
 }
 
 function onOrientation(event: DeviceOrientationEvent): void {
@@ -198,16 +275,21 @@ export async function startOrientation(): Promise<void> {
   }
 
   if (!orientationBound) {
-    window.addEventListener('deviceorientation', onOrientation, true);
+    // Absolute heading when the browser provides it (Android Chrome).
+    window.addEventListener('deviceorientationabsolute', onOrientationAbsolute as EventListener, true);
+    window.addEventListener('deviceorientation', onOrientationRelative, true);
     orientationBound = true;
   }
 }
 
 export function stopOrientation(): void {
   if (orientationBound) {
-    window.removeEventListener('deviceorientation', onOrientation, true);
+    window.removeEventListener('deviceorientationabsolute', onOrientationAbsolute as EventListener, true);
+    window.removeEventListener('deviceorientation', onOrientationRelative, true);
     orientationBound = false;
   }
+  lastStableHeadingDeg = null;
+  preferAbsoluteHeading = false;
 }
 
 /** Start both sensors (call when Spotter opens). */

@@ -139,6 +139,7 @@ function renderShell(): void {
   const sensors = getSensorSnapshot();
   const lat = sensors.location?.latitudeDeg.toFixed(5) ?? '';
   const lon = sensors.location?.longitudeDeg.toFixed(5) ?? '';
+  const needManualLoc = !sensors.location || sensors.locationSource !== 'gps';
 
   panelEl.innerHTML = `
     <div class="spotter-header">
@@ -147,7 +148,6 @@ function renderShell(): void {
     </div>
     <div class="spotter-body">
       <p class="spotter-target">${escapeHtml(name)}</p>
-      <p class="spotter-subtitle">${t('spotter.subtitle')}</p>
 
       <div class="spotter-radar-wrap">
         <canvas id="spotter-radar" class="spotter-radar" width="280" height="280"></canvas>
@@ -156,14 +156,10 @@ function renderShell(): void {
 
       <p class="spotter-guide" id="spotter-guide">—</p>
       <div class="spotter-chips" id="spotter-chips"></div>
-      <p class="spotter-photo" id="spotter-photo"></p>
       <p class="spotter-pass" id="spotter-pass"></p>
 
-      <div class="spotter-sensors">
-        <div class="spotter-sensor-row">
-          <span>${t('spotter.location')}</span>
-          <span id="spotter-loc-status">${locationStatusText(sensors)}</span>
-        </div>
+      <details class="spotter-sensors" ${needManualLoc ? 'open' : ''}>
+        <summary>${t('spotter.location')} · <span id="spotter-loc-status">${locationStatusText(sensors)}</span></summary>
         <div class="spotter-manual">
           <label>${t('spotter.lat')}
             <input id="spotter-lat" type="number" step="0.0001" value="${lat}" />
@@ -178,7 +174,7 @@ function renderShell(): void {
           <span id="spotter-heading-status">${headingStatusText(sensors)}</span>
         </div>
         <button type="button" id="spotter-enable-compass" class="spotter-btn spotter-btn--secondary">${t('spotter.enable_compass')}</button>
-      </div>
+      </details>
     </div>
   `;
 }
@@ -245,7 +241,6 @@ function updateLiveUi(): void {
     lastLook = null;
     setText('spotter-guide', t('spotter.need_location'));
     setHtml('spotter-chips', '');
-    setText('spotter-photo', '');
     setText('spotter-pass', '');
     drawRadar(null, sensors.headingDeg);
     return;
@@ -262,8 +257,7 @@ function updateLiveUi(): void {
       : null;
 
   updateGuide(look, sensors, photo);
-  updateChips(look, sensors, photo);
-  updatePhotoHint(look, photo);
+  updateChips(look, photo);
   updatePassHint(look);
   drawRadar(look, sensors.headingDeg);
 }
@@ -296,16 +290,13 @@ function updateGuide(
   }
 
   const elev = look.elevationDeg.toFixed(0);
-  const range = look.rangeKm.toFixed(0);
-  const az = look.azimuthDeg.toFixed(0);
 
   if (sensors.headingDeg == null) {
     setText(
       'spotter-guide',
       t('spotter.guide_no_compass')
-        .replace('{az}', az)
-        .replace('{el}', elev)
-        .replace('{range}', range),
+        .replace('{az}', look.azimuthDeg.toFixed(0))
+        .replace('{el}', elev),
     );
     return;
   }
@@ -314,7 +305,6 @@ function updateGuide(
   const abs = Math.abs(delta).toFixed(0);
   const aimed = Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG;
   if (aimed) {
-    // Geometric lock ≠ naked-eye visibility. Only celebrate when lighting is favorable.
     const lockKey =
       photo?.favorable
         ? 'spotter.guide_locked'
@@ -323,86 +313,35 @@ function updateGuide(
           : !photo?.observerDark
             ? 'spotter.guide_aimed_day'
             : 'spotter.guide_aimed_dim';
-    setText(
-      'spotter-guide',
-      t(lockKey).replace('{el}', elev).replace('{range}', range),
-    );
+    setText('spotter-guide', t(lockKey).replace('{el}', elev));
     return;
   }
   if (Math.abs(delta) < 8) {
-    setText(
-      'spotter-guide',
-      t('spotter.guide_look_up').replace('{el}', elev).replace('{range}', range),
-    );
+    setText('spotter-guide', t('spotter.guide_look_up').replace('{el}', elev));
     return;
   }
   const turnKey = delta > 0 ? 'spotter.guide_right' : 'spotter.guide_left';
-  setText(
-    'spotter-guide',
-    t(turnKey)
-      .replace('{deg}', abs)
-      .replace('{el}', elev)
-      .replace('{range}', range),
-  );
+  setText('spotter-guide', t(turnKey).replace('{deg}', abs).replace('{el}', elev));
 }
 
-function updateChips(
-  look: LookAngles | null,
-  sensors: SensorSnapshot,
-  photo: PhotoAssessment | null,
-): void {
+function updateChips(look: LookAngles | null, photo: PhotoAssessment | null): void {
   const chips: string[] = [];
-  if (look?.visible) {
-    chips.push(chip(look.elevationDeg >= GOOD_ELEV_DEG ? 'ok' : 'warn', t('spotter.chip_visible')));
-    if (look.elevationDeg < GOOD_ELEV_DEG) {
-      chips.push(chip('warn', t('spotter.chip_low_elev')));
-    }
-    if (photo?.favorable) {
-      chips.push(chip('ok', t('spotter.chip_eye_good')));
-    } else if (photo && !photo.satelliteLit) {
-      chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
-    } else if (photo && !photo.observerDark) {
-      chips.push(chip('warn', t('spotter.chip_eye_day')));
-    }
-  } else {
+  if (!look?.visible) {
     chips.push(chip('muted', t('spotter.chip_below')));
+  } else if (look.elevationDeg < GOOD_ELEV_DEG) {
+    chips.push(chip('warn', t('spotter.chip_low_elev')));
   }
-  if (sensors.locationSource === 'gps') chips.push(chip('ok', t('spotter.chip_gps')));
-  if (sensors.headingDeg != null) chips.push(chip('ok', t('spotter.chip_compass')));
+
+  if (look?.visible && photo) {
+    if (photo.favorable) chips.push(chip('ok', t('spotter.chip_eye_good')));
+    else if (!photo.satelliteLit) chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
+    else if (!photo.observerDark) chips.push(chip('warn', t('spotter.chip_eye_day')));
+  }
   setHtml('spotter-chips', chips.join(''));
 }
 
 function chip(kind: string, label: string): string {
   return `<span class="spotter-chip spotter-chip--${kind}">${escapeHtml(label)}</span>`;
-}
-
-function updatePhotoHint(look: LookAngles | null, photo: PhotoAssessment | null): void {
-  const el = panelEl?.querySelector<HTMLElement>('#spotter-photo');
-  if (!el) return;
-
-  if (!look?.visible || !photo) {
-    el.textContent = '';
-    el.classList.remove('spotter-photo--warn', 'spotter-photo--good');
-    return;
-  }
-
-  if (photo.favorable) {
-    el.textContent = t('spotter.photo_good');
-    el.classList.remove('spotter-photo--warn');
-    el.classList.add('spotter-photo--good');
-  } else if (!photo.satelliteLit) {
-    el.textContent = t('spotter.photo_eclipse');
-    el.classList.remove('spotter-photo--good');
-    el.classList.add('spotter-photo--warn');
-  } else if (!photo.observerDark) {
-    el.textContent = t('spotter.photo_daytime');
-    el.classList.remove('spotter-photo--good');
-    el.classList.add('spotter-photo--warn');
-  } else {
-    el.textContent = t('spotter.photo_dim');
-    el.classList.remove('spotter-photo--good');
-    el.classList.add('spotter-photo--warn');
-  }
 }
 
 function updatePassHint(look: LookAngles | null): void {
@@ -411,12 +350,10 @@ function updatePassHint(look: LookAngles | null): void {
     return;
   }
   const max = cachedPass.max;
-  const rise = cachedPass.rise;
   const set = cachedPass.set;
   let text = t('spotter.pass_max')
     .replace('{el}', max.elevationDeg.toFixed(0))
     .replace('{time}', formatLocalTime(max.time));
-  if (rise) text += ` · ${t('spotter.pass_rise').replace('{time}', formatLocalTime(rise.time))}`;
   if (set) text += ` · ${t('spotter.pass_set').replace('{time}', formatLocalTime(set.time))}`;
   setText('spotter-pass', text);
 }
@@ -470,7 +407,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   const hasHeading = headingDeg != null;
 
   // Cardinal labels relative to device heading (top = facing direction)
-  ctx.fillStyle = 'rgba(148,163,184,0.95)';
   ctx.font = '600 11px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -482,19 +418,32 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   ];
   for (const [label, az] of labels) {
     const rel = ((az - heading + 360) % 360) * (Math.PI / 180);
-    // 0 at top, clockwise
     const x = cx + Math.sin(rel) * (r - 12);
     const y = cy - Math.cos(rel) * (r - 12);
     ctx.fillStyle = label === 'N' ? '#22d3ee' : 'rgba(148,163,184,0.9)';
     ctx.fillText(label, x, y);
   }
 
-  // Device facing marker (always top)
+  // Fixed “you” crosshair at exact center (never offset)
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, cy);
+  ctx.lineTo(cx + 10, cy);
+  ctx.moveTo(cx, cy - 10);
+  ctx.lineTo(cx, cy + 10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(248, 250, 252, 0.95)';
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Facing marker on the rim (top = phone top / look direction)
   ctx.beginPath();
   ctx.fillStyle = '#f8fafc';
   ctx.moveTo(cx, cy - r + 4);
-  ctx.lineTo(cx - 7, cy - r + 18);
-  ctx.lineTo(cx + 7, cy - r + 18);
+  ctx.lineTo(cx - 7, cy - r + 16);
+  ctx.lineTo(cx + 7, cy - r + 16);
   ctx.closePath();
   ctx.fill();
 
@@ -507,15 +456,33 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
     const ty = cy - Math.cos(relAz) * rr;
 
     if (look.visible) {
+      // Line from you → target
       ctx.beginPath();
-      ctx.fillStyle = 'rgba(34, 211, 238, 0.9)';
-      ctx.arc(tx, ty, 7, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.95)';
+      ctx.arc(tx, ty, 8, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#f8fafc';
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      if (hasHeading) {
+        const delta = headingDelta(heading, look.azimuthDeg);
+        if (Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG) {
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+          ctx.lineWidth = 2;
+          ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
     } else {
-      // Project below-horizon toward outer ring in direction of az
       const bx = cx + Math.sin(relAz) * (r - 6);
       const by = cy - Math.cos(relAz) * (r - 6);
       ctx.beginPath();
@@ -523,30 +490,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
       ctx.lineWidth = 2;
       ctx.arc(bx, by, 8, 0, Math.PI * 2);
       ctx.stroke();
-    }
-
-    // Turn arrow in center when heading known
-    if (hasHeading && look.visible) {
-      const delta = headingDelta(heading, look.azimuthDeg);
-      if (Math.abs(delta) >= 8) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate((delta > 0 ? 1 : -1) * 0.55);
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.95)';
-        ctx.beginPath();
-        if (delta > 0) {
-          ctx.moveTo(22, 0);
-          ctx.lineTo(6, -10);
-          ctx.lineTo(6, 10);
-        } else {
-          ctx.moveTo(-22, 0);
-          ctx.lineTo(-6, -10);
-          ctx.lineTo(-6, 10);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-      }
     }
   }
 
