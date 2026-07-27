@@ -7,10 +7,12 @@
 
 import {
   computeLookAngles,
+  findNextPass,
   GOOD_ELEV_DEG,
   headingDelta,
   skyAngularSeparationDeg,
   type LookAngles,
+  type PassEvent,
 } from '../orbital/lookAngles';
 import { getSimulationTime, getState, subscribe } from '../state/appState';
 import { onLangChange, t } from '../i18n/i18n';
@@ -39,6 +41,9 @@ let lastSelectedIndex: number | null = null;
 let radarCanvas: HTMLCanvasElement | null = null;
 let radarCtx: CanvasRenderingContext2D | null = null;
 let lastRadarKey = '';
+let cachedPass: PassEvent | null = null;
+let cachedPassKey = '';
+let passComputeScheduled = false;
 
 /** Poll sensors + refresh guide (no continuous rAF). */
 const TICK_MS = 100;
@@ -81,13 +86,17 @@ export function openSpotterPanel(): void {
   radarCanvas = null;
   radarCtx = null;
   lastRadarKey = '';
+  cachedPass = null;
+  cachedPassKey = '';
+  passComputeScheduled = false;
 
   startObserverSensors();
   renderShell();
   bindShellEvents();
 
   unsubSensors = subscribeSensors(() => {
-    // Location ready / denied — refresh once. Orientation does not emit.
+    cachedPass = null;
+    cachedPassKey = '';
     tick();
   });
   unsubState = subscribe(() => {
@@ -101,6 +110,8 @@ export function openSpotterPanel(): void {
       lastSelectedIndex = s.selectedIndex;
       lastLook = null;
       aimLocked = false;
+      cachedPass = null;
+      cachedPassKey = '';
       renderShell();
       bindShellEvents();
       tick();
@@ -140,6 +151,8 @@ export function closeSpotterPanel(): void {
   radarCanvas = null;
   radarCtx = null;
   lastLook = null;
+  cachedPass = null;
+  cachedPassKey = '';
 }
 
 function handleEsc(e: KeyboardEvent): void {
@@ -239,8 +252,39 @@ function tick(): void {
     lastLook = computeLookAngles(obj.satrec, sensors.location, getSimulationTime());
   }
 
+  if (lastLook && !lastLook.visible) {
+    schedulePassCompute(obj.satrec, sensors.location);
+  }
+
   updateCues(lastLook, sensors);
   maybeDrawRadar(lastLook, sensors.headingDeg, sensors.pitchDeg);
+}
+
+function schedulePassCompute(
+  _satrec: import('satellite.js').SatRec,
+  location: NonNullable<SensorSnapshot['location']>,
+): void {
+  const time = getSimulationTime();
+  const key = `${getState().selectedIndex}|${location.latitudeDeg.toFixed(3)}|${location.longitudeDeg.toFixed(3)}|${Math.floor(time.getTime() / 60_000)}`;
+  if (key === cachedPassKey && cachedPass) return;
+  if (passComputeScheduled) return;
+  passComputeScheduled = true;
+
+  // Defer so the first paint of turn/tilt cues is not blocked by the scan.
+  window.setTimeout(() => {
+    passComputeScheduled = false;
+    if (!backdropEl) return;
+    const state = getState();
+    const sensors = getSensorSnapshot();
+    if (state.selectedIndex == null || !sensors.location) return;
+    const obj = state.objects[state.selectedIndex];
+    const simTime = getSimulationTime();
+    const nextKey = `${state.selectedIndex}|${sensors.location.latitudeDeg.toFixed(3)}|${sensors.location.longitudeDeg.toFixed(3)}|${Math.floor(simTime.getTime() / 60_000)}`;
+    cachedPassKey = nextKey;
+    cachedPass = findNextPass(obj.satrec, sensors.location, simTime, 18, 60);
+    // Refresh below-horizon cue with the predicted rise.
+    if (lastLook && !lastLook.visible) updateCues(lastLook, sensors);
+  }, 0);
 }
 
 function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
@@ -251,9 +295,31 @@ function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
   }
 
   if (!look.visible) {
-    setCue('spotter-turn', t('spotter.below_none'));
-    setCue('spotter-tilt', '');
     aimLocked = false;
+    const rise = cachedPass?.rise;
+    const max = cachedPass?.max;
+    if (rise) {
+      setCue(
+        'spotter-turn',
+        t('spotter.below_rise').replace('{time}', formatLocalTime(rise.time)),
+      );
+      if (max) {
+        setCue(
+          'spotter-tilt',
+          t('spotter.pass_max')
+            .replace('{el}', max.elevationDeg.toFixed(0))
+            .replace('{time}', formatLocalTime(max.time)),
+        );
+      } else {
+        setCue('spotter-tilt', '');
+      }
+    } else if (cachedPassKey) {
+      setCue('spotter-turn', t('spotter.below_none'));
+      setCue('spotter-tilt', '');
+    } else {
+      setCue('spotter-turn', t('spotter.below_computing'));
+      setCue('spotter-tilt', '');
+    }
     return;
   }
 
@@ -425,6 +491,10 @@ function drawRadar(
 function elevToRadius(elevDeg: number, maxR: number): number {
   if (elevDeg <= 0) return maxR * 0.96;
   return maxR * (1 - Math.min(90, elevDeg) / 90) * 0.92;
+}
+
+function formatLocalTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function escapeHtml(text: string): string {

@@ -134,8 +134,8 @@ export function findNextPass(
   satrec: SatRec,
   observer: ObserverLocation,
   start: Date,
-  horizonHours = 6,
-  stepSeconds = 45,
+  horizonHours = 18,
+  stepSeconds = 60,
 ): PassEvent {
   const empty: PassEvent = { rise: null, max: null, set: null };
   const endMs = start.getTime() + horizonHours * 3_600_000;
@@ -158,9 +158,11 @@ export function findNextPass(
     }
 
     if (prev && !tracking && prev.elevationDeg <= VISIBLE_ELEV_DEG && look.elevationDeg > VISIBLE_ELEV_DEG) {
-      rise = { time, azimuthDeg: look.azimuthDeg };
+      // Refine rise time within the step for a tighter clock display.
+      const refined = refineHorizonCrossing(satrec, observer, prevTime, time, true);
+      rise = { time: refined.time, azimuthDeg: refined.azimuthDeg };
       tracking = true;
-      max = { time, elevationDeg: look.elevationDeg, azimuthDeg: look.azimuthDeg };
+      max = { time: refined.time, elevationDeg: refined.elevationDeg, azimuthDeg: refined.azimuthDeg };
     }
 
     if (tracking) {
@@ -168,7 +170,8 @@ export function findNextPass(
         max = { time, elevationDeg: look.elevationDeg, azimuthDeg: look.azimuthDeg };
       }
       if (prev && prev.elevationDeg > VISIBLE_ELEV_DEG && look.elevationDeg <= VISIBLE_ELEV_DEG) {
-        set = { time: prevTime, azimuthDeg: prev.azimuthDeg };
+        const refined = refineHorizonCrossing(satrec, observer, prevTime, time, false);
+        set = { time: refined.time, azimuthDeg: refined.azimuthDeg };
         break;
       }
     }
@@ -185,6 +188,31 @@ export function findNextPass(
 
   if (!tracking && !rise) return empty;
   return { rise, max, set };
+}
+
+/** Binary-search the horizon crossing inside [t0, t1] (~1s accuracy). */
+function refineHorizonCrossing(
+  satrec: SatRec,
+  observer: ObserverLocation,
+  t0: Date,
+  t1: Date,
+  lookingForRise: boolean,
+): { time: Date; azimuthDeg: number; elevationDeg: number } {
+  let lo = t0.getTime();
+  let hi = t1.getTime();
+  let best = computeLookAngles(satrec, observer, lookingForRise ? t1 : t0);
+  for (let i = 0; i < 12; i++) {
+    const mid = Math.floor((lo + hi) / 2);
+    const look = computeLookAngles(satrec, observer, new Date(mid));
+    if (!look) break;
+    best = look;
+    const above = look.elevationDeg > VISIBLE_ELEV_DEG;
+    if (lookingForRise ? above : !above) hi = mid;
+    else lo = mid;
+  }
+  const time = new Date(lookingForRise ? hi : lo);
+  const look = computeLookAngles(satrec, observer, time) ?? best!;
+  return { time, azimuthDeg: look.azimuthDeg, elevationDeg: look.elevationDeg };
 }
 
 /**

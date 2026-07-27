@@ -90,4 +90,21 @@ describe('findNextPass', () => {
       expect(pass.max.azimuthDeg).toBeGreaterThanOrEqual(0);
     }
   });
+
+  it('finds a future rise when the ISS is below the horizon from Istanbul', () => {
+    // Mid-day epoch sample — ISS is typically not continuously visible from TR.
+    const pass = findNextPass(
+      satrec,
+      { latitudeDeg: 41.01, longitudeDeg: 28.97 },
+      start,
+      18,
+      60,
+    );
+    // Either already up (rise null + max set) or a future rise within 18h.
+    expect(pass.max != null || pass.rise != null).toBe(true);
+    if (pass.rise) {
+      expect(pass.rise.time.getTime()).toBeGreaterThanOrEqual(start.getTime());
+      expect(pass.rise.time.getTime()).toBeLessThanOrEqual(start.getTime() + 18 * 3_600_000);
+    }
+  });
 });
