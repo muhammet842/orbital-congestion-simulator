@@ -2777,13 +2777,30 @@ body {
   color: var(--text-muted);
 }
 
-.spotter-guide {
-  margin: 0 0 8px;
-  font-size: 1.05rem;
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: center;
+.spotter-body--minimal {
+  padding-bottom: 16px;
 }
+.spotter-radar--sm {
+  width: 200px !important;
+  height: 200px !important;
+}
+.spotter-cue {
+  margin: 0;
+  text-align: center;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.spotter-cue--turn {
+  margin-top: 8px;
+  font-size: 1.65rem;
+  color: var(--text-primary);
+}
+.spotter-cue--tilt {
+  margin-top: 6px;
+  font-size: 1.45rem;
+  color: #fbbf24;
+}
+.spotter-cue:empty { display: none; }
 
 .spotter-chips {
   display: flex;

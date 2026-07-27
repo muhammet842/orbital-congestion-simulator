@@ -46,6 +46,7 @@ import {
 import { EventReplayVisuals } from './EventReplayVisuals';
 import { EventReplayLabels } from './EventReplayLabels';
 import { getHistoricalEvent } from '../ui/EventCards';
+import { isSpotterOpen } from '../ui/SpotterPanel';
 
 export class SceneManager {
   readonly renderer: WebGLRenderer;
@@ -356,6 +357,13 @@ export class SceneManager {
   }
 
   private tick(now: number): void {
+    // Spotter owns the screen on mobile — skip the heavy 3D/propagation loop
+    // so compass aiming stays responsive.
+    if (isSpotterOpen()) {
+      this.lastFrameTime = now;
+      return;
+    }
+
     const state = getState();
     const deltaMs = now - this.lastFrameTime;
     this.lastFrameTime = now;
