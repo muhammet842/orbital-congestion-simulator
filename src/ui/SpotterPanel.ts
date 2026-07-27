@@ -14,7 +14,7 @@ import {
   type LookAngles,
   type PassEvent,
 } from '../orbital/lookAngles';
-import { getSimulationTime, getState, subscribe } from '../state/appState';
+import { getState, isLiveMode, subscribe } from '../state/appState';
 import { onLangChange, t } from '../i18n/i18n';
 import {
   getSensorSnapshot,
@@ -52,6 +52,11 @@ const LOOK_INTERVAL_MS = 500;
 const LOCK_ENTER_DEG = 5;
 const LOCK_EXIT_DEG = 10;
 const DEADBAND_DEG = 2;
+
+/** Spotter aims at the real sky — always wall-clock, never 10x/100x sim time. */
+function getSpotterTime(): Date {
+  return new Date();
+}
 
 export function isSpotterOpen(): boolean {
   return backdropEl != null;
@@ -183,6 +188,7 @@ function renderShell(): void {
 
       <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
       <p class="spotter-cue spotter-cue--tilt" id="spotter-tilt">—</p>
+      ${!isLiveMode() ? `<p class="spotter-realtime-note">${t('spotter.realtime_only')}</p>` : ''}
 
       <details class="spotter-sensors" ${needLoc ? 'open' : ''}>
         <summary>${t('spotter.location')} · <span id="spotter-loc-status">${locationStatusText(sensors)}</span></summary>
@@ -249,7 +255,7 @@ function tick(): void {
   const obj = state.objects[state.selectedIndex];
   if (!lastLook || now - lastLookMs >= LOOK_INTERVAL_MS) {
     lastLookMs = now;
-    lastLook = computeLookAngles(obj.satrec, sensors.location, getSimulationTime());
+    lastLook = computeLookAngles(obj.satrec, sensors.location, getSpotterTime());
   }
 
   if (lastLook && !lastLook.visible) {
@@ -264,7 +270,7 @@ function schedulePassCompute(
   _satrec: import('satellite.js').SatRec,
   location: NonNullable<SensorSnapshot['location']>,
 ): void {
-  const time = getSimulationTime();
+  const time = getSpotterTime();
   const key = `${getState().selectedIndex}|${location.latitudeDeg.toFixed(3)}|${location.longitudeDeg.toFixed(3)}|${Math.floor(time.getTime() / 60_000)}`;
   if (key === cachedPassKey && cachedPass) return;
   if (passComputeScheduled) return;
@@ -278,10 +284,10 @@ function schedulePassCompute(
     const sensors = getSensorSnapshot();
     if (state.selectedIndex == null || !sensors.location) return;
     const obj = state.objects[state.selectedIndex];
-    const simTime = getSimulationTime();
-    const nextKey = `${state.selectedIndex}|${sensors.location.latitudeDeg.toFixed(3)}|${sensors.location.longitudeDeg.toFixed(3)}|${Math.floor(simTime.getTime() / 60_000)}`;
+    const wallTime = getSpotterTime();
+    const nextKey = `${state.selectedIndex}|${sensors.location.latitudeDeg.toFixed(3)}|${sensors.location.longitudeDeg.toFixed(3)}|${Math.floor(wallTime.getTime() / 60_000)}`;
     cachedPassKey = nextKey;
-    cachedPass = findNextPass(obj.satrec, sensors.location, simTime, 18, 60);
+    cachedPass = findNextPass(obj.satrec, sensors.location, wallTime, 18, 60);
     // Refresh below-horizon cue with the predicted rise.
     if (lastLook && !lastLook.visible) updateCues(lastLook, sensors);
   }, 0);

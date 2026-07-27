@@ -254,6 +254,7 @@ const en: Translations = {
   // ── Live satellite spotter (ground observer aim guide) ─────────────────
   'spotter.open':                 '◎ Spot from here',
   'spotter.title':                'Live Spotter',
+  'spotter.realtime_only':        'Spotter always uses real time (not 10x/100x sim).',
   'spotter.close':                'Close',
   'spotter.subtitle':             'Point your phone like a compass. Turn until the cyan marker is at the top, then look up to the elevation. Above horizon ≠ naked-eye visible.',
   'spotter.compass_hint':         'Top = facing · yellow ring = phone tilt · cyan = target',
@@ -619,6 +620,7 @@ const tr: Translations = {
 
   'spotter.open':                 '◎ Buradan yakala',
   'spotter.title':                'Canlı Spotter',
+  'spotter.realtime_only':        'Spotter her zaman gerçek zamanı kullanır (10x/100x simülasyon değil).',
   'spotter.close':                'Kapat',
   'spotter.subtitle':             'Telefonu pusula gibi tutun. Camgöbeği işaret üste gelene kadar dönün, sonra elevasyon kadar yukarı bakın. Ufuk üstünde olmak çıplak gözle görünür demek değildir.',
   'spotter.compass_hint':         'Üst = yön · sarı halka = telefon eğimi · camgöbeği = hedef',
@@ -984,6 +986,7 @@ const de: Translations = {
 
   'spotter.open':                 '◎ Von hier anvisieren',
   'spotter.title':                'Live-Spotter',
+  'spotter.realtime_only':        'Spotter nutzt immer die Echtzeit (nicht 10x/100x).',
   'spotter.close':                'Schließen',
   'spotter.subtitle':             'Halten Sie das Telefon wie einen Kompass. Drehen Sie, bis die cyan Markierung oben ist, dann schauen Sie zur Elevation hoch. Über dem Horizont ≠ mit bloßem Auge sichtbar.',
   'spotter.compass_hint':         'Oben = Blick · gelber Ring = Neigung · Cyan = Ziel',
@@ -1349,6 +1352,7 @@ const ru: Translations = {
 
   'spotter.open':                 '◎ Навести отсюда',
   'spotter.title':                'Живой споттер',
+  'spotter.realtime_only':        'Spotter всегда использует реальное время (не 10x/100x).',
   'spotter.close':                'Закрыть',
   'spotter.subtitle':             'Держите телефон как компас. Поворачивайтесь, пока бирюзовая метка не окажется сверху, затем смотрите вверх на угол места. Над горизонтом ≠ видно невооружённым глазом.',
   'spotter.compass_hint':         'Верх = взгляд · жёлтое кольцо = наклон · бирюза = цель',
@@ -1714,6 +1718,7 @@ const zh: Translations = {
 
   'spotter.open':                 '◎ 从这里瞄准',
   'spotter.title':                '实时瞄准',
+  'spotter.realtime_only':        '瞄准始终使用真实时间（不是 10x/100x 模拟）。',
   'spotter.close':                '关闭',
   'spotter.subtitle':             '像指南针一样握住手机。转动直到青色标记位于顶部，再按仰角抬头观看。在地平线以上 ≠ 肉眼可见。',
   'spotter.compass_hint':         '顶部=朝向 · 黄环=手机倾角 · 青色=目标',
