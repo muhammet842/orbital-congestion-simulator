@@ -331,6 +331,8 @@ describe('selectConjunctionFromAlert', () => {
       velocityEci: { x: 1, y: 0, z: 0 },
       altitudeKm: 500,
       velocityKmS: 7.5,
+      inclinationDeg: 50,
+      layer: 'LEO',
     }));
   });
 
