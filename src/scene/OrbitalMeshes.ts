@@ -97,6 +97,7 @@ export class OrbitalMeshes {
       colorByFunction?: boolean;
       altitudeFilter?: { minKm: number; maxKm: number } | null;
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
+      showOnlyRecentLaunches?: boolean;
       /** Real-world km between the two conjunction-highlighted objects right
        *  now — caps their model scale so it never visually dwarfs a genuine
        *  multi-km near-miss (see CONJUNCTION_SIZE_FRACTION_OF_SEPARATION). */
@@ -106,6 +107,7 @@ export class OrbitalMeshes {
     const colorByFunction = options?.colorByFunction ?? false;
     const altitudeFilter = options?.altitudeFilter ?? null;
     const inclinationFilter = options?.inclinationFilter ?? null;
+    const showOnlyRecentLaunches = options?.showOnlyRecentLaunches ?? false;
     const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
@@ -121,11 +123,13 @@ export class OrbitalMeshes {
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
+        showOnlyRecentLaunches,
       );
       this.debrisPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
+        showOnlyRecentLaunches,
       );
     }
 

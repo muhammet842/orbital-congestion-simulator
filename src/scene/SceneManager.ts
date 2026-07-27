@@ -513,6 +513,7 @@ export class SceneManager {
           colorByFunction: currentState.colorByFunction,
           altitudeFilter: currentState.altitudeFilter,
           inclinationFilter: currentState.inclinationFilter,
+          showOnlyRecentLaunches: currentState.showOnlyRecentLaunches,
           conjunctionLiveDistanceKm,
         },
       );

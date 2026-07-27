@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getState,
   setState,
+  initState,
   selectObject,
   clearObjectSelection,
   selectHistoricalEvent,
@@ -17,6 +18,7 @@ import {
   setColorByFunction,
   setShowOnlyRecentLaunches,
   computeFilteredIndices,
+  getListIndices,
   selectConjunctionFromAlert,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
@@ -185,6 +187,59 @@ describe('setShowOnlyRecentLaunches', () => {
     expect(getState().showOnlyRecentLaunches).toBe(true);
     setShowOnlyRecentLaunches(false);
     expect(getState().showOnlyRecentLaunches).toBe(false);
+  });
+
+  it('narrows the sidebar list to recently launched objects when enabled', () => {
+    const now = Date.now();
+    const recent = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const stale = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+    initState(
+      [
+        {
+          noradId: 1,
+          name: 'NEW SAT',
+          line1: '',
+          line2: '',
+          category: 'active',
+          country: 'X',
+          owner: 'X',
+          satrec: {} as TrackedObject['satrec'],
+          layer: 'LEO',
+          color: [1, 1, 1],
+          functionGroup: 'active',
+          meanAltitudeKm: 500,
+          inclinationDeg: 50,
+          firstSeenAt: recent,
+        },
+        {
+          noradId: 2,
+          name: 'OLD SAT',
+          line1: '',
+          line2: '',
+          category: 'active',
+          country: 'X',
+          owner: 'X',
+          satrec: {} as TrackedObject['satrec'],
+          layer: 'LEO',
+          color: [1, 1, 1],
+          functionGroup: 'active',
+          meanAltitudeKm: 500,
+          inclinationDeg: 50,
+          firstSeenAt: stale,
+        },
+      ],
+      {
+        total: 2,
+        leoPercent: 100,
+        avgAltitude: 500,
+        categoryCounts: { active: 2, debris: 0, stations: 0 },
+        fetchedAt: new Date().toISOString(),
+      },
+    );
+
+    expect(getListIndices().length).toBe(2);
+    setShowOnlyRecentLaunches(true);
+    expect(getListIndices()).toEqual([0]);
   });
 });
 

@@ -245,11 +245,16 @@ export function getSortedObjectIndices(): number[] {
   return sortedAllIndices;
 }
 
-/** Indices for the sidebar list (search only, all objects when empty). */
+/** Indices for the sidebar list (search + optional recent-only filter). */
 export function getListIndices(): number[] {
   const q = state.searchQuery.trim().toLowerCase();
-  if (!q) return sortedAllIndices;
-  return sortedAllIndices.filter((i) => objectMatchesQuery(state.objects[i], q));
+  let indices = sortedAllIndices;
+  if (state.showOnlyRecentLaunches) {
+    const now = Date.now();
+    indices = indices.filter((i) => isRecentlyLaunched(state.objects[i], now));
+  }
+  if (!q) return indices;
+  return indices.filter((i) => objectMatchesQuery(state.objects[i], q));
 }
 
 export function setSearchQuery(query: string): void {
