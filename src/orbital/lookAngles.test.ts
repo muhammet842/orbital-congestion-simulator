@@ -4,6 +4,7 @@ import {
   computeLookAngles,
   findNextPass,
   headingDelta,
+  skyAngularSeparationDeg,
 } from './lookAngles';
 
 /** Classic ISS sample TLE (epoch mid-2019) — good enough for geometry unit tests. */
@@ -26,6 +27,16 @@ describe('headingDelta', () => {
   it('wraps across north correctly', () => {
     expect(headingDelta(350, 10)).toBe(20);
     expect(headingDelta(10, 350)).toBe(-20);
+  });
+});
+
+describe('skyAngularSeparationDeg', () => {
+  it('is 0 for identical directions', () => {
+    expect(skyAngularSeparationDeg(40, 30, 40, 30)).toBeCloseTo(0, 5);
+  });
+
+  it('measures pure elevation difference on the same azimuth', () => {
+    expect(skyAngularSeparationDeg(10, 20, 10, 50)).toBeCloseTo(30, 5);
   });
 });
 

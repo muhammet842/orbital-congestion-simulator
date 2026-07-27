@@ -65,6 +65,33 @@ export function headingDelta(deviceHeadingDeg: number, targetAzimuthDeg: number)
   return d;
 }
 
+/**
+ * Angular separation on the sky between two az/el directions (degrees).
+ * Used to decide whether the phone is aimed at the satellite.
+ */
+export function skyAngularSeparationDeg(
+  az1Deg: number,
+  el1Deg: number,
+  az2Deg: number,
+  el2Deg: number,
+): number {
+  const toRad = Math.PI / 180;
+  const a1 = wrap360(az1Deg) * toRad;
+  const a2 = wrap360(az2Deg) * toRad;
+  const e1 = el1Deg * toRad;
+  const e2 = el2Deg * toRad;
+  const c1 = Math.cos(e1);
+  const c2 = Math.cos(e2);
+  const x1 = c1 * Math.sin(a1);
+  const y1 = c1 * Math.cos(a1);
+  const z1 = Math.sin(e1);
+  const x2 = c2 * Math.sin(a2);
+  const y2 = c2 * Math.cos(a2);
+  const z2 = Math.sin(e2);
+  const dot = Math.min(1, Math.max(-1, x1 * x2 + y1 * y2 + z1 * z2));
+  return Math.acos(dot) * (180 / Math.PI);
+}
+
 function observerGd(observer: ObserverLocation) {
   return {
     latitude: degreesToRadians(observer.latitudeDeg),

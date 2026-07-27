@@ -2,7 +2,8 @@
  * Live Satellite Spotter — Google Maps–style aim guide for the selected object.
  *
  * Uses GPS + device compass to show turn/elevation toward any catalog satellite.
- * No camera AR in v1; compass radar + numeric guidance only.
+ * Orientation is polled from sensors on a throttled rAF loop (not on every
+ * DeviceOrientation event) so aiming near the target does not stall the UI.
  */
 
 import {
@@ -11,6 +12,7 @@ import {
   findNextPass,
   GOOD_ELEV_DEG,
   headingDelta,
+  skyAngularSeparationDeg,
   type LookAngles,
   type PassEvent,
 } from '../orbital/lookAngles';
@@ -30,15 +32,34 @@ import {
 let backdropEl: HTMLElement | null = null;
 let panelEl: HTMLElement | null = null;
 let rafId = 0;
-let lastComputeMs = 0;
+let lastUiMs = 0;
+let lastRadarMs = 0;
+let lastPropagateMs = 0;
 let unsubState: (() => void) | null = null;
 let unsubSensors: (() => void) | null = null;
 let unsubLang: (() => void) | null = null;
 let cachedPass: PassEvent | null = null;
 let cachedPassKey = '';
 let lastLook: LookAngles | null = null;
+let lastPhoto: PhotoAssessment | null = null;
+let aimLocked = false;
+let lastGuideText = '';
+let lastChipsHtml = '';
+let lastPassText = '';
+let radarCanvas: HTMLCanvasElement | null = null;
+let radarCtx: CanvasRenderingContext2D | null = null;
 
-const COMPUTE_INTERVAL_MS = 250;
+/** Full guide/DOM refresh (includes SGP4 propagate). */
+const UI_INTERVAL_MS = 200;
+/** Canvas redraw cadence. */
+const RADAR_INTERVAL_MS = 50;
+/** Re-propagate satellite look angles. */
+const PROPAGATE_INTERVAL_MS = 250;
+/** Enter / exit thresholds for “on target” (sky degrees) — hysteresis avoids flicker. */
+const LOCK_ENTER_DEG = 4;
+const LOCK_EXIT_DEG = 8;
+
+type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 
 export function isSpotterOpen(): boolean {
   return backdropEl != null;
@@ -67,14 +88,25 @@ export function openSpotterPanel(): void {
   cachedPass = null;
   cachedPassKey = '';
   lastLook = null;
+  lastPhoto = null;
+  aimLocked = false;
+  lastGuideText = '';
+  lastChipsHtml = '';
+  lastPassText = '';
+  radarCanvas = null;
+  radarCtx = null;
+  lastUiMs = 0;
+  lastRadarMs = 0;
+  lastPropagateMs = 0;
 
   startObserverSensors();
   renderShell();
   bindShellEvents();
 
+  // Location / permission changes only — orientation is polled in rAF.
   unsubSensors = subscribeSensors(() => {
     refreshPassCache(true);
-    updateLiveUi();
+    updateLiveUi(true);
   });
   unsubState = subscribe(() => {
     const s = getState();
@@ -83,12 +115,12 @@ export function openSpotterPanel(): void {
       return;
     }
     refreshPassCache(true);
-    updateLiveUi();
+    updateLiveUi(true);
   });
   unsubLang = onLangChange(() => {
     renderShell();
     bindShellEvents();
-    updateLiveUi();
+    updateLiveUi(true);
   });
 
   backdrop.addEventListener('click', (e) => {
@@ -98,11 +130,13 @@ export function openSpotterPanel(): void {
 
   const loop = (now: number): void => {
     if (!backdropEl) return;
-    if (now - lastComputeMs >= COMPUTE_INTERVAL_MS) {
-      lastComputeMs = now;
-      updateLiveUi();
-    } else {
-      drawRadarOnly();
+    if (now - lastUiMs >= UI_INTERVAL_MS) {
+      lastUiMs = now;
+      updateLiveUi(false);
+    } else if (now - lastRadarMs >= RADAR_INTERVAL_MS) {
+      lastRadarMs = now;
+      const sensors = getSensorSnapshot();
+      drawRadar(lastLook, sensors.headingDeg, sensors.pitchDeg);
     }
     rafId = requestAnimationFrame(loop);
   };
@@ -123,6 +157,8 @@ export function closeSpotterPanel(): void {
   backdropEl?.remove();
   backdropEl = null;
   panelEl = null;
+  radarCanvas = null;
+  radarCtx = null;
   cachedPass = null;
   lastLook = null;
 }
@@ -155,6 +191,7 @@ function renderShell(): void {
       </div>
 
       <p class="spotter-guide" id="spotter-guide">—</p>
+      <p class="spotter-pitch" id="spotter-pitch"></p>
       <div class="spotter-chips" id="spotter-chips"></div>
       <p class="spotter-pass" id="spotter-pass"></p>
 
@@ -177,6 +214,11 @@ function renderShell(): void {
       </details>
     </div>
   `;
+  radarCanvas = panelEl.querySelector('#spotter-radar');
+  radarCtx = radarCanvas?.getContext('2d') ?? null;
+  lastGuideText = '';
+  lastChipsHtml = '';
+  lastPassText = '';
 }
 
 function bindShellEvents(): void {
@@ -206,7 +248,9 @@ function locationStatusText(sensors: SensorSnapshot): string {
 
 function headingStatusText(sensors: SensorSnapshot): string {
   if (sensors.headingDeg != null) {
-    return `${sensors.headingDeg.toFixed(0)}°`;
+    const pitch =
+      sensors.pitchDeg != null ? ` · ↑${sensors.pitchDeg.toFixed(0)}°` : '';
+    return `${sensors.headingDeg.toFixed(0)}°${pitch}`;
   }
   if (sensors.headingError === 'denied') return t('spotter.heading_denied');
   if (sensors.headingError === 'unsupported') return t('spotter.heading_unsupported');
@@ -228,10 +272,12 @@ function refreshPassCache(force = false): void {
   cachedPass = findNextPass(obj.satrec, sensors.location, time);
 }
 
-function updateLiveUi(): void {
+function updateLiveUi(forcePropagate: boolean): void {
   if (!panelEl) return;
   const state = getState();
   const sensors = getSensorSnapshot();
+  const now = performance.now();
+
   const locStatus = panelEl.querySelector('#spotter-loc-status');
   const headStatus = panelEl.querySelector('#spotter-heading-status');
   if (locStatus) locStatus.textContent = locationStatusText(sensors);
@@ -239,30 +285,50 @@ function updateLiveUi(): void {
 
   if (state.selectedIndex == null || !sensors.location) {
     lastLook = null;
-    setText('spotter-guide', t('spotter.need_location'));
-    setHtml('spotter-chips', '');
-    setText('spotter-pass', '');
-    drawRadar(null, sensors.headingDeg);
+    lastPhoto = null;
+    setTextIfChanged('spotter-guide', t('spotter.need_location'));
+    setHtmlIfChanged('spotter-chips', '');
+    setTextIfChanged('spotter-pass', '');
+    setTextIfChanged('spotter-pitch', '');
+    drawRadar(null, sensors.headingDeg, sensors.pitchDeg);
     return;
   }
 
   const obj = state.objects[state.selectedIndex];
   const time = getSimulationTime();
-  const look = computeLookAngles(obj.satrec, sensors.location, time);
-  lastLook = look;
-  refreshPassCache();
 
-  const photo = look?.visible
-      ? assessPhotoConditions(obj.satrec, sensors.location, time, getSunEci(time))
-      : null;
+  if (forcePropagate || now - lastPropagateMs >= PROPAGATE_INTERVAL_MS || !lastLook) {
+    lastPropagateMs = now;
+    lastLook = computeLookAngles(obj.satrec, sensors.location, time);
+    lastPhoto =
+      lastLook?.visible
+        ? assessPhotoConditions(obj.satrec, sensors.location, time, getSunEci(time))
+        : null;
+    refreshPassCache(false);
+  }
 
-  updateGuide(look, sensors, photo);
-  updateChips(look, photo);
-  updatePassHint(look);
-  drawRadar(look, sensors.headingDeg);
+  updateGuide(lastLook, sensors, lastPhoto);
+  updatePitchLine(lastLook, sensors);
+  updateChips(lastLook, lastPhoto);
+  updatePassHint(lastLook);
+  drawRadar(lastLook, sensors.headingDeg, sensors.pitchDeg);
+  lastRadarMs = now;
 }
 
-type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
+function updatePitchLine(look: LookAngles | null, sensors: SensorSnapshot): void {
+  if (!look?.visible || sensors.pitchDeg == null) {
+    setTextIfChanged('spotter-pitch', '');
+    return;
+  }
+  const phone = sensors.pitchDeg;
+  const target = look.elevationDeg;
+  const delta = target - phone;
+  const text = t('spotter.pitch_line')
+    .replace('{phone}', phone.toFixed(0))
+    .replace('{target}', target.toFixed(0))
+    .replace('{delta}', `${delta >= 0 ? '+' : ''}${delta.toFixed(0)}`);
+  setTextIfChanged('spotter-pitch', text);
+}
 
 function updateGuide(
   look: LookAngles | null,
@@ -270,21 +336,19 @@ function updateGuide(
   photo: PhotoAssessment | null,
 ): void {
   if (!look) {
-    setText('spotter-guide', t('spotter.propagate_fail'));
+    setTextIfChanged('spotter-guide', t('spotter.propagate_fail'));
     return;
   }
 
   if (!look.visible) {
     const rise = cachedPass?.rise;
     if (rise) {
-      setText(
+      setTextIfChanged(
         'spotter-guide',
-        t('spotter.below_rise')
-          .replace('{time}', formatLocalTime(rise.time))
-          .replace('{az}', rise.azimuthDeg.toFixed(0)),
+        t('spotter.below_rise').replace('{time}', formatLocalTime(rise.time)),
       );
     } else {
-      setText('spotter-guide', t('spotter.below_none'));
+      setTextIfChanged('spotter-guide', t('spotter.below_none'));
     }
     return;
   }
@@ -292,7 +356,7 @@ function updateGuide(
   const elev = look.elevationDeg.toFixed(0);
 
   if (sensors.headingDeg == null) {
-    setText(
+    setTextIfChanged(
       'spotter-guide',
       t('spotter.guide_no_compass')
         .replace('{az}', look.azimuthDeg.toFixed(0))
@@ -301,10 +365,20 @@ function updateGuide(
     return;
   }
 
-  const delta = headingDelta(sensors.headingDeg, look.azimuthDeg);
-  const abs = Math.abs(delta).toFixed(0);
-  const aimed = Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG;
-  if (aimed) {
+  const turn = headingDelta(sensors.headingDeg, look.azimuthDeg);
+  const phoneEl = sensors.pitchDeg ?? 0;
+  const hasPitch = sensors.pitchDeg != null;
+  const sep = hasPitch
+    ? skyAngularSeparationDeg(sensors.headingDeg, phoneEl, look.azimuthDeg, look.elevationDeg)
+    : Math.abs(turn);
+
+  if (aimLocked) {
+    if (sep > LOCK_EXIT_DEG) aimLocked = false;
+  } else if (sep < LOCK_ENTER_DEG && look.elevationDeg >= GOOD_ELEV_DEG) {
+    aimLocked = true;
+  }
+
+  if (aimLocked) {
     const lockKey =
       photo?.favorable
         ? 'spotter.guide_locked'
@@ -313,15 +387,34 @@ function updateGuide(
           : !photo?.observerDark
             ? 'spotter.guide_aimed_day'
             : 'spotter.guide_aimed_dim';
-    setText('spotter-guide', t(lockKey).replace('{el}', elev));
+    setTextIfChanged('spotter-guide', t(lockKey).replace('{el}', elev));
     return;
   }
-  if (Math.abs(delta) < 8) {
-    setText('spotter-guide', t('spotter.guide_look_up').replace('{el}', elev));
-    return;
+
+  const parts: string[] = [];
+  if (Math.abs(turn) >= 1.5) {
+    const turnKey = turn > 0 ? 'spotter.guide_right' : 'spotter.guide_left';
+    parts.push(t(turnKey).replace('{deg}', Math.abs(turn).toFixed(0)));
   }
-  const turnKey = delta > 0 ? 'spotter.guide_right' : 'spotter.guide_left';
-  setText('spotter-guide', t(turnKey).replace('{deg}', abs).replace('{el}', elev));
+
+  if (hasPitch) {
+    const elevErr = look.elevationDeg - phoneEl;
+    if (Math.abs(elevErr) >= 2) {
+      parts.push(
+        elevErr > 0
+          ? t('spotter.guide_tilt_up').replace('{deg}', elevErr.toFixed(0))
+          : t('spotter.guide_tilt_down').replace('{deg}', Math.abs(elevErr).toFixed(0)),
+      );
+    }
+  } else {
+    parts.push(t('spotter.guide_look_up').replace('{el}', elev));
+  }
+
+  if (parts.length === 0) {
+    parts.push(t('spotter.guide_aimed_dim').replace('{el}', elev));
+  }
+
+  setTextIfChanged('spotter-guide', parts.join(' · '));
 }
 
 function updateChips(look: LookAngles | null, photo: PhotoAssessment | null): void {
@@ -337,7 +430,7 @@ function updateChips(look: LookAngles | null, photo: PhotoAssessment | null): vo
     else if (!photo.satelliteLit) chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
     else if (!photo.observerDark) chips.push(chip('warn', t('spotter.chip_eye_day')));
   }
-  setHtml('spotter-chips', chips.join(''));
+  setHtmlIfChanged('spotter-chips', chips.join(''));
 }
 
 function chip(kind: string, label: string): string {
@@ -346,7 +439,7 @@ function chip(kind: string, label: string): string {
 
 function updatePassHint(look: LookAngles | null): void {
   if (!cachedPass?.max) {
-    setText('spotter-pass', look?.visible ? '' : t('spotter.pass_none'));
+    setTextIfChanged('spotter-pass', look?.visible ? '' : t('spotter.pass_none'));
     return;
   }
   const max = cachedPass.max;
@@ -355,25 +448,33 @@ function updatePassHint(look: LookAngles | null): void {
     .replace('{el}', max.elevationDeg.toFixed(0))
     .replace('{time}', formatLocalTime(max.time));
   if (set) text += ` · ${t('spotter.pass_set').replace('{time}', formatLocalTime(set.time))}`;
-  setText('spotter-pass', text);
+  setTextIfChanged('spotter-pass', text);
 }
 
-function drawRadarOnly(): void {
-  const sensors = getSensorSnapshot();
-  drawRadar(lastLook, sensors.headingDeg);
+function ensureRadarCtx(): CanvasRenderingContext2D | null {
+  if (radarCtx) return radarCtx;
+  radarCanvas = panelEl?.querySelector('#spotter-radar') ?? null;
+  radarCtx = radarCanvas?.getContext('2d') ?? null;
+  return radarCtx;
 }
 
-function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
-  const canvas = panelEl?.querySelector<HTMLCanvasElement>('#spotter-radar');
+function drawRadar(
+  look: LookAngles | null,
+  headingDeg: number | null,
+  pitchDeg: number | null,
+): void {
+  const canvas = radarCanvas ?? panelEl?.querySelector<HTMLCanvasElement>('#spotter-radar');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  radarCanvas = canvas;
+  const ctx = ensureRadarCtx();
   if (!ctx) return;
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const css = 280;
-  if (canvas.width !== Math.round(css * dpr)) {
-    canvas.width = Math.round(css * dpr);
-    canvas.height = Math.round(css * dpr);
+  const w = Math.round(css * dpr);
+  if (canvas.width !== w) {
+    canvas.width = w;
+    canvas.height = w;
     canvas.style.width = `${css}px`;
     canvas.style.height = `${css}px`;
   }
@@ -384,7 +485,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   const cy = css / 2;
   const r = css / 2 - 18;
 
-  // Disk
   ctx.beginPath();
   ctx.fillStyle = 'rgba(8, 18, 36, 0.95)';
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -393,7 +493,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Elevation rings (horizon outer, zenith center)
   ctx.strokeStyle = 'rgba(255,255,255,0.08)';
   ctx.lineWidth = 1;
   for (const elev of [0, 30, 60]) {
@@ -406,7 +505,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   const heading = headingDeg ?? 0;
   const hasHeading = headingDeg != null;
 
-  // Cardinal labels relative to device heading (top = facing direction)
   ctx.font = '600 11px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -424,7 +522,18 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
     ctx.fillText(label, x, y);
   }
 
-  // Fixed “you” crosshair at exact center (never offset)
+  // Phone pitch ring marker (where you are looking up)
+  if (pitchDeg != null) {
+    const pr = elevToRadius(Math.max(0, Math.min(90, pitchDeg)), r);
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   ctx.strokeStyle = 'rgba(248, 250, 252, 0.55)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -438,7 +547,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // Facing marker on the rim (top = phone top / look direction)
   ctx.beginPath();
   ctx.fillStyle = '#f8fafc';
   ctx.moveTo(cx, cy - r + 4);
@@ -447,7 +555,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   ctx.closePath();
   ctx.fill();
 
-  // Target
   if (look) {
     const elev = Math.max(-5, Math.min(90, look.elevationDeg));
     const rr = elevToRadius(elev, r);
@@ -456,7 +563,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
     const ty = cy - Math.cos(relAz) * rr;
 
     if (look.visible) {
-      // Line from you → target
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
       ctx.lineWidth = 1.5;
@@ -472,15 +578,12 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      if (hasHeading) {
-        const delta = headingDelta(heading, look.azimuthDeg);
-        if (Math.abs(delta) < 8 && look.elevationDeg >= GOOD_ELEV_DEG) {
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
-          ctx.lineWidth = 2;
-          ctx.arc(cx, cy, 16, 0, Math.PI * 2);
-          ctx.stroke();
-        }
+      if (aimLocked) {
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+        ctx.lineWidth = 2;
+        ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+        ctx.stroke();
       }
     } else {
       const bx = cx + Math.sin(relAz) * (r - 6);
@@ -501,7 +604,6 @@ function drawRadar(look: LookAngles | null, headingDeg: number | null): void {
   }
 }
 
-/** Map elevation (0=horizon … 90=zenith) to radius; below horizon → outer rim. */
 function elevToRadius(elevDeg: number, maxR: number): number {
   if (elevDeg <= 0) return maxR * 0.96;
   const tElev = Math.min(90, elevDeg) / 90;
@@ -512,14 +614,25 @@ function formatLocalTime(date: Date): string {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-function setText(id: string, text: string): void {
+function setTextIfChanged(id: string, text: string): void {
+  if (id === 'spotter-guide') {
+    if (text === lastGuideText) return;
+    lastGuideText = text;
+  } else if (id === 'spotter-pass') {
+    if (text === lastPassText) return;
+    lastPassText = text;
+  }
   const el = panelEl?.querySelector(`#${id}`);
-  if (el) el.textContent = text;
+  if (el && el.textContent !== text) el.textContent = text;
 }
 
-function setHtml(id: string, html: string): void {
+function setHtmlIfChanged(id: string, html: string): void {
+  if (id === 'spotter-chips') {
+    if (html === lastChipsHtml) return;
+    lastChipsHtml = html;
+  }
   const el = panelEl?.querySelector(`#${id}`);
-  if (el) el.innerHTML = html;
+  if (el && el.innerHTML !== html) el.innerHTML = html;
 }
 
 function escapeHtml(text: string): string {

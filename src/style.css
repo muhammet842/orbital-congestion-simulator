@@ -2821,7 +2821,16 @@ body {
   line-height: 1.4;
   text-align: center;
 }
-.spotter-pass:empty { display: none; }
+.spotter-pitch {
+  margin: -2px 0 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fbbf24;
+  text-align: center;
+  line-height: 1.3;
+}
+.spotter-pass:empty,
+.spotter-pitch:empty { display: none; }
 
 .spotter-sensors {
   margin-top: 8px;

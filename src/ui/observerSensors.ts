@@ -3,6 +3,9 @@
  *
  * Location is persisted so a denied permission still allows manual lat/lon.
  * Compass uses DeviceOrientationEvent (iOS requires an explicit permission grant).
+ *
+ * Orientation updates write into a mutable snapshot without notifying listeners on
+ * every sensor tick — the spotter rAF loop polls instead (avoids UI jank).
  */
 
 import type { ObserverLocation } from '../orbital/lookAngles';
@@ -11,6 +14,10 @@ const LS_LOCATION_KEY = 'orbital-spotter-location';
 
 /** Near ±90° beta the Euler frame hits gimbal lock — freeze last stable heading. */
 const GIMBAL_LOCK_BETA_DEG = 85;
+/** Ignore heading/pitch micro-jitter below this (degrees). */
+const ORIENT_EPSILON_DEG = 0.15;
+/** EMA factor for heading/pitch smoothing (higher = snappier). */
+const ORIENT_SMOOTH = 0.35;
 
 export interface SensorSnapshot {
   location: ObserverLocation | null;
@@ -18,6 +25,11 @@ export interface SensorSnapshot {
   locationError: string | null;
   /** True north heading in degrees, or null if unavailable. */
   headingDeg: number | null;
+  /**
+   * Phone look elevation above the horizon (degrees): 0 = horizon, 90 = zenith.
+   * Derived from device beta/gamma (screen-normal / aiming tilt).
+   */
+  pitchDeg: number | null;
   headingError: string | null;
   orientationPermission: 'unknown' | 'granted' | 'denied' | 'unsupported';
 }
@@ -31,12 +43,15 @@ let listeners = new Set<Listener>();
 let lastStableHeadingDeg: number | null = null;
 /** Prefer absolute events when the browser provides them (Android). */
 let preferAbsoluteHeading = false;
+let smoothedHeading: number | null = null;
+let smoothedPitch: number | null = null;
 
 let snapshot: SensorSnapshot = {
   location: loadCachedLocation(),
   locationSource: loadCachedLocation() ? 'cached' : null,
   locationError: null,
   headingDeg: null,
+  pitchDeg: null,
   headingError: null,
   orientationPermission: 'unknown',
 };
@@ -72,17 +87,26 @@ function persistLocation(loc: ObserverLocation): void {
   }
 }
 
-function emit(): void {
-  for (const fn of listeners) fn({ ...snapshot, location: snapshot.location ? { ...snapshot.location } : null });
+function cloneSnap(): SensorSnapshot {
+  return {
+    ...snapshot,
+    location: snapshot.location ? { ...snapshot.location } : null,
+  };
 }
 
-function setPartial(partial: Partial<SensorSnapshot>): void {
+function emit(): void {
+  const snap = cloneSnap();
+  for (const fn of listeners) fn(snap);
+}
+
+/** Location / permission changes notify subscribers. Orientation does not. */
+function setPartial(partial: Partial<SensorSnapshot>, notify = true): void {
   snapshot = { ...snapshot, ...partial };
-  emit();
+  if (notify) emit();
 }
 
 export function getSensorSnapshot(): SensorSnapshot {
-  return { ...snapshot, location: snapshot.location ? { ...snapshot.location } : null };
+  return cloneSnap();
 }
 
 export function subscribeSensors(fn: Listener): () => void {
@@ -111,6 +135,24 @@ function wrap360(deg: number): number {
   return ((deg % 360) + 360) % 360;
 }
 
+/** Shortest signed delta degrees in (−180, 180]. */
+function signedDeltaDeg(from: number, to: number): number {
+  let d = wrap360(to) - wrap360(from);
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d;
+}
+
+function smoothAngle360(prev: number | null, next: number, alpha: number): number {
+  if (prev == null) return next;
+  return wrap360(prev + signedDeltaDeg(prev, next) * alpha);
+}
+
+function smoothLinear(prev: number | null, next: number, alpha: number): number {
+  if (prev == null) return next;
+  return prev + (next - prev) * alpha;
+}
+
 /**
  * Compass heading (degrees from true/magnetic north) that stays stable when the
  * phone is tilted to look at the sky — unlike raw `360 - alpha`, which flips
@@ -134,6 +176,22 @@ export function compassHeadingFromEuler(alpha: number, beta: number, gamma: numb
   const Vy = -sZ * sY + cZ * sX * cY;
 
   return wrap360(Math.atan2(Vx, Vy) * (180 / Math.PI));
+}
+
+/**
+ * Phone aiming elevation above the horizon (degrees).
+ * 0 = aimed at horizon, +90 = zenith, negative = below horizon.
+ *
+ * Uses the screen-normal (out-of-screen) direction so tilting the phone up to
+ * “look at” a satellite matches the satellite elevation angle.
+ */
+export function lookElevationFromEuler(beta: number, gamma: number): number {
+  const toRad = Math.PI / 180;
+  const b = beta * toRad;
+  const g = gamma * toRad;
+  const up = Math.cos(b) * Math.cos(g);
+  const elev = Math.asin(clamp(up, -1, 1)) * (180 / Math.PI);
+  return clamp(elev, -90, 90);
 }
 
 function screenOrientationOffsetDeg(): number {
@@ -170,7 +228,6 @@ export function headingFromOrientationEvent(event: DeviceOrientationEvent): numb
 
   const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
   const b = beta ?? 0;
-  // Prefer tilt-aware Euler heading when beta/gamma exist; raw 360-alpha flips at 90°.
   const heading =
     beta != null
       ? compassHeadingFromEuler(event.alpha, b, gamma)
@@ -178,6 +235,12 @@ export function headingFromOrientationEvent(event: DeviceOrientationEvent): numb
 
   lastStableHeadingDeg = heading;
   return heading;
+}
+
+export function pitchFromOrientationEvent(event: DeviceOrientationEvent): number | null {
+  if (typeof event.beta !== 'number' || !Number.isFinite(event.beta)) return null;
+  const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
+  return lookElevationFromEuler(event.beta, gamma);
 }
 
 export function startGeolocation(): void {
@@ -223,26 +286,53 @@ export function stopGeolocation(): void {
 
 function onOrientationAbsolute(event: DeviceOrientationEvent): void {
   preferAbsoluteHeading = true;
-  onOrientation(event);
+  applyOrientation(event);
 }
 
 function onOrientationRelative(event: DeviceOrientationEvent): void {
-  // Ignore relative alpha once absolute stream is available — it flips at tilt.
   if (preferAbsoluteHeading) return;
-  onOrientation(event);
+  applyOrientation(event);
 }
 
-function onOrientation(event: DeviceOrientationEvent): void {
-  const heading = headingFromOrientationEvent(event);
-  if (heading == null) {
-    setPartial({ headingError: 'unavailable' });
+/** Write smoothed orientation into snapshot without notifying listeners. */
+function applyOrientation(event: DeviceOrientationEvent): void {
+  const rawHeading = headingFromOrientationEvent(event);
+  const rawPitch = pitchFromOrientationEvent(event);
+
+  if (rawHeading == null && rawPitch == null) {
+    if (snapshot.headingError !== 'unavailable') {
+      setPartial({ headingError: 'unavailable' }, false);
+    }
     return;
   }
-  setPartial({
-    headingDeg: heading,
+
+  if (rawHeading != null) {
+    smoothedHeading = smoothAngle360(smoothedHeading, rawHeading, ORIENT_SMOOTH);
+  }
+  if (rawPitch != null) {
+    smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
+  }
+
+  const nextHeading = smoothedHeading;
+  const nextPitch = smoothedPitch;
+  const prevH = snapshot.headingDeg;
+  const prevP = snapshot.pitchDeg;
+
+  const headingChanged =
+    nextHeading != null &&
+    (prevH == null || Math.abs(signedDeltaDeg(prevH, nextHeading)) >= ORIENT_EPSILON_DEG);
+  const pitchChanged =
+    nextPitch != null && (prevP == null || Math.abs(prevP - nextPitch) >= ORIENT_EPSILON_DEG);
+
+  if (!headingChanged && !pitchChanged) return;
+
+  snapshot = {
+    ...snapshot,
+    headingDeg: nextHeading,
+    pitchDeg: nextPitch,
     headingError: null,
     orientationPermission: 'granted',
-  });
+  };
 }
 
 export async function startOrientation(): Promise<void> {
@@ -275,7 +365,6 @@ export async function startOrientation(): Promise<void> {
   }
 
   if (!orientationBound) {
-    // Absolute heading when the browser provides it (Android Chrome).
     window.addEventListener('deviceorientationabsolute', onOrientationAbsolute as EventListener, true);
     window.addEventListener('deviceorientation', onOrientationRelative, true);
     orientationBound = true;
@@ -290,6 +379,9 @@ export function stopOrientation(): void {
   }
   lastStableHeadingDeg = null;
   preferAbsoluteHeading = false;
+  smoothedHeading = null;
+  smoothedPitch = null;
+  snapshot = { ...snapshot, headingDeg: null, pitchDeg: null };
 }
 
 /** Start both sensors (call when Spotter opens). */

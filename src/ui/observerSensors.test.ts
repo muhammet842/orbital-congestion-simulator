@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { compassHeadingFromEuler, headingFromOrientationEvent } from './observerSensors';
+import {
+  compassHeadingFromEuler,
+  headingFromOrientationEvent,
+  lookElevationFromEuler,
+  pitchFromOrientationEvent,
+} from './observerSensors';
 
 describe('headingFromOrientationEvent', () => {
   it('prefers webkitCompassHeading when present', () => {
@@ -17,7 +22,6 @@ describe('headingFromOrientationEvent', () => {
     const heading = headingFromOrientationEvent(event);
     expect(heading).not.toBeNull();
     expect(heading).toBe(compassHeadingFromEuler(90, 40, 20));
-    // Raw 360-alpha would be 270 — Euler with tilt/roll differs.
     expect(heading).not.toBe(270);
   });
 
@@ -37,6 +41,27 @@ describe('headingFromOrientationEvent', () => {
   it('returns null when no orientation data is available', () => {
     const event = {} as DeviceOrientationEvent;
     expect(headingFromOrientationEvent(event)).toBeNull();
+  });
+});
+
+describe('lookElevationFromEuler', () => {
+  it('is ~0 when phone is upright (beta 90)', () => {
+    expect(lookElevationFromEuler(90, 0)).toBeCloseTo(0, 5);
+  });
+
+  it('is ~90 when phone is flat screen-up (beta 0)', () => {
+    expect(lookElevationFromEuler(0, 0)).toBeCloseTo(90, 5);
+  });
+
+  it('is ~45 when tilted halfway', () => {
+    expect(lookElevationFromEuler(45, 0)).toBeCloseTo(45, 5);
+  });
+});
+
+describe('pitchFromOrientationEvent', () => {
+  it('reads pitch from beta/gamma', () => {
+    const event = { beta: 45, gamma: 0 } as DeviceOrientationEvent;
+    expect(pitchFromOrientationEvent(event)).toBeCloseTo(45, 5);
   });
 });
 
