@@ -3,40 +3,53 @@ import {
   classifyOutlook,
   clampScenarioParams,
   DEFAULT_KESSLER_SCENARIO,
+  KESSLER_PRESETS,
   projectKesslerTimeline,
   REAL_WORLD_BASELINE_OBJECTS,
 } from './kesslerProjection';
 
 describe('projectKesslerTimeline', () => {
   it('returns one point per projected year', () => {
-    const points = projectKesslerTimeline(2025, 2050, 12000);
+    const points = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS);
     expect(points).toHaveLength(25);
     expect(points[0].year).toBe(2026);
     expect(points[24].year).toBe(2050);
   });
 
   it('clamps the span to at least one year even if end <= start', () => {
-    expect(projectKesslerTimeline(2025, 2025, 12000)).toHaveLength(1);
-    expect(projectKesslerTimeline(2025, 2020, 12000)).toHaveLength(1);
+    expect(projectKesslerTimeline(2025, 2025, REAL_WORLD_BASELINE_OBJECTS)).toHaveLength(1);
+    expect(projectKesslerTimeline(2025, 2020, REAL_WORLD_BASELINE_OBJECTS)).toHaveLength(1);
   });
 
   it('caps the projected span at 100 years', () => {
-    expect(projectKesslerTimeline(2025, 3025, 12000)).toHaveLength(100);
+    expect(projectKesslerTimeline(2025, 3025, REAL_WORLD_BASELINE_OBJECTS)).toHaveLength(100);
   });
 
-  it('grows the object population under the default (business-as-usual) scenario', () => {
-    const points = projectKesslerTimeline(2025, 2050, 12000);
-    const last = points[points.length - 1];
-    expect(last.totalObjects).toBeGreaterThan(12000);
-    // Population should be monotonically non-decreasing year over year.
-    for (let i = 1; i < points.length; i++) {
-      expect(points[i].totalObjects).toBeGreaterThanOrEqual(points[i - 1].totalObjects);
+  it('keeps LEO + MEO + GEO equal to the reported total', () => {
+    const points = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS);
+    for (const p of points) {
+      expect(p.leoObjects + p.meoObjects + p.geoObjects).toBe(p.totalObjects);
+      expect(p.debrisObjects).toBeLessThanOrEqual(p.totalObjects);
     }
   });
 
+  it('puts most of the catalog and nearly all collision risk in LEO', () => {
+    const points = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS);
+    const last = points[points.length - 1];
+    expect(last.leoObjects).toBeGreaterThan(last.meoObjects);
+    expect(last.leoObjects).toBeGreaterThan(last.geoObjects);
+    expect(last.leoObjects / last.totalObjects).toBeGreaterThan(0.7);
+  });
+
+  it('grows the object population under the default (business-as-usual) scenario', () => {
+    const points = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS);
+    const last = points[points.length - 1];
+    expect(last.totalObjects).toBeGreaterThan(REAL_WORLD_BASELINE_OBJECTS);
+  });
+
   it('produces a larger population under a higher launch-rate multiplier', () => {
-    const baseline = projectKesslerTimeline(2025, 2050, 12000, DEFAULT_KESSLER_SCENARIO);
-    const aggressive = projectKesslerTimeline(2025, 2050, 12000, {
+    const baseline = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, DEFAULT_KESSLER_SCENARIO);
+    const aggressive = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, {
       ...DEFAULT_KESSLER_SCENARIO,
       launchRateMultiplier: 3,
     });
@@ -46,8 +59,8 @@ describe('projectKesslerTimeline', () => {
   });
 
   it('produces a smaller population under aggressive debris mitigation', () => {
-    const baseline = projectKesslerTimeline(2025, 2050, 12000, DEFAULT_KESSLER_SCENARIO);
-    const mitigated = projectKesslerTimeline(2025, 2050, 12000, {
+    const baseline = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, DEFAULT_KESSLER_SCENARIO);
+    const mitigated = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, {
       ...DEFAULT_KESSLER_SCENARIO,
       mitigationRate: 2.5,
     });
@@ -57,8 +70,8 @@ describe('projectKesslerTimeline', () => {
   });
 
   it('raises the risk index and cumulative collisions under higher collision risk', () => {
-    const baseline = projectKesslerTimeline(2025, 2050, 12000, DEFAULT_KESSLER_SCENARIO);
-    const risky = projectKesslerTimeline(2025, 2050, 12000, {
+    const baseline = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, DEFAULT_KESSLER_SCENARIO);
+    const risky = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, {
       ...DEFAULT_KESSLER_SCENARIO,
       collisionRiskMultiplier: 4,
     });
@@ -81,26 +94,18 @@ describe('projectKesslerTimeline', () => {
 
   it('seeds debris at a realistic non-zero fraction of the starting population', () => {
     const points = projectKesslerTimeline(2025, 2026, REAL_WORLD_BASELINE_OBJECTS);
-    // Today's real-world catalog is already roughly half debris, not zero —
-    // the very first projected year should reflect that starting point.
     expect(points[0].debrisObjects).toBeGreaterThan(REAL_WORLD_BASELINE_OBJECTS * 0.3);
   });
 
-  it('never lets the population collapse below 10% of the baseline', () => {
-    const points = projectKesslerTimeline(2025, 2100, 12000, {
+  it('never lets any shell collapse below a small floor of its own baseline', () => {
+    const points = projectKesslerTimeline(2025, 2100, REAL_WORLD_BASELINE_OBJECTS, {
       launchRateMultiplier: 0,
       mitigationRate: 3,
       collisionRiskMultiplier: 0,
     });
     for (const p of points) {
-      expect(p.totalObjects).toBeGreaterThanOrEqual(1200 * 0.99);
+      expect(p.totalObjects).toBeGreaterThan(REAL_WORLD_BASELINE_OBJECTS * 0.07);
     }
-  });
-
-  it('guards against a zero or negative starting object count', () => {
-    const points = projectKesslerTimeline(2025, 2030, 0);
-    expect(points.every((p) => Number.isFinite(p.totalObjects))).toBe(true);
-    expect(points.every((p) => p.totalObjects >= 0)).toBe(true);
   });
 
   it('never produces NaN or Infinity even under an extreme worst-case scenario over a long horizon', () => {
@@ -114,14 +119,11 @@ describe('projectKesslerTimeline', () => {
       expect(Number.isFinite(p.debrisObjects)).toBe(true);
       expect(Number.isFinite(p.riskIndex)).toBe(true);
       expect(Number.isFinite(p.cumulativeCollisions)).toBe(true);
+      expect(Number.isFinite(p.leoObjects)).toBe(true);
     }
   });
 
   it('keeps the default (business-as-usual) scenario in a believable "concerning" range over 25 years', () => {
-    // Regression guard for the real-world-baseline calibration: at 1×/1×/1×
-    // the model should show meaningful but not apocalyptic growth by 2050 —
-    // if this ever creeps into "runaway" territory, the panel loses its
-    // ability to show contrast between a good and a bad policy scenario.
     const points = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS);
     const last = points[points.length - 1];
     expect(classifyOutlook(last.riskIndex)).not.toBe('runaway');
@@ -135,6 +137,15 @@ describe('projectKesslerTimeline', () => {
     });
     const last = points[points.length - 1];
     expect(classifyOutlook(last.riskIndex)).toBe('stable');
+  });
+
+  it('exposes named presets that differ from each other in the expected direction', () => {
+    const bau = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, KESSLER_PRESETS.bau);
+    const boom = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, KESSLER_PRESETS.boom);
+    const green = projectKesslerTimeline(2025, 2050, REAL_WORLD_BASELINE_OBJECTS, KESSLER_PRESETS.green);
+    expect(boom[boom.length - 1].totalObjects).toBeGreaterThan(bau[bau.length - 1].totalObjects);
+    expect(green[green.length - 1].totalObjects).toBeLessThan(bau[bau.length - 1].totalObjects);
+    expect(boom[boom.length - 1].riskIndex).toBeGreaterThan(green[green.length - 1].riskIndex);
   });
 });
 

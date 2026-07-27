@@ -46,19 +46,23 @@ describe('initKesslerPanel', () => {
 });
 
 describe('openKesslerPanel / closeKesslerPanel', () => {
-  it('renders the scenario sliders and run button', () => {
+  it('renders the scenario sliders, presets, and run button', () => {
     openKesslerPanel();
     expect(document.getElementById('kp-launch')).not.toBeNull();
     expect(document.getElementById('kp-mitigation')).not.toBeNull();
     expect(document.getElementById('kp-risk')).not.toBeNull();
     expect(document.getElementById('kp-target-year')).not.toBeNull();
     expect(document.getElementById('kp-run')).not.toBeNull();
+    expect(document.querySelectorAll('[data-preset]').length).toBe(4);
   });
 
-  it('hides the results section and shows the prompt before running a projection', () => {
+  it('auto-runs the business-as-usual projection when opened', () => {
     openKesslerPanel();
-    expect(document.getElementById('kp-results-section')?.hasAttribute('hidden')).toBe(true);
-    expect(document.getElementById('kp-prompt')?.hasAttribute('hidden')).toBe(false);
+    expect(document.getElementById('kp-results-section')?.hasAttribute('hidden')).toBe(false);
+    expect(document.getElementById('kp-prompt')?.hasAttribute('hidden')).toBe(true);
+    expect(document.getElementById('kp-stat-total')?.textContent).not.toBe('—');
+    expect(document.getElementById('kp-stat-leo')?.textContent).not.toBe('—');
+    expect(document.getElementById('kp-narrative')?.textContent?.length).toBeGreaterThan(0);
   });
 
   it('does not open a second backdrop if already open', () => {
@@ -67,19 +71,15 @@ describe('openKesslerPanel / closeKesslerPanel', () => {
     expect(document.querySelectorAll('#kessler-panel-backdrop').length).toBe(1);
   });
 
-  it('reveals results and populates stats after clicking Run Projection', () => {
+  it('shows LEO collision risk as a multiplier, not a percent', () => {
     openKesslerPanel();
-    document.getElementById('kp-run')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-    expect(document.getElementById('kp-results-section')?.hasAttribute('hidden')).toBe(false);
-    expect(document.getElementById('kp-prompt')?.hasAttribute('hidden')).toBe(true);
-    expect(document.getElementById('kp-stat-total')?.textContent).not.toBe('—');
-    expect(document.getElementById('kp-narrative')?.textContent?.length).toBeGreaterThan(0);
+    const risk = document.getElementById('kp-stat-risk')?.textContent ?? '';
+    expect(risk).toMatch(/×$/);
+    expect(risk).not.toContain('%');
   });
 
   it('projects a larger population for a higher launch-rate slider value', () => {
     openKesslerPanel();
-    document.getElementById('kp-run')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     const baselineText = document.getElementById('kp-stat-total')?.textContent ?? '0';
     const baselineTotal = Number(baselineText.replace(/[^\d]/g, ''));
 
@@ -93,9 +93,20 @@ describe('openKesslerPanel / closeKesslerPanel', () => {
     expect(aggressiveTotal).toBeGreaterThan(baselineTotal);
   });
 
+  it('applies a named preset and updates the projection', () => {
+    openKesslerPanel();
+    const bauTotal = Number((document.getElementById('kp-stat-total')?.textContent ?? '0').replace(/[^\d]/g, ''));
+
+    const boomBtn = document.querySelector('[data-preset="boom"]') as HTMLButtonElement;
+    boomBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const boomTotal = Number((document.getElementById('kp-stat-total')?.textContent ?? '0').replace(/[^\d]/g, ''));
+    expect(boomTotal).toBeGreaterThan(bauTotal);
+    expect(boomBtn.classList.contains('kp-preset--active')).toBe(true);
+  });
+
   it('updates the scrubbed year display when the scrub slider changes', () => {
     openKesslerPanel();
-    document.getElementById('kp-run')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     const scrub = document.getElementById('kp-scrub') as HTMLInputElement;
     scrub.value = '0';

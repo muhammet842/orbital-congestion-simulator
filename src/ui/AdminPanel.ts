@@ -23,6 +23,7 @@
 import { getState, subscribe } from '../state/appState';
 import type { TrackedObject } from '../types';
 import { t, getLang, onLangChange } from '../i18n/i18n';
+import { MOBILE_BREAKPOINT_PX } from './Layout';
 
 // ── Storage keys ───────────────────────────────────────────────────────────────
 
@@ -530,8 +531,11 @@ function refreshAdminButton(): void {
 function refreshAdminButtonLabel(): void {
   const btn = document.getElementById('admin-panel-btn');
   if (!btn) return;
-  btn.textContent = `⚙ ${t('admin.button_label')}`;
+  const label = t('admin.button_label');
+  const short = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches;
+  btn.textContent = short ? '⚙' : `⚙ ${label}`;
   btn.title = t('admin.button_title');
+  btn.setAttribute('aria-label', label);
 }
 
 // ── PIN dialog ────────────────────────────────────────────────────────────────

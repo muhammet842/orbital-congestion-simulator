@@ -19,18 +19,24 @@ const SLIDER_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
 export function initTimeControls(container: HTMLElement): void {
   container.innerHTML = `
     <div class="time-controls">
-      <div class="time-buttons">
-        <button type="button" id="btn-rewind" title="Back 1 hour">⏮</button>
-        <button type="button" id="btn-play" title="Play/Pause">⏸</button>
-        <button type="button" id="btn-forward" title="Forward 1 hour">⏭</button>
+      <div class="time-row time-row--transport">
+        <div class="time-buttons">
+          <button type="button" id="btn-rewind" title="Back 1 hour">⏮</button>
+          <button type="button" id="btn-play" title="Play/Pause">⏸</button>
+          <button type="button" id="btn-forward" title="Forward 1 hour">⏭</button>
+        </div>
+        <input type="range" id="time-slider" class="time-slider" min="-100" max="100" step="1" value="0" />
       </div>
-      <input type="range" id="time-slider" class="time-slider" min="-100" max="100" step="1" value="0" />
-      <div class="time-display" id="time-display"></div>
-      <button type="button" id="btn-now" class="btn-now" title="Jump to current UTC time">Now</button>
-      <button type="button" id="btn-live" class="btn-live active" title="Live real-time tracking">● LIVE</button>
-      <div class="speed-controls">
-        <span class="speed-label">Speed:</span>
-        <div id="speed-buttons" class="speed-buttons"></div>
+      <div class="time-row time-row--meta">
+        <div class="time-display" id="time-display"></div>
+        <div class="time-mode-btns">
+          <button type="button" id="btn-now" class="btn-now" title="Jump to current UTC time">Now</button>
+          <button type="button" id="btn-live" class="btn-live active" title="Live real-time tracking">● LIVE</button>
+        </div>
+        <div class="speed-controls">
+          <span class="speed-label">Speed:</span>
+          <div id="speed-buttons" class="speed-buttons"></div>
+        </div>
       </div>
     </div>
   `;

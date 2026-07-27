@@ -26,6 +26,7 @@ import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
 import { isRecentlyLaunched } from '../data/newLaunches';
 import { t, onLangChange } from '../i18n/i18n';
+import { openSpotterPanel } from './SpotterPanel';
 
 /**
  * Compute the 3-D separation in km between the two collision objects at T-5min,
@@ -148,6 +149,13 @@ export function initRightPanel(container: HTMLElement): void {
   });
 
   container.addEventListener('click', (e) => {
+    const spotterBtn = (e.target as HTMLElement).closest('#btn-spotter');
+    if (spotterBtn) {
+      e.preventDefault();
+      openSpotterPanel();
+      return;
+    }
+
     const trailBtn = (e.target as HTMLElement).closest('#btn-orbit-trail');
     if (trailBtn) {
       e.preventDefault();
@@ -371,6 +379,9 @@ function render(container: HTMLElement): void {
       <div class="detail-row"><dt>Category</dt><dd>${snapshot.category}</dd></div>
       <div class="detail-row"><dt>Inclination</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
     </dl>
+    <button type="button" id="btn-spotter" class="btn-orbit-trail btn-spotter">
+      ${t('spotter.open')}
+    </button>
     <button type="button" id="btn-orbit-trail" class="btn-orbit-trail${state.showOrbitTrail ? ' active' : ''}">
       ${state.showOrbitTrail ? 'Hide orbit trail' : 'Show orbit trail'}
     </button>

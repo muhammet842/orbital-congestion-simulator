@@ -32,7 +32,8 @@ function toJulianDate(date: Date): number {
  * This makes the day/night terminator consistent with GMST-aligned Earth
  * texture and SGP4-propagated satellite positions.
  */
-function getSunEci(date: Date): { x: number; y: number; z: number } {
+/** Unit sun direction in ECI (TEME-compatible) — shared with ground-observer photo hints. */
+export function getSunEci(date: Date): { x: number; y: number; z: number } {
   const jd = toJulianDate(date);
   const n = jd - 2_451_545.0;
   const meanLongitudeDeg = (280.46 + 0.9856474 * n) % 360;

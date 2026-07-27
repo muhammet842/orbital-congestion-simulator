@@ -15,8 +15,9 @@ export function createLayout(root: HTMLElement): {
       <header class="app-header">
         <button id="toggle-left-panel" class="panel-toggle-btn" type="button" aria-label="Toggle filters &amp; stats panel" aria-expanded="false">☰</button>
         <div class="header-title">
-          <span class="header-icon">🛰</span>
-          Orbital Congestion Simulator
+          <span class="header-icon" aria-hidden="true">🛰</span>
+          <span class="header-title-full">Orbital Congestion Simulator</span>
+          <span class="header-title-short">Orbital Congestion</span>
         </div>
         <button id="toggle-right-panel" class="panel-toggle-btn" type="button" aria-label="Toggle object details panel" aria-expanded="false">ℹ</button>
         <select id="lang-select" class="lang-select" aria-label="Select language">

@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest';
+import { twoline2satrec } from 'satellite.js';
+import {
+  computeLookAngles,
+  findNextPass,
+  headingDelta,
+} from './lookAngles';
+
+/** Classic ISS sample TLE (epoch mid-2019) — good enough for geometry unit tests. */
+const ISS_TLE1 = '1 25544U 98067A   19156.50900463  .00003075  00000-0  59442-4 0  9992';
+const ISS_TLE2 = '2 25544  51.6433  59.2583 0008217  16.4489 347.6017 15.51174618173442';
+
+describe('headingDelta', () => {
+  it('returns 0 when already facing the target', () => {
+    expect(headingDelta(40, 40)).toBe(0);
+  });
+
+  it('returns a positive value for a right turn', () => {
+    expect(headingDelta(10, 40)).toBe(30);
+  });
+
+  it('returns a negative value for a left turn', () => {
+    expect(headingDelta(40, 10)).toBe(-30);
+  });
+
+  it('wraps across north correctly', () => {
+    expect(headingDelta(350, 10)).toBe(20);
+    expect(headingDelta(10, 350)).toBe(-20);
+  });
+});
+
+describe('computeLookAngles', () => {
+  const satrec = twoline2satrec(ISS_TLE1, ISS_TLE2);
+  // Near TLE epoch so propagation is valid.
+  const date = new Date(Date.UTC(2019, 5, 5, 12, 12, 0));
+
+  it('returns finite az/el/range for a ground observer', () => {
+    const look = computeLookAngles(
+      satrec,
+      { latitudeDeg: 41.0, longitudeDeg: 29.0, altitudeKm: 0.05 },
+      date,
+    );
+    expect(look).not.toBeNull();
+    expect(Number.isFinite(look!.azimuthDeg)).toBe(true);
+    expect(Number.isFinite(look!.elevationDeg)).toBe(true);
+    expect(look!.rangeKm).toBeGreaterThan(100);
+    expect(look!.azimuthDeg).toBeGreaterThanOrEqual(0);
+    expect(look!.azimuthDeg).toBeLessThan(360);
+  });
+
+  it('marks visible consistently with elevation sign', () => {
+    const look = computeLookAngles(
+      satrec,
+      { latitudeDeg: 41.0, longitudeDeg: 29.0 },
+      date,
+    );
+    expect(look).not.toBeNull();
+    expect(look!.visible).toBe(look!.elevationDeg > 0);
+  });
+});
+
+describe('findNextPass', () => {
+  const satrec = twoline2satrec(ISS_TLE1, ISS_TLE2);
+  const start = new Date(Date.UTC(2019, 5, 5, 0, 0, 0));
+
+  it('returns a structured pass result without throwing', () => {
+    const pass = findNextPass(
+      satrec,
+      { latitudeDeg: 41.0, longitudeDeg: 29.0 },
+      start,
+      12,
+      60,
+    );
+    expect(pass).toHaveProperty('rise');
+    expect(pass).toHaveProperty('max');
+    expect(pass).toHaveProperty('set');
+    if (pass.max) {
+      expect(pass.max.elevationDeg).toBeGreaterThan(0);
+      expect(pass.max.azimuthDeg).toBeGreaterThanOrEqual(0);
+    }
+  });
+});
