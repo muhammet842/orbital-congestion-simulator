@@ -31,6 +31,12 @@ describe('isRecentlyLaunched', () => {
     const future = new Date(now + 60_000).toISOString();
     expect(isRecentlyLaunched({ firstSeenAt: future }, now)).toBe(false);
   });
+
+  it('is false for a decades-old launch even with a fresh firstSeenAt stamp (OSCAR 29)', () => {
+    const seen = new Date(now - 3 * 60 * 60 * 1000).toISOString();
+    const oscar29Line1 = '1 18362U 87080B   26207.64992772  .00000068  00000+0  10087-3 0  9998';
+    expect(isRecentlyLaunched({ firstSeenAt: seen, line1: oscar29Line1 }, now)).toBe(false);
+  });
 });
 
 describe('hasAnyRecentlyLaunched', () => {

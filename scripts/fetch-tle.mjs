@@ -467,13 +467,16 @@ async function main() {
 
   const fetchedAt = new Date().toISOString();
   const previous = await loadPreviousFirstSeenMap();
-  const { newlyLaunchedCount, skippedReason, droppedCorrupt } = applyFirstSeenAt(
+  const { newlyLaunchedCount, skippedReason, droppedCorrupt, rejectedStaleLaunch } = applyFirstSeenAt(
     seen,
     previous,
     fetchedAt,
   );
   if (droppedCorrupt > 0) {
     console.log(`  dropped ${droppedCorrupt} bulk-corrupt firstSeenAt stamp(s) from previous catalog`);
+  }
+  if (rejectedStaleLaunch > 0) {
+    console.log(`  rejected ${rejectedStaleLaunch} stale-launch false NEW stamp(s) (TLE launch year too old)`);
   }
   if (skippedReason) {
     console.log(`  new-launch stamping skipped (${skippedReason})`);
