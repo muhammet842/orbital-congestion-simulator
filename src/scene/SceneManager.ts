@@ -6,6 +6,7 @@ import {
   PerspectiveCamera,
   Raycaster,
   Scene,
+  TOUCH,
   Vector2,
   WebGLRenderer,
 } from 'three';
@@ -131,9 +132,17 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    this.controls.minDistance = 0.02;
-    this.controls.maxDistance = 30;
+    // Earth radius is ~1 in scene units; keep the camera outside the globe
+    // and close enough that empty space isn't reachable.
+    this.controls.minDistance = 1.35;
+    this.controls.maxDistance = 10;
     this.controls.target.set(0, 0, 0);
+    // Pinch-zoom must not pan the orbit target — on phones TWO-finger default
+    // is DOLLY_PAN, which drifts Earth off-center.
+    this.controls.enablePan = false;
+    this.controls.screenSpacePanning = false;
+    this.controls.touches.ONE = TOUCH.ROTATE;
+    this.controls.touches.TWO = TOUCH.DOLLY;
 
     const ambientLight = new AmbientLight(0x1a2040, 0.28);
     this.scene.add(ambientLight);
@@ -204,6 +213,19 @@ export class SceneManager {
 
   stop(): void {
     cancelAnimationFrame(this.animationId);
+  }
+
+  /**
+   * Free navigation always orbits Earth (origin). Conjunction / event-replay
+   * modes temporarily move the target; don't fight those.
+   */
+  private keepEarthCenteredOrbit(): void {
+    const state = getState();
+    if (state.selectedConjunction || state.eventReplay || state.verificationTime) return;
+    if (this.cameraFly.isActive()) return;
+    if (this.controls.target.lengthSq() > 1e-8) {
+      this.controls.target.set(0, 0, 0);
+    }
   }
 
   private onStateChange(): void {
@@ -589,6 +611,7 @@ export class SceneManager {
 
     if (!flying) {
       this.controls.update();
+      this.keepEarthCenteredOrbit();
     }
 
     this.camera.updateMatrixWorld();
