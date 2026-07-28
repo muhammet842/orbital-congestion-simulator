@@ -6,7 +6,6 @@ import {
   PerspectiveCamera,
   Raycaster,
   Scene,
-  TOUCH,
   Vector2,
   WebGLRenderer,
 } from 'three';
@@ -137,12 +136,11 @@ export class SceneManager {
     this.controls.minDistance = 1.35;
     this.controls.maxDistance = 10;
     this.controls.target.set(0, 0, 0);
-    // Pinch-zoom must not pan the orbit target — on phones TWO-finger default
-    // is DOLLY_PAN, which drifts Earth off-center.
+    // Pinch-zoom must not pan the orbit target — phones default to
+    // two-finger DOLLY_PAN, which drifts Earth off-center. Disabling pan
+    // keeps pinch as zoom-only while orbit stays locked on the origin.
     this.controls.enablePan = false;
     this.controls.screenSpacePanning = false;
-    this.controls.touches.ONE = TOUCH.ROTATE;
-    this.controls.touches.TWO = TOUCH.DOLLY;
 
     const ambientLight = new AmbientLight(0x1a2040, 0.28);
     this.scene.add(ambientLight);
