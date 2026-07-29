@@ -38,7 +38,7 @@ body {
   width: 100%;
   height: 100%;
   grid-template:
-    'header header header' 48px
+    'header header header' 56px
     'left scene right' 1fr
     'time time time' 64px / 260px 1fr 280px;
 }
@@ -47,48 +47,166 @@ body {
   grid-area: header;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--panel-border);
-  background: var(--panel-bg);
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.12);
+  background:
+    linear-gradient(180deg, rgba(14, 22, 40, 0.98) 0%, rgba(8, 12, 24, 0.94) 100%);
+  box-shadow: inset 0 -1px 0 rgba(34, 211, 238, 0.08);
+  position: relative;
+  z-index: 5;
+}
+
+.app-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(34, 211, 238, 0.45) 20%,
+    rgba(34, 211, 238, 0.15) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  flex: 1;
+}
+
+.header-mark {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.header-mark__core {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+}
+
+.header-mark__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(34, 211, 238, 0.55);
+}
+
+.header-mark__ring--inner {
+  inset: 4px;
+  border-color: rgba(34, 211, 238, 0.35);
+  transform: rotate(-18deg) scaleX(1.05);
+}
+
+.header-mark__ring--outer {
+  border-color: rgba(34, 211, 238, 0.55);
+  transform: rotate(28deg) scaleY(0.72);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.15);
 }
 
 .header-title {
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.header-title-full,
+.header-title-short {
+  font-size: 0.98rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-title-short {
+  display: none;
+}
+
+.header-actions {
+  display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  font-size: 0.95rem;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.header-icon {
-  font-size: 1.1rem;
+.header-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
 }
 
-.header-link {
-  color: var(--accent);
-  text-decoration: none;
+.header-lang-icon {
   font-size: 0.85rem;
+  opacity: 0.75;
+  line-height: 1;
+  padding-left: 4px;
 }
 
-.header-link:hover {
-  text-decoration: underline;
+.header-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.header-github:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+}
+
+.header-github-icon {
+  display: block;
+  flex-shrink: 0;
 }
 
 /* ── Language selector dropdown ─────────────────────────────────────────── */
 .lang-select {
   appearance: none;
   -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
   color: var(--text-primary);
   cursor: pointer;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 650;
   font-family: inherit;
   letter-spacing: 0.04em;
-  padding: 5px 26px 5px 10px;
+  padding: 5px 26px 5px 6px;
   height: 32px;
   outline: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
@@ -98,17 +216,17 @@ body {
 }
 
 .lang-select:hover {
-  background-color: rgba(34, 211, 238, 0.1);
-  border-color: var(--accent);
+  background-color: rgba(34, 211, 238, 0.08);
+  border-color: rgba(34, 211, 238, 0.28);
 }
 
 .lang-select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.18);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.16);
 }
 
 .lang-select option {
-  background: #1e293b;
+  background: #0f172a;
   color: var(--text-primary);
 }
 
@@ -271,9 +389,9 @@ body {
   flex-shrink: 0;
   font-size: 1.05rem;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -672,10 +790,6 @@ body {
 .speed-buttons {
   display: flex;
   gap: 4px;
-}
-
-.header-title-short {
-  display: none;
 }
 
 .layer-filters {
@@ -1509,7 +1623,7 @@ body {
 @media (max-width: 860px) {
   .app-grid {
     grid-template:
-      'header' 52px
+      'header' 56px
       'scene' 1fr
       'time' auto
       / 1fr;
@@ -1517,22 +1631,26 @@ body {
   }
 
   .app-header {
-    justify-content: flex-start;
-    gap: 6px;
-    padding: 0 8px;
+    gap: 8px;
+    padding: 0 10px;
     padding-top: env(safe-area-inset-top, 0px);
-    min-height: 52px;
+    min-height: 56px;
     height: auto;
   }
 
-  .header-title {
+  .header-brand {
+    gap: 8px;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-size: 0.82rem;
-    gap: 6px;
+  }
+
+  .header-mark {
+    width: 24px;
+    height: 24px;
+  }
+
+  .header-mark__core {
+    inset: 8px;
   }
 
   .header-title-full {
@@ -1540,31 +1658,43 @@ body {
   }
 
   .header-title-short {
-    display: inline;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: block;
+    font-size: 0.86rem;
   }
 
-  .header-link {
+  .header-actions {
+    gap: 4px;
+    padding: 3px;
+  }
+
+  .header-github-label,
+  .header-lang-icon {
     display: none;
+  }
+
+  .header-github {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
   }
 
   .lang-select {
     height: 36px;
     padding: 4px 22px 4px 8px;
     font-size: 0.72rem;
-    flex-shrink: 0;
   }
 
   .admin-header-btn {
     width: 36px;
     height: 36px;
     padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     font-size: 1.05rem;
-    flex-shrink: 0;
+  }
+
+  .kessler-header-btn {
+    width: 36px;
+    height: 36px;
   }
 
   .panel-toggle-btn {
@@ -1574,7 +1704,7 @@ body {
   .panel-left,
   .panel-right {
     position: fixed;
-    top: calc(52px + env(safe-area-inset-top, 0px));
+    top: calc(56px + env(safe-area-inset-top, 0px));
     bottom: 0;
     width: min(86vw, 340px);
     margin: 0;
@@ -1686,12 +1816,9 @@ body {
 }
 
 @media (max-width: 480px) {
-  .header-title {
+  .header-title-full,
+  .header-title-short {
     font-size: 0.8rem;
-  }
-
-  .header-icon {
-    font-size: 1rem;
   }
 
   .panel-left,
@@ -2123,21 +2250,26 @@ body {
 /* Header button */
 .admin-header-btn {
   appearance: none;
-  background: rgba(34, 211, 238, 0.1);
-  border: 1px solid rgba(34, 211, 238, 0.35);
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
   color: var(--accent);
   cursor: pointer;
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 650;
   font-family: inherit;
-  letter-spacing: 0.03em;
-  padding: 5px 12px;
-  transition: background 0.18s, border-color 0.18s;
+  letter-spacing: 0.02em;
+  padding: 0 11px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .admin-header-btn:hover {
-  background: rgba(34, 211, 238, 0.2);
-  border-color: var(--accent);
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.55);
 }
 
 /* ── Backdrop ──────────────────────────────────────────────────────────────── */
@@ -2618,24 +2750,24 @@ body {
 /* Header trigger — compact icon button, visible to every visitor (unlike
    the admin-only header button), so it sits alongside the panel toggles. */
 .kessler-header-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
-  font-size: 1.05rem;
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
   touch-action: manipulation;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .kessler-header-btn:hover {
-  background: rgba(34, 211, 238, 0.14);
-  border-color: var(--accent);
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
   color: var(--accent);
 }
 

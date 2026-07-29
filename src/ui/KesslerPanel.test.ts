@@ -6,8 +6,12 @@ import { closeKesslerPanel, initKesslerPanel, isKesslerPanelOpen, openKesslerPan
 function mountHeader(): void {
   document.body.innerHTML = `
     <header class="app-header">
-      <div class="header-title">Orbital Congestion Simulator</div>
-      <select id="lang-select"></select>
+      <div class="header-brand">
+        <div class="header-title">Orbital Congestion Simulator</div>
+      </div>
+      <div class="header-actions" id="header-actions">
+        <select id="lang-select"></select>
+      </div>
     </header>
   `;
 }
@@ -33,8 +37,12 @@ describe('initKesslerPanel', () => {
     initKesslerPanel();
     const btn = document.getElementById('kessler-panel-btn');
     const langSel = document.getElementById('lang-select');
+    const actions = document.getElementById('header-actions');
     expect(btn).not.toBeNull();
-    expect(btn?.nextElementSibling).toBe(langSel);
+    expect(actions?.contains(btn!)).toBe(true);
+    expect(
+      Boolean(btn && langSel && (btn.compareDocumentPosition(langSel) & Node.DOCUMENT_POSITION_FOLLOWING)),
+    ).toBe(true);
   });
 
   it('opens the panel when the header button is clicked', () => {

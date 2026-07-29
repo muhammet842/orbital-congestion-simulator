@@ -14,18 +14,41 @@ export function createLayout(root: HTMLElement): {
     <div class="app-grid">
       <header class="app-header">
         <button id="toggle-left-panel" class="panel-toggle-btn" type="button" aria-label="Toggle filters &amp; stats panel" aria-expanded="false">☰</button>
-        <div class="header-title">
-          <span class="header-icon" aria-hidden="true">🛰</span>
-          <span class="header-title-full">Orbital Congestion Simulator</span>
-          <span class="header-title-short">Orbital Congestion</span>
+
+        <div class="header-brand">
+          <span class="header-mark" aria-hidden="true">
+            <span class="header-mark__core"></span>
+            <span class="header-mark__ring header-mark__ring--inner"></span>
+            <span class="header-mark__ring header-mark__ring--outer"></span>
+          </span>
+          <div class="header-title">
+            <span class="header-title-full">Orbital Congestion Simulator</span>
+            <span class="header-title-short">Orbital Congestion</span>
+          </div>
         </div>
+
         <button id="toggle-right-panel" class="panel-toggle-btn" type="button" aria-label="Toggle object details panel" aria-expanded="false">ℹ</button>
-        <select id="lang-select" class="lang-select" aria-label="Select language">
-          ${SUPPORTED_LANGS.map((l) => `<option value="${l}"${l === getLang() ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
-        </select>
-        <a class="header-link" href="https://github.com" target="_blank" rel="noopener noreferrer">
-          GitHub ↗
-        </a>
+
+        <div class="header-actions" id="header-actions">
+          <label class="header-lang">
+            <span class="header-lang-icon" aria-hidden="true">🌐</span>
+            <select id="lang-select" class="lang-select" aria-label="Select language">
+              ${SUPPORTED_LANGS.map((l) => `<option value="${l}"${l === getLang() ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
+            </select>
+          </label>
+          <a
+            class="header-github"
+            href="https://github.com/muhammet842/orbital-congestion-simulator"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View source on GitHub"
+          >
+            <svg class="header-github-icon" viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+              <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82A7.68 7.68 0 0 1 8 4.77c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+            <span class="header-github-label">GitHub</span>
+          </a>
+        </div>
       </header>
       <aside id="left-panel" class="panel panel-left"></aside>
       <main id="scene-container" class="scene-container"></main>

@@ -105,8 +105,10 @@ export function initKesslerPanel(): void {
   btn.addEventListener('click', openKesslerPanel);
 
   const header = document.querySelector('.app-header');
+  const actions = document.getElementById('header-actions');
   const langSel = document.getElementById('lang-select');
-  if (header) {
+  if (actions && langSel) actions.insertBefore(btn, langSel.closest('.header-lang') ?? langSel);
+  else if (header) {
     if (langSel) header.insertBefore(btn, langSel);
     else header.appendChild(btn);
   }
