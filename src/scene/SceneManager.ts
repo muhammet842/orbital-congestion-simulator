@@ -131,16 +131,13 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    // Earth radius is ~1 in scene units; keep the camera outside the globe
-    // and close enough that empty space isn't reachable.
-    this.controls.minDistance = 1.35;
-    this.controls.maxDistance = 10;
     this.controls.target.set(0, 0, 0);
     // Pinch-zoom must not pan the orbit target — phones default to
     // two-finger DOLLY_PAN, which drifts Earth off-center. Disabling pan
     // keeps pinch as zoom-only while orbit stays locked on the origin.
     this.controls.enablePan = false;
     this.controls.screenSpacePanning = false;
+    this.applyOrbitDistanceLimits(false);
 
     const ambientLight = new AmbientLight(0x1a2040, 0.28);
     this.scene.add(ambientLight);
@@ -226,6 +223,21 @@ export class SceneManager {
     }
   }
 
+  /**
+   * Globe view clamps the camera outside Earth (radius ≈ 1). Conjunction
+   * verification orbits the pair midpoint at ~0.1 scene units — the globe
+   * minDistance would otherwise block all zoom-in (and yank the fly-in pose).
+   */
+  private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
+    if (conjunctionFocus) {
+      this.controls.minDistance = 0.02;
+      this.controls.maxDistance = 6;
+      return;
+    }
+    this.controls.minDistance = 1.35;
+    this.controls.maxDistance = 10;
+  }
+
   private onStateChange(): void {
     const { selectedConjunction, selectedIndex, selectedEventId, objects, conjunctionRevision } = getState();
 
@@ -292,6 +304,9 @@ export class SceneManager {
         this.lastConjunctionSessionKey = sessionKey;
         this.lastConjunctionRevision = conjunctionRevision;
         this.conjunctionVerification.rebuildForEvent(selectedConjunction, objects);
+        // Relax dolly limits *before* the fly-in so OrbitControls.update
+        // does not clamp the close-pair pose back to globe minDistance.
+        this.applyOrbitDistanceLimits(true);
 
         const flyTime = getSimulationTime();
         const propA = propagateObject(objects[selectedConjunction.indexA]?.satrec, flyTime);
@@ -315,6 +330,7 @@ export class SceneManager {
         }
       }
 
+      this.applyOrbitDistanceLimits(true);
       this.canvasContainer.classList.add('scene-container--conjunction-focus');
       this.earth.mesh.visible = true;
       return;
@@ -323,6 +339,7 @@ export class SceneManager {
     if (this.lastConjunctionSessionKey) {
       this.conjunctionVerification.disposeVisuals();
       this.conjunctionLabels.reset();
+      this.applyOrbitDistanceLimits(false);
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
     }
 
