@@ -559,6 +559,7 @@ export class SceneManager {
           altitudeFilter: currentState.altitudeFilter,
           inclinationFilter: currentState.inclinationFilter,
           showOnlyRecentLaunches: currentState.showOnlyRecentLaunches,
+          categoryFilter: currentState.categoryFilter,
           conjunctionLiveDistanceKm,
         },
       );
@@ -684,6 +685,7 @@ export class SceneManager {
       if (
         propagation &&
         state.layerFilters[propagation.layer] &&
+        (state.categoryFilter === 'all' || obj.category === state.categoryFilter) &&
         matchesSearchQuery(obj, state.searchQuery)
       ) {
         selectObject(objectIndex);

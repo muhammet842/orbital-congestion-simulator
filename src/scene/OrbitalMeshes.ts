@@ -16,7 +16,7 @@ import {
   getFunctionGroupPulse,
 } from '../orbital/classify';
 import { propagateObject, type PropagationResult } from '../orbital/propagator';
-import type { TrackedObject, OrbitLayer } from '../types';
+import type { TrackedObject, OrbitLayer, ObjectCategory } from '../types';
 import { ORBIT_DISPLAY_SCALE } from '../types';
 import { matchesSearchQuery } from '../state/appState';
 import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
@@ -98,6 +98,7 @@ export class OrbitalMeshes {
       altitudeFilter?: { minKm: number; maxKm: number } | null;
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
       showOnlyRecentLaunches?: boolean;
+      categoryFilter?: ObjectCategory | 'all';
       /** Real-world km between the two conjunction-highlighted objects right
        *  now — caps their model scale so it never visually dwarfs a genuine
        *  multi-km near-miss (see CONJUNCTION_SIZE_FRACTION_OF_SEPARATION). */
@@ -108,6 +109,7 @@ export class OrbitalMeshes {
     const altitudeFilter = options?.altitudeFilter ?? null;
     const inclinationFilter = options?.inclinationFilter ?? null;
     const showOnlyRecentLaunches = options?.showOnlyRecentLaunches ?? false;
+    const categoryFilter = options?.categoryFilter ?? 'all';
     const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
@@ -123,17 +125,21 @@ export class OrbitalMeshes {
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches,
+        showOnlyRecentLaunches, categoryFilter,
       );
       this.debrisPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches,
+        showOnlyRecentLaunches, categoryFilter,
       );
     }
 
-    this.syncDetailWrappers(objects, propagations, gltfDetailIndices, layerFilters, searchQuery, conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs, colorByFunction, conjunctionLiveDistanceKm);
+    this.syncDetailWrappers(
+      objects, propagations, gltfDetailIndices, layerFilters, searchQuery,
+      conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs,
+      colorByFunction, conjunctionLiveDistanceKm, categoryFilter,
+    );
 
     const nextVisible: Object3D[] = [];
     for (const wrapper of this.detailWrappers.values()) {
@@ -203,6 +209,7 @@ export class OrbitalMeshes {
     pulseTimeMs: number,
     colorByFunction: boolean,
     conjunctionLiveDistanceKm: number | null,
+    categoryFilter: ObjectCategory | 'all' = 'all',
   ): void {
     for (const [index, wrapper] of this.detailWrappers) {
       if (!gltfDetailIndices.has(index)) {
@@ -221,7 +228,11 @@ export class OrbitalMeshes {
         (conjunctionFocus && !isConjunction) ||
         (!isSelected &&
           !isConjunction &&
-          (!layerFilters[obj.layer] || !matchesSearch(obj, searchQuery)));
+          (
+            !layerFilters[obj.layer] ||
+            (categoryFilter !== 'all' && obj.category !== categoryFilter) ||
+            !matchesSearch(obj, searchQuery)
+          ));
 
       let wrapper = this.detailWrappers.get(index);
       if (!wrapper) {

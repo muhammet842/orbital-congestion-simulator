@@ -34,19 +34,31 @@ describe('initLeftPanel – DOM smoke', () => {
     document.body.removeChild(container);
   });
 
-  it('renders a checkbox for each of the four orbit layers', () => {
+  it('renders a toggle chip for each of the four orbit layers', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     initLeftPanel(container);
-    const layerCheckboxes = container.querySelectorAll('input[data-layer]');
-    expect(layerCheckboxes.length).toBe(4);
-    const layers = Array.from(layerCheckboxes).map(
-      (el) => (el as HTMLInputElement).dataset.layer,
+    const layerChips = container.querySelectorAll('button[data-layer]');
+    expect(layerChips.length).toBe(4);
+    const layers = Array.from(layerChips).map(
+      (el) => (el as HTMLButtonElement).dataset.layer,
     );
     expect(layers).toContain('LEO');
     expect(layers).toContain('MEO');
     expect(layers).toContain('GEO');
     expect(layers).toContain('HEO');
+    document.body.removeChild(container);
+  });
+
+  it('creates the category filter section with all / satellites / stations / debris', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+    expect(container.querySelector('#category-filters')).not.toBeNull();
+    const options = container.querySelectorAll('#category-filters input[data-category]');
+    expect(options.length).toBe(4);
+    const values = Array.from(options).map((el) => (el as HTMLInputElement).value);
+    expect(values).toEqual(['all', 'active', 'stations', 'debris']);
     document.body.removeChild(container);
   });
 
@@ -75,7 +87,7 @@ describe('initLeftPanel – DOM smoke', () => {
     document.body.removeChild(container);
   });
 
-  it('creates the #color-by-function display option checkbox', () => {
+  it('creates the #color-by-function display option toggle', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     initLeftPanel(container);

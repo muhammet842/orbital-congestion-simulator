@@ -1,4 +1,4 @@
-import { LAYER_HEX, type OrbitLayer } from '../types';
+import { LAYER_HEX, type ObjectCategory, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
   hasUpcomingConjunctionScanCompleted,
@@ -17,6 +17,7 @@ import {
   selectObject,
   setSearchQuery,
   setConjunctionSortMode,
+  setCategoryFilter,
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
@@ -30,6 +31,7 @@ import { t, applyTranslations, onLangChange } from '../i18n/i18n';
 import { isRecentlyLaunched, hasAnyRecentlyLaunched } from '../data/newLaunches';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
+const CATEGORY_FILTERS: Array<ObjectCategory | 'all'> = ['all', 'active', 'stations', 'debris'];
 const LIST_ITEM_HEIGHT = 36;
 const LIST_VIEWPORT_HEIGHT = 200;
 const LIST_OVERSCAN = 6;
@@ -61,6 +63,9 @@ export function initLeftPanel(container: HTMLElement): void {
     <h2 class="panel-heading" data-i18n="ui.orbit_layers">Orbit Layers</h2>
     <div class="layer-filters" id="layer-filters"></div>
 
+    <h2 class="panel-heading" data-i18n="ui.object_types">Object Types</h2>
+    <div class="category-filters" id="category-filters"></div>
+
     <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
     <div class="display-options" id="display-options"></div>
 
@@ -80,6 +85,7 @@ export function initLeftPanel(container: HTMLElement): void {
 
   initSearchAndList(container);
   renderLayerFilters(container);
+  renderCategoryFilters(container);
   renderDisplayOptions(container);
   renderStats(container);
   renderConjunctionFilters(container);
@@ -127,6 +133,8 @@ export function initLeftPanel(container: HTMLElement): void {
   onLangChange(() => {
     applyTranslations(container);
     renderDisplayOptions(container);
+    renderCategoryFilters(container);
+    renderLayerFilters(container);
     renderStats(container);
     renderConjunctionFilters(container);
     renderConjunctions(container);
@@ -135,6 +143,7 @@ export function initLeftPanel(container: HTMLElement): void {
 
   let lastListKey = '';
   let lastSelectedIndex: number | null = null;
+  let lastFilterUiKey = '';
 
   subscribe(() => {
     renderStats(container);
@@ -142,9 +151,35 @@ export function initLeftPanel(container: HTMLElement): void {
     renderConjunctions(container);
 
     const state = getState();
+    const filterUiKey = [
+      Object.entries(state.layerFilters).join(','),
+      state.categoryFilter,
+      state.colorByFunction,
+      state.showOnlyRecentLaunches,
+      hasAnyRecentlyLaunched(state.objects),
+    ].join('|');
+    if (filterUiKey !== lastFilterUiKey) {
+      renderLayerFilters(container);
+      renderCategoryFilters(container);
+      renderDisplayOptions(container);
+      lastFilterUiKey = filterUiKey;
+    }
+
     const viewport = container.querySelector('#object-list-viewport') as HTMLElement;
     const scrollBucket = Math.floor(viewport.scrollTop / LIST_ITEM_HEIGHT);
-    const listKey = `${state.searchQuery}|${scrollBucket}|${state.objects.length}`;
+    const listKey = [
+      state.searchQuery,
+      scrollBucket,
+      state.objects.length,
+      state.filteredIndices.length,
+      state.categoryFilter,
+      state.showOnlyRecentLaunches,
+      Object.entries(state.layerFilters).join(','),
+      state.altitudeFilter?.minKm,
+      state.altitudeFilter?.maxKm,
+      state.inclinationFilter?.minDeg,
+      state.inclinationFilter?.maxDeg,
+    ].join('|');
 
     if (listKey !== lastListKey) {
       renderObjectList(container);
@@ -243,28 +278,62 @@ function escapeHtml(text: string): string {
 
 function renderLayerFilters(container: HTMLElement): void {
   const filtersEl = container.querySelector('#layer-filters')!;
-  filtersEl.innerHTML = LAYERS.map(
-    (layer) => `
-      <label class="filter-row">
-        <input type="checkbox" data-layer="${layer}" checked />
-        <span class="layer-dot" style="background: ${LAYER_HEX[layer]}"></span>
-        ${layer}
-      </label>
-    `,
-  ).join('');
+  const { layerFilters } = getState();
 
-  filtersEl.querySelectorAll('input[data-layer]').forEach((input) => {
-    input.addEventListener('change', () => {
-      const layer = (input as HTMLInputElement).dataset.layer as OrbitLayer;
+  filtersEl.innerHTML = `
+    <div class="filter-chip-grid" role="group" aria-label="${t('ui.orbit_layers')}">
+      ${LAYERS.map(
+        (layer) => `
+          <button
+            type="button"
+            class="filter-chip${layerFilters[layer] ? ' filter-chip--on' : ''}"
+            data-layer="${layer}"
+            aria-pressed="${layerFilters[layer]}"
+          >
+            <span class="filter-chip-dot" style="background: ${LAYER_HEX[layer]}"></span>
+            <span class="filter-chip-label">${layer}</span>
+          </button>
+        `,
+      ).join('')}
+    </div>
+  `;
+
+  filtersEl.querySelectorAll<HTMLButtonElement>('button[data-layer]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const layer = btn.dataset.layer as OrbitLayer;
       toggleLayerFilter(layer);
     });
   });
+}
 
-  subscribe(() => {
-    const state = getState();
-    filtersEl.querySelectorAll('input[data-layer]').forEach((input) => {
-      const layer = (input as HTMLInputElement).dataset.layer as OrbitLayer;
-      (input as HTMLInputElement).checked = state.layerFilters[layer];
+function renderCategoryFilters(container: HTMLElement): void {
+  const el = container.querySelector('#category-filters');
+  if (!el) return;
+  const { categoryFilter } = getState();
+
+  el.innerHTML = `
+    <div class="filter-segment" role="radiogroup" aria-label="${t('ui.object_types')}">
+      ${CATEGORY_FILTERS.map(
+        (cat) => `
+          <label class="filter-segment-option${categoryFilter === cat ? ' filter-segment-option--on' : ''}">
+            <input
+              type="radio"
+              name="category-filter"
+              value="${cat}"
+              data-category="${cat}"
+              ${categoryFilter === cat ? 'checked' : ''}
+            />
+            <span class="filter-segment-swatch filter-segment-swatch--${cat}" aria-hidden="true"></span>
+            <span>${t(cat === 'all' ? 'cat.filter_all' : `cat.${cat}`)}</span>
+          </label>
+        `,
+      ).join('')}
+    </div>
+  `;
+
+  el.querySelectorAll<HTMLInputElement>('input[data-category]').forEach((input) => {
+    input.addEventListener('change', () => {
+      setCategoryFilter(input.value as ObjectCategory | 'all');
     });
   });
 }
@@ -272,53 +341,58 @@ function renderLayerFilters(container: HTMLElement): void {
 function renderDisplayOptions(container: HTMLElement): void {
   const optionsEl = container.querySelector('#display-options')!;
   const showRecentToggle = hasAnyRecentlyLaunched(getState().objects);
+  const { colorByFunction, showOnlyRecentLaunches } = getState();
 
   optionsEl.innerHTML = `
-    <label class="filter-row filter-row--toggle">
-      <input type="checkbox" id="color-by-function" />
+    <button
+      type="button"
+      class="filter-toggle-card${colorByFunction ? ' filter-toggle-card--on' : ''}"
+      id="color-by-function"
+      aria-pressed="${colorByFunction}"
+    >
       <span class="function-legend" aria-hidden="true">
-        <span class="function-dot function-dot--starlink" title="Starlink"></span>
-        <span class="function-dot function-dot--station" title="Stations"></span>
-        <span class="function-dot function-dot--active" title="Active"></span>
-        <span class="function-dot function-dot--debris" title="Debris"></span>
+        <span class="function-dot function-dot--starlink"></span>
+        <span class="function-dot function-dot--station"></span>
+        <span class="function-dot function-dot--active"></span>
+        <span class="function-dot function-dot--debris"></span>
       </span>
-      ${t('ui.color_by_function')}
-    </label>
-    <p class="display-options-hint muted">${t('ui.cbf_hint')}</p>
+      <span class="filter-toggle-copy">
+        <strong>${t('ui.color_by_function')}</strong>
+        <span class="muted">${t('ui.cbf_hint')}</span>
+      </span>
+    </button>
     ${
       showRecentToggle
         ? `
-    <label class="filter-row filter-row--toggle">
-      <input type="checkbox" id="show-recent-launches" />
+    <button
+      type="button"
+      class="filter-toggle-card${showOnlyRecentLaunches ? ' filter-toggle-card--on' : ''}"
+      id="show-recent-launches"
+      aria-pressed="${showOnlyRecentLaunches}"
+    >
       <span class="new-launch-badge" aria-hidden="true">${t('badge.new_launch')}</span>
-      ${t('ui.recent_launches')}
-    </label>
+      <span class="filter-toggle-copy">
+        <strong>${t('ui.recent_launches')}</strong>
+      </span>
+    </button>
     `
         : ''
     }
   `;
 
-  const checkbox = optionsEl.querySelector('#color-by-function') as HTMLInputElement;
-  checkbox.addEventListener('change', () => {
-    setColorByFunction(checkbox.checked);
+  const colorBtn = optionsEl.querySelector('#color-by-function') as HTMLButtonElement;
+  colorBtn.addEventListener('click', () => {
+    setColorByFunction(!getState().colorByFunction);
   });
 
-  const recentCheckbox = optionsEl.querySelector('#show-recent-launches') as HTMLInputElement | null;
-  recentCheckbox?.addEventListener('change', () => {
-    setShowOnlyRecentLaunches(recentCheckbox.checked);
+  const recentBtn = optionsEl.querySelector('#show-recent-launches') as HTMLButtonElement | null;
+  recentBtn?.addEventListener('click', () => {
+    setShowOnlyRecentLaunches(!getState().showOnlyRecentLaunches);
   });
 
-  // If the toggle just got hidden (e.g. the recent-launch window rolled past
-  // for every object), make sure we're not left silently filtering the list
-  // down to nothing via a now-invisible control.
   if (!showRecentToggle && getState().showOnlyRecentLaunches) {
     setShowOnlyRecentLaunches(false);
   }
-
-  subscribe(() => {
-    checkbox.checked = getState().colorByFunction;
-    if (recentCheckbox) recentCheckbox.checked = getState().showOnlyRecentLaunches;
-  });
 }
 
 function renderStats(container: HTMLElement): void {

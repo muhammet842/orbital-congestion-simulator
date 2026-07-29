@@ -25,6 +25,7 @@ const en: Translations = {
   'ui.search_objects':    'Search Objects',
   'ui.search_ph':         'Name, NORAD, country, or operator',
   'ui.orbit_layers':      'Orbit Layers',
+  'ui.object_types':      'Object Types',
   'ui.display_options':   'Display Options',
   'ui.color_by_function': 'Color by Function',
   'ui.cbf_hint':          'Starlink · Stations · Active · Debris',
@@ -53,9 +54,10 @@ const en: Translations = {
   'stats.tle_updated':  'TLE data updated',
 
   // ── Object categories ─────────────────────────────────────────────────
-  'cat.active':   'Active',
-  'cat.debris':   'Debris',
-  'cat.stations': 'Stations',
+  'cat.filter_all': 'All',
+  'cat.active':     'Satellites',
+  'cat.debris':     'Debris',
+  'cat.stations':   'Stations',
 
   // ── TLE staleness banners ─────────────────────────────────────────────
   'tle.critical': 'TLE data is {n} days old — LEO positions may be off by hundreds of km. Run npm run fetch-tle.',
@@ -419,6 +421,7 @@ const tr: Translations = {
   'ui.search_objects':    'Nesne Ara',
   'ui.search_ph':         'İsim, NORAD, ülke veya operatör',
   'ui.orbit_layers':      'Yörünge Katmanları',
+  'ui.object_types':      'Nesne Türleri',
   'ui.display_options':   'Görüntüleme Seçenekleri',
   'ui.color_by_function': 'Fonksiyona Göre Renklendir',
   'ui.cbf_hint':          'Starlink · İstasyonlar · Aktif · Enkaz',
@@ -442,9 +445,10 @@ const tr: Translations = {
   'stats.avg_alt':     'Ort. irtifa',
   'stats.tle_updated': 'TLE güncelleme tarihi',
 
-  'cat.active':   'Aktif',
-  'cat.debris':   'Enkaz',
-  'cat.stations': 'İstasyon',
+  'cat.filter_all': 'Tümü',
+  'cat.active':     'Uydular',
+  'cat.debris':     'Uzay Çöpleri',
+  'cat.stations':   'İstasyonlar',
 
   'tle.critical': 'TLE verisi {n} gün eski — AYY konumları yüzlerce km sapıyor. npm run fetch-tle komutunu çalıştırın.',
   'tle.warn':     'TLE verisi {n} gün eski — AYY doğruluğu azalıyor. npm run fetch-tle komutunu çalıştırın.',
@@ -798,6 +802,7 @@ const de: Translations = {
   'ui.search_objects':    'Objekte suchen',
   'ui.search_ph':         'Name, NORAD, Land oder Betreiber',
   'ui.orbit_layers':      'Umlaufbahnschichten',
+  'ui.object_types':      'Objektarten',
   'ui.display_options':   'Anzeigeoptionen',
   'ui.color_by_function': 'Nach Funktion einfärben',
   'ui.cbf_hint':          'Starlink · Stationen · Aktiv · Trümmer',
@@ -821,9 +826,10 @@ const de: Translations = {
   'stats.avg_alt':     'Mittlere Höhe',
   'stats.tle_updated': 'TLE-Daten aktualisiert',
 
-  'cat.active':   'Aktiv',
-  'cat.debris':   'Trümmer',
-  'cat.stations': 'Stationen',
+  'cat.filter_all': 'Alle',
+  'cat.active':     'Satelliten',
+  'cat.debris':     'Trümmer',
+  'cat.stations':   'Stationen',
 
   'tle.critical': 'TLE-Daten sind {n} Tage alt — LEO-Positionen können um Hunderte von km abweichen. npm run fetch-tle ausführen.',
   'tle.warn':     'TLE-Daten sind {n} Tage alt — LEO-Genauigkeit nimmt ab. npm run fetch-tle ausführen.',
@@ -1177,6 +1183,7 @@ const ru: Translations = {
   'ui.search_objects':    'Поиск объектов',
   'ui.search_ph':         'Название, NORAD, страна или оператор',
   'ui.orbit_layers':      'Орбитальные слои',
+  'ui.object_types':      'Типы объектов',
   'ui.display_options':   'Параметры отображения',
   'ui.color_by_function': 'Раскраска по функции',
   'ui.cbf_hint':          'Starlink · Станции · Активные · Обломки',
@@ -1200,9 +1207,10 @@ const ru: Translations = {
   'stats.avg_alt':     'Средняя высота',
   'stats.tle_updated': 'TLE обновлено',
 
-  'cat.active':   'Активные',
-  'cat.debris':   'Обломки',
-  'cat.stations': 'Станции',
+  'cat.filter_all': 'Все',
+  'cat.active':     'Спутники',
+  'cat.debris':     'Обломки',
+  'cat.stations':   'Станции',
 
   'tle.critical': 'TLE-данные устарели на {n} дней — позиции НОО могут отличаться на сотни км. Выполните npm run fetch-tle.',
   'tle.warn':     'TLE-данные устарели на {n} дней — точность НОО снижается. Выполните npm run fetch-tle.',
@@ -1556,6 +1564,7 @@ const zh: Translations = {
   'ui.search_objects':    '搜索对象',
   'ui.search_ph':         '名称、NORAD、国家或运营商',
   'ui.orbit_layers':      '轨道层',
+  'ui.object_types':      '对象类型',
   'ui.display_options':   '显示选项',
   'ui.color_by_function': '按功能着色',
   'ui.cbf_hint':          'Starlink · 空间站 · 活跃 · 碎片',
@@ -1579,9 +1588,10 @@ const zh: Translations = {
   'stats.avg_alt':     '平均高度',
   'stats.tle_updated': 'TLE数据更新',
 
-  'cat.active':   '活跃',
-  'cat.debris':   '碎片',
-  'cat.stations': '空间站',
+  'cat.filter_all': '全部',
+  'cat.active':     '卫星',
+  'cat.debris':     '碎片',
+  'cat.stations':   '空间站',
 
   'tle.critical': 'TLE数据已过期{n}天 — 低轨道位置可能偏差数百公里。请运行 npm run fetch-tle。',
   'tle.warn':     'TLE数据已过期{n}天 — 低轨道精度下降。请运行 npm run fetch-tle。',

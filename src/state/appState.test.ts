@@ -17,6 +17,7 @@ import {
   stopEventReplay,
   setColorByFunction,
   setShowOnlyRecentLaunches,
+  setCategoryFilter,
   computeFilteredIndices,
   getListIndices,
   selectConjunctionFromAlert,
@@ -46,6 +47,7 @@ function resetState(): void {
     altitudeFilter: null,
     inclinationFilter: null,
     showOnlyRecentLaunches: false,
+    categoryFilter: 'all',
     showOrbitTrail: false,
     showGroundTrack: true,
     colorByFunction: false,
@@ -282,6 +284,114 @@ describe('computeFilteredIndices with showOnlyRecentLaunches', () => {
     ];
     const indices = computeFilteredIndices(objects, layerFilters, '', null, null, true);
     expect(indices).toEqual([0]);
+  });
+});
+
+describe('computeFilteredIndices with categoryFilter', () => {
+  function makeObj(overrides: Partial<TrackedObject>): TrackedObject {
+    return {
+      noradId: 1,
+      name: 'TEST',
+      line1: '',
+      line2: '',
+      category: 'active',
+      country: 'Unknown',
+      owner: 'Unknown',
+      satrec: {} as TrackedObject['satrec'],
+      layer: 'LEO',
+      color: [1, 1, 1],
+      functionGroup: 'active',
+      meanAltitudeKm: 500,
+      inclinationDeg: 50,
+      ...overrides,
+    };
+  }
+
+  const layerFilters = { LEO: true, MEO: true, GEO: true, HEO: true };
+
+  it('includes all categories when filter is all', () => {
+    const objects = [
+      makeObj({ noradId: 1, category: 'active' }),
+      makeObj({ noradId: 2, category: 'debris' }),
+      makeObj({ noradId: 3, category: 'stations' }),
+    ];
+    expect(computeFilteredIndices(objects, layerFilters, '', null, null, false, 'all')).toEqual([
+      0, 1, 2,
+    ]);
+  });
+
+  it('keeps only the selected category', () => {
+    const objects = [
+      makeObj({ noradId: 1, category: 'active' }),
+      makeObj({ noradId: 2, category: 'debris' }),
+      makeObj({ noradId: 3, category: 'stations' }),
+      makeObj({ noradId: 4, category: 'debris' }),
+    ];
+    expect(computeFilteredIndices(objects, layerFilters, '', null, null, false, 'debris')).toEqual([
+      1, 3,
+    ]);
+    expect(computeFilteredIndices(objects, layerFilters, '', null, null, false, 'stations')).toEqual([
+      2,
+    ]);
+    expect(computeFilteredIndices(objects, layerFilters, '', null, null, false, 'active')).toEqual([
+      0,
+    ]);
+  });
+});
+
+describe('setCategoryFilter', () => {
+  it('defaults to all', () => {
+    expect(getState().categoryFilter).toBe('all');
+  });
+
+  it('narrows filteredIndices and the sidebar list to the chosen category', () => {
+    initState(
+      [
+        {
+          noradId: 1,
+          name: 'SAT',
+          line1: '',
+          line2: '',
+          category: 'active',
+          country: 'X',
+          owner: 'X',
+          satrec: {} as TrackedObject['satrec'],
+          layer: 'LEO',
+          color: [1, 1, 1],
+          functionGroup: 'active',
+          meanAltitudeKm: 500,
+          inclinationDeg: 50,
+        },
+        {
+          noradId: 2,
+          name: 'DEB',
+          line1: '',
+          line2: '',
+          category: 'debris',
+          country: 'X',
+          owner: 'X',
+          satrec: {} as TrackedObject['satrec'],
+          layer: 'LEO',
+          color: [1, 1, 1],
+          functionGroup: 'debris',
+          meanAltitudeKm: 500,
+          inclinationDeg: 50,
+        },
+      ],
+      {
+        total: 2,
+        leoPercent: 100,
+        avgAltitude: 500,
+        categoryCounts: { active: 1, debris: 1, stations: 0 },
+        fetchedAt: new Date().toISOString(),
+      },
+    );
+
+    expect(getListIndices().length).toBe(2);
+    setCategoryFilter('debris');
+    expect(getState().categoryFilter).toBe('debris');
+    expect(getState().filteredIndices).toEqual([1]);
+    expect(getListIndices()).toEqual([1]);
   });
 });
 

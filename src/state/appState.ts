@@ -9,7 +9,7 @@ import {
   normalizeConjunctionAlert,
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
-import type { AppStats, ConjunctionEvent, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
+import type { AppStats, ConjunctionEvent, ObjectCategory, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
 import { isRecentlyLaunched } from '../data/newLaunches';
 
 /** How far before the collision to start the replay (ms). */
@@ -55,6 +55,8 @@ export interface AppState {
   inclinationFilter: { minDeg: number; maxDeg: number } | null;
   /** When true, only objects first observed in the last ~14 days are shown. */
   showOnlyRecentLaunches: boolean;
+  /** Object-category filter for list + globe (`all` = no cut). */
+  categoryFilter: ObjectCategory | 'all';
   time: TimeState;
   stats: AppStats;
   conjunctions: ConjunctionEvent[];
@@ -98,6 +100,7 @@ let state: AppState = {
   altitudeFilter: null,
   inclinationFilter: null,
   showOnlyRecentLaunches: false,
+  categoryFilter: 'all',
   time: {
     mode: 'live',
     current: new Date(),
@@ -204,11 +207,13 @@ export function setState(partial: Partial<AppState>): void {
     partial.searchQuery !== undefined ||
     partial.altitudeFilter !== undefined ||
     partial.inclinationFilter !== undefined ||
-    partial.showOnlyRecentLaunches !== undefined
+    partial.showOnlyRecentLaunches !== undefined ||
+    partial.categoryFilter !== undefined
   ) {
     state.filteredIndices = computeFilteredIndices(
       state.objects, state.layerFilters, state.searchQuery,
       state.altitudeFilter, state.inclinationFilter, state.showOnlyRecentLaunches,
+      state.categoryFilter,
     );
   }
 
@@ -227,6 +232,7 @@ export function computeFilteredIndices(
   altitudeFilter: { minKm: number; maxKm: number } | null = null,
   inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
   showOnlyRecentLaunches = false,
+  categoryFilter: ObjectCategory | 'all' = 'all',
 ): number[] {
   const q = searchQuery.trim().toLowerCase();
   const now = Date.now();
@@ -234,6 +240,7 @@ export function computeFilteredIndices(
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
     if (!layerFilters[obj.layer]) continue;
+    if (categoryFilter !== 'all' && obj.category !== categoryFilter) continue;
     if (q && !objectMatchesQuery(obj, q)) continue;
     if (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) continue;
     if (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) continue;
@@ -268,16 +275,10 @@ export function getSortedObjectIndices(): number[] {
   return sortedAllIndices;
 }
 
-/** Indices for the sidebar list (search + optional recent-only filter). */
+/** Indices for the sidebar list (same filters as the globe, A–Z order). */
 export function getListIndices(): number[] {
-  const q = state.searchQuery.trim().toLowerCase();
-  let indices = sortedAllIndices;
-  if (state.showOnlyRecentLaunches) {
-    const now = Date.now();
-    indices = indices.filter((i) => isRecentlyLaunched(state.objects[i], now));
-  }
-  if (!q) return indices;
-  return indices.filter((i) => objectMatchesQuery(state.objects[i], q));
+  const allowed = new Set(state.filteredIndices);
+  return sortedAllIndices.filter((i) => allowed.has(i));
 }
 
 export function setSearchQuery(query: string): void {
@@ -479,6 +480,11 @@ export function setShowOnlyRecentLaunches(enabled: boolean): void {
   setState({ showOnlyRecentLaunches: enabled });
 }
 
+export function setCategoryFilter(filter: ObjectCategory | 'all'): void {
+  if (state.categoryFilter === filter) return;
+  setState({ categoryFilter: filter });
+}
+
 export function setAltitudeFilter(filter: { minKm: number; maxKm: number } | null): void {
   setState({ altitudeFilter: filter });
 }
@@ -531,7 +537,9 @@ export function initState(
   state = {
     ...state,
     objects,
-    filteredIndices: computeFilteredIndices(objects, state.layerFilters, state.searchQuery),
+    filteredIndices: computeFilteredIndices(
+      objects, state.layerFilters, '', null, null, false, 'all',
+    ),
     stats,
     selectedIndex: null,
     selectedEventId: null,
@@ -543,6 +551,8 @@ export function initState(
     searchQuery: '',
     altitudeFilter: null,
     inclinationFilter: null,
+    showOnlyRecentLaunches: false,
+    categoryFilter: 'all',
     conjunctions: [],
     conjunctionHiddenCount: 0,
     conjunctionSortMode: 'time',

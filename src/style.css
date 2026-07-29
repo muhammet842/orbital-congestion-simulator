@@ -684,6 +684,165 @@ body {
   gap: 8px;
 }
 
+.filter-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.filter-chip:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+}
+
+.filter-chip--on {
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--text-primary);
+}
+
+.filter-chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.filter-chip-label {
+  letter-spacing: 0.02em;
+}
+
+.category-filters {
+  margin-bottom: 2px;
+}
+
+.filter-segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.filter-segment-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-segment-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.filter-segment-option:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+}
+
+.filter-segment-option--on {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+}
+
+.filter-segment-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.filter-segment-swatch--all {
+  background: conic-gradient(#52e673, #ffe684, #d16161, #1fd1ff, #52e673);
+}
+
+.filter-segment-swatch--active {
+  background: #52e673;
+}
+
+.filter-segment-swatch--stations {
+  background: #ffe684;
+}
+
+.filter-segment-swatch--debris {
+  background: #d16161;
+}
+
+.display-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-toggle-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: inherit;
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-toggle-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.filter-toggle-card--on {
+  border-color: rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.filter-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter-toggle-copy strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.filter-toggle-copy .muted {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
 .filter-row {
   display: flex;
   align-items: flex-start;
@@ -706,12 +865,6 @@ body {
   flex-shrink: 0;
 }
 
-.display-options {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .filter-row--toggle {
   justify-content: flex-start;
 }
@@ -721,6 +874,7 @@ body {
   align-items: center;
   gap: 3px;
   flex-shrink: 0;
+  margin-top: 3px;
 }
 
 .function-dot {

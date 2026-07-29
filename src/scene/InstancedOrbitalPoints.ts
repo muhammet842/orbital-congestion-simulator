@@ -74,6 +74,7 @@ export class InstancedOrbitalPoints {
     altitudeFilter: { minKm: number; maxKm: number } | null = null,
     inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
     showOnlyRecentLaunches = false,
+    categoryFilter: ObjectCategory | 'all' = 'all',
   ): void {
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
@@ -118,6 +119,7 @@ export class InstancedOrbitalPoints {
         !isConjunction &&
         (
           !layerFilters[obj.layer] ||
+          (categoryFilter !== 'all' && obj.category !== categoryFilter) ||
           !matchesSearch(obj, searchQuery) ||
           (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) ||
           (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) ||
