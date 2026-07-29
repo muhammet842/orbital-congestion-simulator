@@ -439,22 +439,44 @@ export function selectConjunctionAlertsForDisplay(
   events: ConjunctionEvent[],
   options: SelectConjunctionAlertsOptions,
 ): ConjunctionEvent[] {
-  const horizonHours = options.horizonHours ?? 24;
-  const horizonMs = horizonHours * 3_600_000;
   const limit = options.limit ?? MAX_DISPLAY_ALERTS;
-  const endMs = options.nowMs + horizonMs;
+  const ranked =
+    options.sortMode === 'criticality'
+      ? rankConjunctionAlertsByCriticality(filterConjunctionAlertsInHorizon(events, options))
+      : rankConjunctionAlertsByTime(filterConjunctionAlertsInHorizon(events, options));
 
-  const inWindow = events.filter((event) => {
+  return ranked.slice(0, limit);
+}
+
+/** Events whose CPA falls in [now − 1s, now + horizon] (default 24h). */
+export function filterConjunctionAlertsInHorizon(
+  events: ConjunctionEvent[],
+  options: Pick<SelectConjunctionAlertsOptions, 'nowMs' | 'horizonHours'>,
+): ConjunctionEvent[] {
+  const horizonHours = options.horizonHours ?? 24;
+  const endMs = options.nowMs + horizonHours * 3_600_000;
+  return events.filter((event) => {
     const t = event.time.getTime();
     return t >= options.nowMs - 1_000 && t <= endMs;
   });
+}
 
-  const ranked =
-    options.sortMode === 'criticality'
-      ? rankConjunctionAlertsByCriticality(inWindow)
-      : rankConjunctionAlertsByTime(inWindow);
-
-  return ranked.slice(0, limit);
+/**
+ * "+N more" footer: remaining approaches in the next 24h beyond the cards shown,
+ * plus any the scan found but did not keep in the stored pool. Independent of
+ * sort mode — both radios must show the same N.
+ */
+export function countConjunctionOverflow(
+  events: ConjunctionEvent[],
+  options: {
+    nowMs: number;
+    displayedCount: number;
+    hiddenCount: number;
+    horizonHours?: number;
+  },
+): number {
+  const inWindow = filterConjunctionAlertsInHorizon(events, options).length;
+  return Math.max(0, inWindow - options.displayedCount) + Math.max(0, options.hiddenCount);
 }
 
 /** Freeze alert CPA metadata — always resolve indices by NORAD ID, never

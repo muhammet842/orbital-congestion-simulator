@@ -1,6 +1,7 @@
 import { LAYER_HEX, type ObjectCategory, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
+  countConjunctionOverflow,
   hasUpcomingConjunctionScanCompleted,
   isUpcomingConjunctionScanPending,
   selectConjunctionAlertsForDisplay,
@@ -501,6 +502,11 @@ function renderConjunctions(container: HTMLElement): void {
   const visible = getVisibleConjunctions();
   displayedConjunctions = visible;
   const nowMs = getGlobalSimulationTime().getTime();
+  const overflowTotal = countConjunctionOverflow(conjunctions, {
+    nowMs,
+    displayedCount: visible.length,
+    hiddenCount: conjunctionHiddenCount,
+  });
 
   if (visible.length === 0) {
     previousAlertKeys.clear();
@@ -511,7 +517,6 @@ function renderConjunctions(container: HTMLElement): void {
 
   const structureKey = [
     selectedConjunctionSessionKey ?? '',
-    String(conjunctionHiddenCount),
     conjunctionSortMode,
     ...visible.map(
       (c) =>
@@ -519,12 +524,14 @@ function renderConjunctions(container: HTMLElement): void {
     ),
   ].join('|');
 
-  // Same cards already mounted — only refresh countdown copy (avoids drop animation flicker).
+  // Same cards already mounted — only refresh countdown / overflow copy
+  // (avoids drop animation flicker when the scan pool grows).
   if (
     structureKey === lastConjunctionStructureKey &&
     listEl.querySelectorAll('.conjunction-alert').length === visible.length
   ) {
     updateConjunctionAlertTexts(listEl, visible, nowMs);
+    updateConjunctionOverflow(listEl, overflowTotal);
     return;
   }
 
@@ -549,15 +556,33 @@ function renderConjunctions(container: HTMLElement): void {
     })
     .join('');
 
-  const poolExtra = Math.max(0, conjunctions.length - visible.length);
-  const overflowTotal = conjunctionHiddenCount + poolExtra;
-  const overflowHtml =
-    overflowTotal > 0
-      ? `<p class="conjunction-more muted">${t(overflowTotal === 1 ? 'conj.more_one' : 'conj.more_other').replace('{n}', overflowTotal.toLocaleString())}</p>`
-      : '';
-
-  listEl.innerHTML = alertsHtml + overflowHtml;
+  listEl.innerHTML = alertsHtml;
+  updateConjunctionOverflow(listEl, overflowTotal);
   previousAlertKeys = nextKeys;
+}
+
+function formatConjunctionOverflowText(overflowTotal: number): string {
+  return t(overflowTotal === 1 ? 'conj.more_one' : 'conj.more_other').replace(
+    '{n}',
+    overflowTotal.toLocaleString(),
+  );
+}
+
+function updateConjunctionOverflow(listEl: Element, overflowTotal: number): void {
+  let moreEl = listEl.querySelector('.conjunction-more');
+  if (overflowTotal <= 0) {
+    moreEl?.remove();
+    return;
+  }
+  const text = formatConjunctionOverflowText(overflowTotal);
+  if (!moreEl) {
+    moreEl = document.createElement('p');
+    moreEl.className = 'conjunction-more muted';
+    listEl.appendChild(moreEl);
+  }
+  if (moreEl.textContent !== text) {
+    moreEl.textContent = text;
+  }
 }
 
 function formatAlertMessage(c: { objectA: string; objectB: string; distanceKm: number; time: Date }, nowMs: number): string {

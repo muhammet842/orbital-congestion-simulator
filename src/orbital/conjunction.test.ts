@@ -17,6 +17,7 @@ import {
   normalizeConjunctionAlert,
   rankConjunctionAlertsForDisplay,
   selectConjunctionAlertsForDisplay,
+  countConjunctionOverflow,
 } from './conjunction';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 import * as propagatorModule from './propagator';
@@ -137,6 +138,59 @@ describe('selectConjunctionAlertsForDisplay', () => {
     expect(byCrit).toHaveLength(MAX_DISPLAY_ALERTS);
     expect(byTime.map((e) => e.objectA)).toEqual(['A0', 'A1', 'A2', 'A3', 'A4']);
     expect(byCrit.map((e) => e.objectA)).toEqual(['A7', 'A6', 'A5', 'A4', 'A3']);
+  });
+});
+
+describe('countConjunctionOverflow', () => {
+  const nowMs = Date.parse('2026-07-29T12:00:00Z');
+
+  function alert(partial: Partial<ConjunctionEvent> & Pick<ConjunctionEvent, 'objectA' | 'time' | 'distanceKm'>): ConjunctionEvent {
+    return {
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      relativeVelocityKmS: 7,
+      midpointScene: { x: 0, y: 0, z: 0 },
+      ...partial,
+    };
+  }
+
+  it('is identical for time vs criticality display slices', () => {
+    const events = Array.from({ length: 12 }, (_, i) =>
+      alert({
+        objectA: `A${i}`,
+        time: new Date(nowMs + (i + 1) * 60_000),
+        distanceKm: 2.5 - i * 0.1,
+      }),
+    );
+    const byTime = selectConjunctionAlertsForDisplay(events, { nowMs, sortMode: 'time' });
+    const byCrit = selectConjunctionAlertsForDisplay(events, { nowMs, sortMode: 'criticality' });
+    const overflowTime = countConjunctionOverflow(events, {
+      nowMs,
+      displayedCount: byTime.length,
+      hiddenCount: 3,
+    });
+    const overflowCrit = countConjunctionOverflow(events, {
+      nowMs,
+      displayedCount: byCrit.length,
+      hiddenCount: 3,
+    });
+    expect(overflowTime).toBe(overflowCrit);
+    expect(overflowTime).toBe(12 - MAX_DISPLAY_ALERTS + 3);
+  });
+
+  it('ignores CPAs outside the next 24h when counting the stored pool', () => {
+    const events = [
+      alert({ objectA: 'PAST', time: new Date(nowMs - 60_000), distanceKm: 0.5 }),
+      alert({ objectA: 'SOON', time: new Date(nowMs + 60_000), distanceKm: 1 }),
+      alert({ objectA: 'LATER', time: new Date(nowMs + 2 * 60_000), distanceKm: 1.2 }),
+      alert({ objectA: 'FAR', time: new Date(nowMs + 30 * 3_600_000), distanceKm: 0.4 }),
+    ];
+    expect(
+      countConjunctionOverflow(events, { nowMs, displayedCount: 2, hiddenCount: 0 }),
+    ).toBe(0);
   });
 });
 

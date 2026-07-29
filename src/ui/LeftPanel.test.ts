@@ -285,4 +285,85 @@ describe('renderConjunctions — predicted (future) close approaches', () => {
       conjunctionSortMode: 'time',
     });
   });
+
+  it('keeps the same "+N more" count for time and criticality sorts', () => {
+    const alerts = Array.from({ length: 12 }, (_, i) => {
+      const c = makeFutureConjunction((i + 1) * 10 * 60 * 1000);
+      c.objectA = `A${i}`;
+      c.objectB = `B${i}`;
+      c.noradIdA = i * 2 + 1;
+      c.noradIdB = i * 2 + 2;
+      c.distanceKm = 2.5 - i * 0.1;
+      return c;
+    });
+
+    setState({
+      conjunctions: alerts,
+      conjunctionHiddenCount: 4,
+      conjunctionSortMode: 'time',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    const moreByTime = container.querySelector('.conjunction-more')?.textContent ?? '';
+    expect(moreByTime).toMatch(/\+?\s*11/);
+
+    setState({ conjunctionSortMode: 'criticality' });
+    const moreByCrit = container.querySelector('.conjunction-more')?.textContent ?? '';
+    expect(moreByCrit).toBe(moreByTime);
+
+    document.body.removeChild(container);
+    setState({
+      conjunctions: [],
+      conjunctionHiddenCount: 0,
+      conjunctionSortMode: 'time',
+    });
+  });
+
+  it('updates "+N more" when the scan pool grows without changing the top cards', () => {
+    const seed = Array.from({ length: 7 }, (_, i) => {
+      const c = makeFutureConjunction((i + 1) * 5 * 60 * 1000);
+      c.objectA = `SEED-${i}`;
+      c.objectB = `SEED-B-${i}`;
+      c.noradIdA = 100 + i * 2;
+      c.noradIdB = 101 + i * 2;
+      c.distanceKm = 1.5;
+      return c;
+    });
+
+    setState({
+      conjunctions: seed,
+      conjunctionHiddenCount: 0,
+      conjunctionSortMode: 'time',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    expect(container.querySelector('.conjunction-more')?.textContent ?? '').toMatch(/\+?\s*2/);
+    const firstCard = container.querySelector('.conjunction-alert');
+
+    const grown = [
+      ...seed,
+      ...Array.from({ length: 8 }, (_, i) => {
+        const c = makeFutureConjunction((i + 20) * 5 * 60 * 1000);
+        c.objectA = `LATE-${i}`;
+        c.objectB = `LATE-B-${i}`;
+        c.noradIdA = 200 + i * 2;
+        c.noradIdB = 201 + i * 2;
+        c.distanceKm = 2.0;
+        return c;
+      }),
+    ];
+    setState({ conjunctions: grown, conjunctionHiddenCount: 0 });
+
+    expect(container.querySelector('.conjunction-alert')).toBe(firstCard);
+    expect(container.querySelector('.conjunction-more')?.textContent ?? '').toMatch(/\+?\s*10/);
+
+    document.body.removeChild(container);
+    setState({ conjunctions: [], conjunctionHiddenCount: 0 });
+  });
 });
