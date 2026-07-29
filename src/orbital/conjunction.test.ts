@@ -13,7 +13,9 @@ import {
   invalidateConjunctionCache,
   invalidateUpcomingConjunctionCache,
   isCoOrbitingPair,
+  MAX_DISPLAY_ALERTS,
   normalizeConjunctionAlert,
+  rankConjunctionAlertsForDisplay,
 } from './conjunction';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 import * as propagatorModule from './propagator';
@@ -23,6 +25,51 @@ type Vec3 = { x: number; y: number; z: number };
 function distance(a: Vec3, b: Vec3): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
+
+describe('rankConjunctionAlertsForDisplay', () => {
+  function alert(partial: Partial<ConjunctionEvent> & Pick<ConjunctionEvent, 'objectA' | 'time' | 'distanceKm'>): ConjunctionEvent {
+    return {
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      relativeVelocityKmS: 7,
+      midpointScene: { x: 0, y: 0, z: 0 },
+      ...partial,
+    };
+  }
+
+  it('lists the soonest CPA before a closer-but-later miss', () => {
+    const soonFar = alert({
+      objectA: 'SOON',
+      time: new Date('2026-07-29T12:30:00Z'),
+      distanceKm: 2.5,
+    });
+    const laterClose = alert({
+      objectA: 'LATER',
+      time: new Date('2026-07-29T18:00:00Z'),
+      distanceKm: 0.2,
+    });
+
+    const ranked = rankConjunctionAlertsForDisplay([laterClose, soonFar]);
+    expect(ranked.map((e) => e.objectA)).toEqual(['SOON', 'LATER']);
+  });
+
+  it('keeps only the soonest MAX_DISPLAY_ALERTS when sliced like the UI', () => {
+    const events = Array.from({ length: 8 }, (_, i) =>
+      alert({
+        objectA: `A${i}`,
+        time: new Date(Date.UTC(2026, 6, 29, 12, i * 10)),
+        // Later events are closer — distance-first ranking would invert the list.
+        distanceKm: 3 - i * 0.3,
+      }),
+    );
+    const top = rankConjunctionAlertsForDisplay(events).slice(0, MAX_DISPLAY_ALERTS);
+    expect(top.map((e) => e.objectA)).toEqual(['A0', 'A1', 'A2', 'A3', 'A4']);
+  });
+});
+
 
 /** Reference implementation: the exact O(n^2) scan the grid search replaces. */
 function bruteForcePairsWithinRadius(positions: Vec3[], radiusKm: number): Set<string> {

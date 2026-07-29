@@ -24,7 +24,7 @@ export const CHECK_WALL_INTERVAL_MS = 1_500;
  * this only widens what gets a closer look, not what counts as a conjunction.
  */
 export const DETECTION_RADIUS_KM = 20;
-/** Max close-approach alerts shown in the left panel (sorted by minimum distance). */
+/** Max close-approach alerts shown in the left panel (soonest CPA first). */
 export const MAX_DISPLAY_ALERTS = 5;
 export const SUBSET: OrbitLayer = 'LEO';
 export const REFINE_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -389,7 +389,20 @@ function deduplicatePhysicalConjunctions(
     seen.set(key, existing ? preferConjunctionEvent(existing, event, objects) : event);
   }
 
-  return Array.from(seen.values()).sort((a, b) => a.distanceKm - b.distanceKm);
+  return rankConjunctionAlertsForDisplay(Array.from(seen.values()));
+}
+
+/**
+ * Left-panel ordering: soonest predicted CPA first, then tighter miss distance.
+ * Distance-first ranking made the top-5 thrash as the 24h sweep discovered
+ * closer-but-later pairs.
+ */
+export function rankConjunctionAlertsForDisplay(events: ConjunctionEvent[]): ConjunctionEvent[] {
+  return [...events].sort((a, b) => {
+    const dt = a.time.getTime() - b.time.getTime();
+    if (dt !== 0) return dt;
+    return a.distanceKm - b.distanceKm;
+  });
 }
 
 /** Freeze alert CPA metadata — always resolve indices by NORAD ID, never
@@ -650,7 +663,7 @@ export function findConjunctions(objects: TrackedObject[], date: Date): Conjunct
     }
   }
 
-  pairs.sort((a, b) => a.distanceKm - b.distanceKm);
+  pairs.sort((a, b) => a.time.getTime() - b.time.getTime() || a.distanceKm - b.distanceKm);
   const ranked = deduplicatePhysicalConjunctions(pairs, objects);
   return {
     alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
@@ -818,7 +831,9 @@ export function findUpcomingConjunctions(
     scanUpcomingSample(objects, startMs + step * sampleStepMs, startMs, horizonMs, bestByPair);
   }
 
-  const ranked = deduplicatePhysicalConjunctions(Array.from(bestByPair.values()), objects);
+  const ranked = deduplicatePhysicalConjunctions(Array.from(bestByPair.values()), objects).filter(
+    (event) => event.time.getTime() >= startMs - 1_000,
+  );
   return {
     alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
     hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
@@ -881,7 +896,9 @@ let upcomingStepScheduled = false;
 let upcomingScanCompletedOnce = false;
 
 function snapshotUpcomingResult(scan: UpcomingScanState): ConjunctionScanResult {
-  const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects);
+  const ranked = deduplicatePhysicalConjunctions(Array.from(scan.bestByPair.values()), scan.objects)
+    // Drop CPAs already behind the sweep clock so the panel stays "what's next".
+    .filter((event) => event.time.getTime() >= scan.startMs - 1_000);
   return {
     alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
     hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
@@ -1076,7 +1093,7 @@ function scheduleUpcomingScanStep(onUpdate: ConjunctionRefreshListener): void {
 /**
  * Forward-looking close-approach screen — walks `UPCOMING_HORIZON_MS` into
  * the future (24h by default) and returns the closest predicted approaches,
- * sorted by predicted minimum distance. This is what actually answers "what
+ * sorted by soonest CPA time. This is what actually answers "what
  * close approaches are coming up", as opposed to `getConjunctions`, which
  * only ever reports what's happening at this exact instant.
  *
@@ -1087,6 +1104,10 @@ function scheduleUpcomingScanStep(onUpdate: ConjunctionRefreshListener): void {
  * frame just like `getConjunctions`: it's a cheap no-op between sweeps
  * (throttled by `UPCOMING_RESCAN_INTERVAL_MS`) and self-driving once a sweep
  * has started, so callers don't need to do anything beyond calling it.
+ *
+ * Displayed alerts are the soonest upcoming CPAs (max `MAX_DISPLAY_ALERTS`),
+ * not the globally closest misses — that keeps the left panel stable and
+ * answers "what happens next".
  */
 export function getUpcomingConjunctions(
   objects: TrackedObject[],
