@@ -119,6 +119,15 @@ export function getSimulationTime(): Date {
   if (state.eventReplay) {
     return new Date(state.eventReplay.currentMs);
   }
+  return getGlobalSimulationTime();
+}
+
+/**
+ * Live/historical catalog clock only — ignores verification & event-replay overlays.
+ * Use for UI that must stay anchored to “now” (e.g. close-approach alert countdowns)
+ * while the 3D view is scrubbing a selected CPA.
+ */
+export function getGlobalSimulationTime(): Date {
   return state.time.mode === 'live' ? new Date() : state.time.current;
 }
 

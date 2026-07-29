@@ -7,6 +7,7 @@ import {
 import {
   formatUtcDateTime,
   getListIndices,
+  getGlobalSimulationTime,
   getSimulationTime,
   getState,
   getTimeModeLabel,
@@ -357,7 +358,7 @@ function renderConjunctions(container: HTMLElement): void {
     return;
   }
 
-  const nowMs = getSimulationTime().getTime();
+  const nowMs = getGlobalSimulationTime().getTime();
   const nextKeys = new Set<string>();
   const alertsHtml = conjunctions
     .map((c, index) => {

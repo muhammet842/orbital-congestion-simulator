@@ -169,4 +169,46 @@ describe('renderConjunctions — predicted (future) close approaches', () => {
     document.body.removeChild(container);
     setState({ conjunctions: [], conjunctionHiddenCount: 0 });
   });
+
+  it('keeps alert countdowns on the global clock while verifying a selected CPA', () => {
+    const near = makeFutureConjunction(40 * 60 * 1000); // ~40m from now
+    const far = makeFutureConjunction(2 * 60 * 60 * 1000 + 20 * 60 * 1000); // ~2h20m
+    far.objectA = 'STARLINK-FAR-A';
+    far.objectB = 'STARLINK-FAR-B';
+
+    setState({
+      conjunctions: [far, near],
+      conjunctionHiddenCount: 0,
+      // Scrubbing near the far event's CPA must not make the near event look "imminent".
+      verificationTime: {
+        cpaTimeMs: far.time.getTime(),
+        currentMs: far.time.getTime() - 60_000,
+        playing: true,
+        speed: 1,
+      },
+      selectedConjunctionSessionKey: 'far-session',
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    const texts = [...container.querySelectorAll('.conjunction-alert-text')].map(
+      (el) => el.textContent ?? '',
+    );
+    const nearText = texts.find((t) => t.includes('STARLINK-1')) ?? '';
+    const farText = texts.find((t) => t.includes('STARLINK-FAR-A')) ?? '';
+
+    expect(nearText).toMatch(/40m|in 40/);
+    expect(nearText).not.toContain('close approach!');
+    expect(farText).toMatch(/2h|in 2h/);
+
+    document.body.removeChild(container);
+    setState({
+      conjunctions: [],
+      conjunctionHiddenCount: 0,
+      verificationTime: null,
+      selectedConjunctionSessionKey: null,
+    });
+  });
 });
