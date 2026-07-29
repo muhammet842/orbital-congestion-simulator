@@ -16,11 +16,7 @@ export function createLayout(root: HTMLElement): {
         <button id="toggle-left-panel" class="panel-toggle-btn" type="button" aria-label="Toggle filters &amp; stats panel" aria-expanded="false">☰</button>
 
         <div class="header-brand">
-          <span class="header-mark" aria-hidden="true">
-            <span class="header-mark__core"></span>
-            <span class="header-mark__ring header-mark__ring--inner"></span>
-            <span class="header-mark__ring header-mark__ring--outer"></span>
-          </span>
+          <img class="header-mark" src="/logo.png" alt="" width="28" height="28" decoding="async" />
           <div class="header-title">
             <span class="header-title-full">Orbital Congestion Simulator</span>
             <span class="header-title-short">Orbital Congestion</span>
