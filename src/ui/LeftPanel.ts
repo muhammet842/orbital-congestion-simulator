@@ -13,7 +13,6 @@ import {
   getGlobalSimulationTime,
   getSimulationTime,
   getState,
-  getTimeModeLabel,
   toggleConjunctionFromAlert,
   selectObject,
   setSearchQuery,
@@ -429,16 +428,16 @@ function renderStats(container: HTMLElement): void {
     : '';
 
   const liveEl = container.querySelector('#live-stats')!;
-  const modeClass = isLive ? 'stat-value--live' : 'stat-value--historical';
   const timeLabel = isLive ? t('stats.utc_time') : t('stats.sim_time');
+  const visibleCount = state.filteredIndices.length;
+  const closeApproachTotal = state.conjunctions.length + state.conjunctionHiddenCount;
 
   liveEl.innerHTML = `
     ${tleStaleHtml}
-    <div class="stat-row"><dt>${t('stats.mode')}</dt><dd class="${modeClass}">${getTimeModeLabel(time.mode)}</dd></div>
     <div class="stat-row"><dt>${timeLabel}</dt><dd id="live-stat-time">${formatUtcDateTime(simTime)}</dd></div>
     <div class="stat-row"><dt>${t('stats.total')}</dt><dd>${stats.total.toLocaleString()}</dd></div>
-    <div class="stat-row"><dt>${t('stats.leo')}</dt><dd>${stats.leoPercent}%</dd></div>
-    <div class="stat-row"><dt>${t('stats.avg_alt')}</dt><dd>${stats.avgAltitude.toLocaleString()} km</dd></div>
+    <div class="stat-row"><dt>${t('stats.visible')}</dt><dd>${visibleCount.toLocaleString()}</dd></div>
+    <div class="stat-row"><dt>${t('stats.close_24h')}</dt><dd>${closeApproachTotal.toLocaleString()}</dd></div>
     <div class="stat-row"><dt>${t('stats.tle_updated')}</dt><dd>${fetchedDate}</dd></div>
   `;
 }
