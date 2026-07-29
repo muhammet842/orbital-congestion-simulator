@@ -1,6 +1,7 @@
 import type { ConjunctionScanResult } from '../orbital/conjunction';
 import {
   conjunctionSessionKey,
+  hasUpcomingConjunctionScanCompleted,
   invalidateConjunctionCache,
   invalidateUpcomingConjunctionCache,
   normalizeConjunctionAlert,
@@ -62,6 +63,14 @@ export interface AppState {
 }
 
 type Listener = () => void;
+
+/** One-shot wake after an empty predictive sweep so the UI leaves "Scanning…". */
+let emptyConjunctionScanAcked = false;
+
+function resetUpcomingConjunctionUi(): void {
+  invalidateUpcomingConjunctionCache();
+  emptyConjunctionScanAcked = false;
+}
 
 const defaultLayerFilters: Record<OrbitLayer, boolean> = {
   LEO: true,
@@ -283,7 +292,7 @@ export function selectObject(index: number): void {
   const wasVerifying = state.verificationTime != null;
   if (wasVerifying) {
     invalidateConjunctionCache();
-    invalidateUpcomingConjunctionCache();
+    resetUpcomingConjunctionUi();
   }
   setState({
     selectedIndex: index,
@@ -305,7 +314,7 @@ export function selectHistoricalEvent(eventId: string): void {
   const wasVerifying = state.verificationTime != null;
   if (wasVerifying) {
     invalidateConjunctionCache();
-    invalidateUpcomingConjunctionCache();
+    resetUpcomingConjunctionUi();
   }
   setState({
     selectedEventId: eventId,
@@ -366,7 +375,7 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
 
   if (state.verificationTime) {
     invalidateConjunctionCache();
-    invalidateUpcomingConjunctionCache();
+    resetUpcomingConjunctionUi();
   }
 
   const cpaTimeMs = frozen.time.getTime();
@@ -406,7 +415,7 @@ export function toggleConjunctionFromAlert(alert: ConjunctionEvent): void {
 export function clearSelectedConjunction(): void {
   if (!state.selectedConjunction && !state.verificationTime) return;
   invalidateConjunctionCache();
-  invalidateUpcomingConjunctionCache();
+  resetUpcomingConjunctionUi();
   setState({
     selectedConjunction: null,
     selectedConjunctionSessionKey: null,
@@ -467,22 +476,30 @@ export function resetAdvancedFilters(): void {
 
 export function setConjunctions({ alerts, hiddenCount }: ConjunctionScanResult): void {
   const prev = state.conjunctions;
-  if (
+  const sameContent =
     state.conjunctionHiddenCount === hiddenCount &&
     prev.length === alerts.length &&
     prev.every(
       (c, i) =>
         c.objectA === alerts[i].objectA &&
         c.objectB === alerts[i].objectB &&
-        Math.abs(c.distanceKm - alerts[i].distanceKm) < 0.001,
-    )
-  ) {
-    // Still wake subscribers: after a first sweep finishes with zero hits,
-    // the left panel needs to leave the "Scanning…" placeholder even though
-    // `conjunctions` was already `[]`.
-    listeners.forEach((fn) => fn());
+        Math.abs(c.distanceKm - alerts[i].distanceKm) < 0.001 &&
+        Math.abs(c.time.getTime() - alerts[i].time.getTime()) < 1_000,
+    );
+
+  if (sameContent) {
+    // Empty→empty still needs one wake so the panel can leave "Scanning…"
+    // when the first sweep finishes with no hits. Later identical publishes
+    // must stay silent — they were remounting alert cards every idle tick.
+    if (alerts.length === 0 && hasUpcomingConjunctionScanCompleted() && !emptyConjunctionScanAcked) {
+      emptyConjunctionScanAcked = true;
+      listeners.forEach((fn) => fn());
+    }
     return;
   }
+
+  emptyConjunctionScanAcked =
+    alerts.length === 0 && hasUpcomingConjunctionScanCompleted();
   setState({ conjunctions: alerts, conjunctionHiddenCount: hiddenCount });
 }
 

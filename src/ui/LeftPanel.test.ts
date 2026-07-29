@@ -211,4 +211,24 @@ describe('renderConjunctions — predicted (future) close approaches', () => {
       selectedConjunctionSessionKey: null,
     });
   });
+
+  it('does not remount alert cards when the same conjunction list is re-rendered', () => {
+    const alert = makeFutureConjunction(15 * 60 * 1000);
+    setState({ conjunctions: [alert], conjunctionHiddenCount: 0 });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    const first = container.querySelector('.conjunction-alert');
+    expect(first).not.toBeNull();
+
+    // Same payload again (e.g. identical scan publish) — nodes must stay put.
+    setState({ conjunctions: [alert], conjunctionHiddenCount: 0 });
+    const second = container.querySelector('.conjunction-alert');
+    expect(second).toBe(first);
+
+    document.body.removeChild(container);
+    setState({ conjunctions: [], conjunctionHiddenCount: 0 });
+  });
 });

@@ -97,6 +97,11 @@ export function initLeftPanel(container: HTMLElement): void {
     if (timeEl) {
       timeEl.textContent = formatUtcDateTime(getSimulationTime());
     }
+    const now = performance.now();
+    if (now - lastConjunctionCountdownMs >= 1_000) {
+      lastConjunctionCountdownMs = now;
+      refreshConjunctionCountdowns(container);
+    }
     requestAnimationFrame(refreshLiveStatTime);
   };
   requestAnimationFrame(refreshLiveStatTime);
@@ -350,15 +355,40 @@ function renderConjunctions(container: HTMLElement): void {
 
   if (conjunctions.length === 0) {
     previousAlertKeys.clear();
+    lastConjunctionStructureKey = '';
     const stillScanning =
       isUpcomingConjunctionScanPending() || !hasUpcomingConjunctionScanCompleted();
-    listEl.innerHTML = `<p class="muted conjunction-empty">${t(
-      stillScanning ? 'conj.scanning' : 'conj.empty',
-    )}</p>`;
+    const emptyText = t(stillScanning ? 'conj.scanning' : 'conj.empty');
+    const existing = listEl.querySelector('.conjunction-empty');
+    if (existing && !listEl.querySelector('.conjunction-alert')) {
+      if (existing.textContent !== emptyText) existing.textContent = emptyText;
+      return;
+    }
+    listEl.innerHTML = `<p class="muted conjunction-empty">${emptyText}</p>`;
     return;
   }
 
+  const structureKey = [
+    selectedConjunctionSessionKey ?? '',
+    String(conjunctionHiddenCount),
+    ...conjunctions.map(
+      (c) =>
+        `${conjunctionSessionKey(c)}:${c.distanceKm.toFixed(2)}:${c.time.getTime()}`,
+    ),
+  ].join('|');
+
   const nowMs = getGlobalSimulationTime().getTime();
+
+  // Same cards already mounted — only refresh countdown copy (avoids drop animation flicker).
+  if (
+    structureKey === lastConjunctionStructureKey &&
+    listEl.querySelectorAll('.conjunction-alert').length === conjunctions.length
+  ) {
+    updateConjunctionAlertTexts(listEl, conjunctions, nowMs);
+    return;
+  }
+
+  lastConjunctionStructureKey = structureKey;
   const nextKeys = new Set<string>();
   const alertsHtml = conjunctions
     .map((c, index) => {
@@ -366,12 +396,6 @@ function renderConjunctions(container: HTMLElement): void {
       const isNew = !previousAlertKeys.has(sessionKey);
       const isActive = sessionKey === selectedConjunctionSessionKey;
       nextKeys.add(sessionKey);
-      const msUntil = c.time.getTime() - nowMs;
-      const message = t(msUntil > 1000 ? 'conj.alert_in' : 'conj.alert')
-        .replace('{a}', c.objectA)
-        .replace('{b}', c.objectB)
-        .replace('{km}', c.distanceKm.toFixed(2))
-        .replace('{t}', formatTimeUntil(msUntil));
       return `
         <button
           type="button"
@@ -379,7 +403,7 @@ function renderConjunctions(container: HTMLElement): void {
           data-alert-index="${index}"
         >
           <span class="conjunction-alert-icon" aria-hidden="true">⚠</span>
-          <span class="conjunction-alert-text">${escapeHtml(message)}</span>
+          <span class="conjunction-alert-text">${escapeHtml(formatAlertMessage(c, nowMs))}</span>
         </button>
       `;
     })
@@ -394,7 +418,44 @@ function renderConjunctions(container: HTMLElement): void {
   previousAlertKeys = nextKeys;
 }
 
+function formatAlertMessage(c: { objectA: string; objectB: string; distanceKm: number; time: Date }, nowMs: number): string {
+  const msUntil = c.time.getTime() - nowMs;
+  return t(msUntil > 1000 ? 'conj.alert_in' : 'conj.alert')
+    .replace('{a}', c.objectA)
+    .replace('{b}', c.objectB)
+    .replace('{km}', c.distanceKm.toFixed(2))
+    .replace('{t}', formatTimeUntil(msUntil));
+}
+
+function updateConjunctionAlertTexts(
+  listEl: Element,
+  conjunctions: { objectA: string; objectB: string; distanceKm: number; time: Date }[],
+  nowMs: number,
+): void {
+  const texts = listEl.querySelectorAll('.conjunction-alert-text');
+  conjunctions.forEach((c, i) => {
+    const el = texts[i];
+    if (!el) return;
+    const message = formatAlertMessage(c, nowMs);
+    if (el.textContent !== message) el.textContent = message;
+  });
+}
+
+/** Tick countdowns without remounting cards (and refresh empty/scanning copy). */
+function refreshConjunctionCountdowns(container: HTMLElement): void {
+  const listEl = container.querySelector('#conjunction-list');
+  if (!listEl) return;
+  const { conjunctions } = getState();
+  if (conjunctions.length === 0) {
+    renderConjunctions(container);
+    return;
+  }
+  updateConjunctionAlertTexts(listEl, conjunctions, getGlobalSimulationTime().getTime());
+}
+
 let previousAlertKeys = new Set<string>();
+let lastConjunctionStructureKey = '';
+let lastConjunctionCountdownMs = 0;
 
 /** Compact "in 3h 12m" / "in 45s" style duration, for predicted close approaches
  *  up to 24h out. Falls back to 0s for anything already at/past CPA. */
