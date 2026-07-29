@@ -132,13 +132,13 @@ export function openKesslerPanel(): void {
 
   const backdrop = document.createElement('div');
   backdrop.id = 'kessler-panel-backdrop';
-  backdrop.className = 'admin-backdrop';
+  backdrop.className = 'admin-backdrop kessler-backdrop';
 
   const panel = document.createElement('div');
   panel.id = 'kessler-panel';
   panel.className = 'admin-panel kessler-panel';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Future Projection');
+  panel.setAttribute('aria-label', t('kessler.title'));
 
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
@@ -192,7 +192,7 @@ function renderPanelContent(): void {
         <h3 class="ap-section-title">${t('kessler.presets_heading')}</h3>
         <div class="kp-presets" id="kp-presets">${presetButtons}</div>
 
-        <h3 class="ap-section-title" style="margin-top:14px;">${t('kessler.scenario_heading')}</h3>
+        <h3 class="ap-section-title kp-scenario-title">${t('kessler.scenario_heading')}</h3>
 
         <div class="kp-slider-row">
           <div class="kp-slider-label-row">
@@ -237,7 +237,7 @@ function renderPanelContent(): void {
       <div class="ap-section" id="kp-results-section" ${hasRun ? '' : 'hidden'}>
         <h3 class="ap-section-title">${t('kessler.results_heading')}</h3>
 
-        <div class="ap-grid-4">
+        <div class="kp-metrics">
           <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-total">—</div><div class="ap-metric-lbl">${t('kessler.stat.total_objects')}</div></div>
           <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-debris">—</div><div class="ap-metric-lbl">${t('kessler.stat.debris_objects')}</div></div>
           <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-collisions">—</div><div class="ap-metric-lbl">${t('kessler.stat.collisions')}</div></div>
@@ -250,18 +250,20 @@ function renderPanelContent(): void {
           <div class="kp-shell"><span class="kp-shell-lbl">${t('kessler.stat.geo')}</span><span class="kp-shell-val" id="kp-stat-geo">—</span></div>
         </div>
 
-        <p class="kp-slider-hint" id="kp-baseline-note" style="margin: 10px 0 0;"></p>
+        <p class="kp-slider-hint kp-baseline-note" id="kp-baseline-note"></p>
 
-        <div class="kp-slider-label-row" style="margin-top: 12px;">
-          <span class="kp-slider-label">${t('kessler.year_scrub')}</span>
-          <span class="kp-slider-value" id="kp-scrub-val">—</span>
-        </div>
-        <div class="kp-scrub-row" style="margin: 4px 0 14px;">
-          <input type="range" id="kp-scrub" class="kp-range" min="0" max="1" step="1" value="0" />
-          <button class="kp-animate-btn" id="kp-animate">${t('kessler.play')}</button>
+        <div class="kp-scrub-block">
+          <div class="kp-slider-label-row">
+            <span class="kp-slider-label">${t('kessler.year_scrub')}</span>
+            <span class="kp-slider-value" id="kp-scrub-val">—</span>
+          </div>
+          <div class="kp-scrub-row">
+            <input type="range" id="kp-scrub" class="kp-range" min="0" max="1" step="1" value="0" />
+            <button class="kp-animate-btn" id="kp-animate">${t('kessler.play')}</button>
+          </div>
         </div>
 
-        <h4 class="ap-section-title" style="margin-top:2px;">${t('kessler.chart_heading')}</h4>
+        <h4 class="ap-section-title">${t('kessler.chart_heading')}</h4>
         <canvas id="kp-chart" class="kp-chart-canvas"></canvas>
         <div class="kp-chart-legend">
           <span><i class="kp-swatch kp-swatch--total"></i>${t('kessler.chart.total')}</span>
@@ -269,17 +271,17 @@ function renderPanelContent(): void {
           <span><i class="kp-swatch kp-swatch--baseline"></i>${t('kessler.chart.baseline')}</span>
         </div>
 
-        <h4 class="ap-section-title" style="margin-top:14px;">${t('kessler.density_heading')}</h4>
+        <h4 class="ap-section-title">${t('kessler.density_heading')}</h4>
         <div class="kp-density-wrap">
           <canvas id="kp-density" class="kp-density-canvas"></canvas>
         </div>
-        <div class="kp-chart-legend">
-          <span>${t('kessler.shell.leo')}</span>
-          <span>${t('kessler.shell.meo')}</span>
-          <span>${t('kessler.shell.geo')}</span>
+        <div class="kp-chart-legend kp-shell-legend">
+          <span><i class="kp-swatch kp-swatch--leo"></i>${t('kessler.shell.leo')}</span>
+          <span><i class="kp-swatch kp-swatch--meo"></i>${t('kessler.shell.meo')}</span>
+          <span><i class="kp-swatch kp-swatch--geo"></i>${t('kessler.shell.geo')}</span>
         </div>
 
-        <p class="kp-narrative" id="kp-narrative" style="margin-top:14px;"></p>
+        <p class="kp-narrative" id="kp-narrative"></p>
       </div>
 
       <p class="kp-prompt" id="kp-prompt" ${hasRun ? 'hidden' : ''}>${t('kessler.run_prompt')}</p>
@@ -508,25 +510,41 @@ function prepareCanvas(canvas: HTMLCanvasElement, cssHeight: number): CanvasRend
   return ctx;
 }
 
+function isNarrowViewport(): boolean {
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(max-width: 640px)').matches;
+  }
+  return window.innerWidth <= 640;
+}
+
 function redrawCanvases(): void {
+  const narrow = isNarrowViewport();
+  const chartH = narrow ? 140 : 170;
+  const densityH = narrow ? 170 : 220;
+
   const chartCanvas = getEl<HTMLCanvasElement>('kp-chart');
   if (chartCanvas) {
-    const ctx = prepareCanvas(chartCanvas, 170);
-    if (ctx) drawChart(ctx, chartCanvas.clientWidth || 300, 170);
+    const ctx = prepareCanvas(chartCanvas, chartH);
+    if (ctx) drawChart(ctx, chartCanvas.clientWidth || 300, chartH, narrow);
   }
 
   const densityCanvas = getEl<HTMLCanvasElement>('kp-density');
   if (densityCanvas) {
-    const ctx = prepareCanvas(densityCanvas, 220);
-    if (ctx) drawDensity(ctx, densityCanvas.clientWidth || 300, 220);
+    const ctx = prepareCanvas(densityCanvas, densityH);
+    if (ctx) drawDensity(ctx, densityCanvas.clientWidth || 300, densityH);
   }
 }
 
-function drawChart(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+function drawChart(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  narrow = false,
+): void {
   ctx.clearRect(0, 0, width, height);
   if (timeline.length === 0) return;
 
-  const padL = 42;
+  const padL = narrow ? 34 : 42;
   const padR = 10;
   const padT = 14;
   const padB = 20;
