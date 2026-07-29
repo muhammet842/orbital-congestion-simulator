@@ -1,11 +1,10 @@
 import { LAYER_HEX, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
-  filterConjunctionAlerts,
   hasUpcomingConjunctionScanCompleted,
   isUpcomingConjunctionScanPending,
-  type ConjunctionHorizonHours,
-  type ConjunctionRiskFilter,
+  selectConjunctionAlertsForDisplay,
+  type ConjunctionSortMode,
 } from '../orbital/conjunction';
 import {
   formatUtcDateTime,
@@ -17,8 +16,7 @@ import {
   toggleConjunctionFromAlert,
   selectObject,
   setSearchQuery,
-  setConjunctionHorizonHours,
-  setConjunctionRiskFilter,
+  setConjunctionSortMode,
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
@@ -35,11 +33,10 @@ const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const LIST_ITEM_HEIGHT = 36;
 const LIST_VIEWPORT_HEIGHT = 200;
 const LIST_OVERSCAN = 6;
-const HORIZON_OPTIONS: ConjunctionHorizonHours[] = [1, 6, 12, 24];
-const RISK_OPTIONS: ConjunctionRiskFilter[] = ['all', 'critical', 'monitoring'];
+const SORT_MODES: ConjunctionSortMode[] = ['time', 'criticality'];
 
-/** Currently visible (filtered) alert cards — click handler reads this, not the raw pool. */
-let displayedConjunctions: ReturnType<typeof filterConjunctionAlerts> = [];
+/** Currently visible alert cards — click handler reads this, not the raw pool. */
+let displayedConjunctions: ReturnType<typeof selectConjunctionAlertsForDisplay> = [];
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
@@ -90,23 +87,15 @@ export function initLeftPanel(container: HTMLElement): void {
   initEventCards(container);
   initAdvancedFilters(container);
 
-  container.addEventListener('click', (e) => {
-    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(
-      '#conjunction-filters [data-horizon], #conjunction-filters [data-risk]',
+  container.addEventListener('change', (e) => {
+    const input = (e.target as HTMLElement).closest<HTMLInputElement>(
+      '#conjunction-filters input[data-sort]',
     );
-    if (chip) {
-      e.preventDefault();
-      const horizon = chip.dataset.horizon;
-      const risk = chip.dataset.risk;
-      if (horizon) {
-        setConjunctionHorizonHours(Number(horizon) as ConjunctionHorizonHours);
-      }
-      if (risk) {
-        setConjunctionRiskFilter(risk as ConjunctionRiskFilter);
-      }
-      return;
-    }
+    if (!input?.dataset.sort) return;
+    setConjunctionSortMode(input.dataset.sort as ConjunctionSortMode);
+  });
 
+  container.addEventListener('click', (e) => {
     const card = (e.target as HTMLElement).closest<HTMLButtonElement>(
       '.conjunction-alert[data-session-key]',
     );
@@ -382,55 +371,41 @@ function renderStats(container: HTMLElement): void {
 function renderConjunctionFilters(container: HTMLElement): void {
   const el = container.querySelector('#conjunction-filters');
   if (!el) return;
-  const { conjunctionHorizonHours, conjunctionRiskFilter } = getState();
+  const { conjunctionSortMode } = getState();
 
-  const horizonChips = HORIZON_OPTIONS.map(
-    (h) => `
-      <button
-        type="button"
-        class="conjunction-filter-chip${conjunctionHorizonHours === h ? ' active' : ''}"
-        data-horizon="${h}"
-      >${t('conj.filter_horizon').replace('{h}', String(h))}</button>
-    `,
-  ).join('');
-
-  const riskChips = RISK_OPTIONS.map(
-    (r) => `
-      <button
-        type="button"
-        class="conjunction-filter-chip${conjunctionRiskFilter === r ? ' active' : ''}"
-        data-risk="${r}"
-      >${t(`conj.filter_risk_${r}`)}</button>
+  const options = SORT_MODES.map(
+    (mode) => `
+      <label class="conjunction-sort-option">
+        <input
+          type="radio"
+          name="conjunction-sort"
+          value="${mode}"
+          data-sort="${mode}"
+          ${conjunctionSortMode === mode ? 'checked' : ''}
+        />
+        <span>${t(`conj.sort_${mode}`)}</span>
+      </label>
     `,
   ).join('');
 
   el.innerHTML = `
-    <div class="conjunction-filter-row" role="group" aria-label="${t('conj.filter_time_label')}">
-      <span class="conjunction-filter-label">${t('conj.filter_time_label')}</span>
-      <div class="conjunction-filter-chips">${horizonChips}</div>
-    </div>
-    <div class="conjunction-filter-row" role="group" aria-label="${t('conj.filter_risk_label')}">
-      <span class="conjunction-filter-label">${t('conj.filter_risk_label')}</span>
-      <div class="conjunction-filter-chips">${riskChips}</div>
+    <div class="conjunction-sort" role="radiogroup" aria-label="${t('conj.sort_label')}">
+      ${options}
     </div>
   `;
 }
 
 function getVisibleConjunctions() {
-  const {
-    conjunctions,
-    conjunctionHorizonHours,
-    conjunctionRiskFilter,
-  } = getState();
-  return filterConjunctionAlerts(conjunctions, {
+  const { conjunctions, conjunctionSortMode } = getState();
+  return selectConjunctionAlertsForDisplay(conjunctions, {
     nowMs: getGlobalSimulationTime().getTime(),
-    horizonHours: conjunctionHorizonHours,
-    risk: conjunctionRiskFilter,
+    sortMode: conjunctionSortMode,
   });
 }
 
 function renderConjunctions(container: HTMLElement): void {
-  const { conjunctions, conjunctionHiddenCount, selectedConjunctionSessionKey } = getState();
+  const { conjunctions, conjunctionHiddenCount, selectedConjunctionSessionKey, conjunctionSortMode } =
+    getState();
   const listEl = container.querySelector('#conjunction-list')!;
 
   if (conjunctions.length === 0) {
@@ -456,15 +431,14 @@ function renderConjunctions(container: HTMLElement): void {
   if (visible.length === 0) {
     previousAlertKeys.clear();
     lastConjunctionStructureKey = 'filtered-empty';
-    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.filter_empty')}</p>`;
+    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.empty')}</p>`;
     return;
   }
 
   const structureKey = [
     selectedConjunctionSessionKey ?? '',
     String(conjunctionHiddenCount),
-    getState().conjunctionHorizonHours,
-    getState().conjunctionRiskFilter,
+    conjunctionSortMode,
     ...visible.map(
       (c) =>
         `${conjunctionSessionKey(c)}:${c.distanceKm.toFixed(2)}:${c.time.getTime()}`,

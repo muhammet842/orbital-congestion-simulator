@@ -5,7 +5,6 @@ import {
   findCandidatePairsWithinRadius,
   findConjunctions,
   findUpcomingConjunctions,
-  filterConjunctionAlerts,
   formatCloseApproachAlert,
   formatRelativeVelocityKmS,
   getConjunctions,
@@ -17,6 +16,7 @@ import {
   MAX_DISPLAY_ALERTS,
   normalizeConjunctionAlert,
   rankConjunctionAlertsForDisplay,
+  selectConjunctionAlertsForDisplay,
 } from './conjunction';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 import * as propagatorModule from './propagator';
@@ -71,7 +71,7 @@ describe('rankConjunctionAlertsForDisplay', () => {
   });
 });
 
-describe('filterConjunctionAlerts', () => {
+describe('selectConjunctionAlertsForDisplay', () => {
   const nowMs = Date.parse('2026-07-29T12:00:00Z');
 
   function alert(partial: Partial<ConjunctionEvent> & Pick<ConjunctionEvent, 'objectA' | 'time' | 'distanceKm'>): ConjunctionEvent {
@@ -87,59 +87,56 @@ describe('filterConjunctionAlerts', () => {
     };
   }
 
-  it('drops events outside the selected horizon', () => {
-    const near = alert({
-      objectA: 'NEAR',
-      time: new Date(nowMs + 30 * 60_000),
-      distanceKm: 0.5,
+  it('by time lists the soonest CPA within 24h first', () => {
+    const soonFar = alert({
+      objectA: 'SOON',
+      time: new Date(nowMs + 2 * 3_600_000),
+      distanceKm: 2.5,
     });
-    const far = alert({
-      objectA: 'FAR',
-      time: new Date(nowMs + 5 * 3_600_000),
-      distanceKm: 0.4,
+    const laterClose = alert({
+      objectA: 'LATER',
+      time: new Date(nowMs + 10 * 3_600_000),
+      distanceKm: 0.2,
     });
-    const visible = filterConjunctionAlerts([near, far], {
+    const visible = selectConjunctionAlertsForDisplay([laterClose, soonFar], {
       nowMs,
-      horizonHours: 1,
-      risk: 'all',
+      sortMode: 'time',
     });
-    expect(visible.map((e) => e.objectA)).toEqual(['NEAR']);
+    expect(visible.map((e) => e.objectA)).toEqual(['SOON', 'LATER']);
   });
 
-  it('critical risk keeps only sub-1 km misses', () => {
-    const critical = alert({
-      objectA: 'CRIT',
-      time: new Date(nowMs + 20 * 60_000),
-      distanceKm: 0.4,
+  it('by criticality lists the tightest miss distance first', () => {
+    const soonFar = alert({
+      objectA: 'SOON',
+      time: new Date(nowMs + 2 * 3_600_000),
+      distanceKm: 2.5,
     });
-    const monitoring = alert({
-      objectA: 'MON',
-      time: new Date(nowMs + 10 * 60_000),
-      distanceKm: 2.0,
+    const laterClose = alert({
+      objectA: 'CLOSE',
+      time: new Date(nowMs + 10 * 3_600_000),
+      distanceKm: 0.2,
     });
-    const visible = filterConjunctionAlerts([critical, monitoring], {
+    const visible = selectConjunctionAlertsForDisplay([soonFar, laterClose], {
       nowMs,
-      horizonHours: 24,
-      risk: 'critical',
+      sortMode: 'criticality',
     });
-    expect(visible.map((e) => e.objectA)).toEqual(['CRIT']);
+    expect(visible.map((e) => e.objectA)).toEqual(['CLOSE', 'SOON']);
   });
 
-  it('monitoring includes critical and caps at MAX_DISPLAY_ALERTS', () => {
+  it('caps at MAX_DISPLAY_ALERTS for both modes', () => {
     const events = Array.from({ length: 8 }, (_, i) =>
       alert({
-        objectA: `C${i}`,
+        objectA: `A${i}`,
         time: new Date(nowMs + (i + 1) * 60_000),
-        distanceKm: i < 6 ? 0.5 : 2.0,
+        distanceKm: 2.5 - i * 0.2,
       }),
     );
-    const visible = filterConjunctionAlerts(events, {
-      nowMs,
-      horizonHours: 24,
-      risk: 'monitoring',
-    });
-    expect(visible).toHaveLength(MAX_DISPLAY_ALERTS);
-    expect(visible.map((e) => e.objectA)).toEqual(['C0', 'C1', 'C2', 'C3', 'C4']);
+    const byTime = selectConjunctionAlertsForDisplay(events, { nowMs, sortMode: 'time' });
+    const byCrit = selectConjunctionAlertsForDisplay(events, { nowMs, sortMode: 'criticality' });
+    expect(byTime).toHaveLength(MAX_DISPLAY_ALERTS);
+    expect(byCrit).toHaveLength(MAX_DISPLAY_ALERTS);
+    expect(byTime.map((e) => e.objectA)).toEqual(['A0', 'A1', 'A2', 'A3', 'A4']);
+    expect(byCrit.map((e) => e.objectA)).toEqual(['A7', 'A6', 'A5', 'A4', 'A3']);
   });
 });
 

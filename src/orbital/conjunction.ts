@@ -391,15 +391,15 @@ function deduplicatePhysicalConjunctions(
     seen.set(key, existing ? preferConjunctionEvent(existing, event, objects) : event);
   }
 
-  return rankConjunctionAlertsForDisplay(Array.from(seen.values()));
+  return rankConjunctionAlertsByTime(Array.from(seen.values()));
 }
 
 /**
- * Left-panel ordering: soonest predicted CPA first, then tighter miss distance.
- * Distance-first ranking made the top-5 thrash as the 24h sweep discovered
- * closer-but-later pairs.
+ * Left-panel ordering helpers. The scan stores up to MAX_STORED_ALERTS in the
+ * next 24h; the UI then picks the top MAX_DISPLAY_ALERTS by either soonest CPA
+ * or tightest miss distance.
  */
-export function rankConjunctionAlertsForDisplay(events: ConjunctionEvent[]): ConjunctionEvent[] {
+export function rankConjunctionAlertsByTime(events: ConjunctionEvent[]): ConjunctionEvent[] {
   return [...events].sort((a, b) => {
     const dt = a.time.getTime() - b.time.getTime();
     if (dt !== 0) return dt;
@@ -407,41 +407,54 @@ export function rankConjunctionAlertsForDisplay(events: ConjunctionEvent[]): Con
   });
 }
 
-export type ConjunctionRiskFilter = 'all' | 'critical' | 'monitoring';
-export type ConjunctionHorizonHours = 1 | 6 | 12 | 24;
+export function rankConjunctionAlertsByCriticality(events: ConjunctionEvent[]): ConjunctionEvent[] {
+  return [...events].sort((a, b) => {
+    const dd = a.distanceKm - b.distanceKm;
+    if (dd !== 0) return dd;
+    return a.time.getTime() - b.time.getTime();
+  });
+}
 
-export interface ConjunctionAlertFilterOptions {
+/** @deprecated Prefer rankConjunctionAlertsByTime — kept for call sites during rename. */
+export function rankConjunctionAlertsForDisplay(events: ConjunctionEvent[]): ConjunctionEvent[] {
+  return rankConjunctionAlertsByTime(events);
+}
+
+/** How the left-panel close-approach list is ordered within the next 24h. */
+export type ConjunctionSortMode = 'time' | 'criticality';
+
+export interface SelectConjunctionAlertsOptions {
   nowMs: number;
-  horizonHours: ConjunctionHorizonHours;
-  risk: ConjunctionRiskFilter;
-  /** Cap after filtering (left panel shows at most this many). */
+  sortMode: ConjunctionSortMode;
+  /** Cap after ranking (left panel shows at most this many). */
   limit?: number;
+  /** Horizon from now; defaults to 24h (full predictive scan window). */
+  horizonHours?: number;
 }
 
 /**
- * Apply horizon + risk filters, then return the soonest alerts (default top 5).
- * `monitoring` means "at least monitoring" (includes critical).
+ * Keep events in the next horizon (default 24h), rank by sort mode, return top N.
  */
-export function filterConjunctionAlerts(
+export function selectConjunctionAlertsForDisplay(
   events: ConjunctionEvent[],
-  options: ConjunctionAlertFilterOptions,
+  options: SelectConjunctionAlertsOptions,
 ): ConjunctionEvent[] {
-  const horizonMs = options.horizonHours * 3_600_000;
+  const horizonHours = options.horizonHours ?? 24;
+  const horizonMs = horizonHours * 3_600_000;
   const limit = options.limit ?? MAX_DISPLAY_ALERTS;
   const endMs = options.nowMs + horizonMs;
 
-  const filtered = events.filter((event) => {
+  const inWindow = events.filter((event) => {
     const t = event.time.getTime();
-    if (t < options.nowMs - 1_000 || t > endMs) return false;
-    const risk = getRiskAssessment(event.distanceKm);
-    if (options.risk === 'critical') return risk === 'CRITICAL RISK';
-    if (options.risk === 'monitoring') {
-      return risk === 'CRITICAL RISK' || risk === 'MONITORING';
-    }
-    return true;
+    return t >= options.nowMs - 1_000 && t <= endMs;
   });
 
-  return rankConjunctionAlertsForDisplay(filtered).slice(0, limit);
+  const ranked =
+    options.sortMode === 'criticality'
+      ? rankConjunctionAlertsByCriticality(inWindow)
+      : rankConjunctionAlertsByTime(inWindow);
+
+  return ranked.slice(0, limit);
 }
 
 /** Freeze alert CPA metadata — always resolve indices by NORAD ID, never

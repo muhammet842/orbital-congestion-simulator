@@ -1000,47 +1000,30 @@ body {
   margin-bottom: 10px;
 }
 
-.conjunction-filter-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.conjunction-filter-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.conjunction-filter-chips {
+.conjunction-sort {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 10px 14px;
 }
 
-.conjunction-filter-chip {
-  font-family: var(--font);
-  font-size: 0.72rem;
+.conjunction-sort-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 4px 9px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
   color: var(--text-muted);
   cursor: pointer;
+  user-select: none;
 }
 
-.conjunction-filter-chip:hover {
-  border-color: rgba(248, 113, 113, 0.45);
-  color: var(--text-primary);
-}
-
-.conjunction-filter-chip.active {
-  border-color: rgba(248, 113, 113, 0.7);
-  background: rgba(248, 113, 113, 0.16);
+.conjunction-sort-option:has(input:checked) {
   color: #fecaca;
+}
+
+.conjunction-sort-option input {
+  accent-color: #f87171;
+  margin: 0;
 }
 
 .conjunction-empty {

@@ -233,43 +233,44 @@ describe('renderConjunctions — predicted (future) close approaches', () => {
     setState({ conjunctions: [], conjunctionHiddenCount: 0 });
   });
 
-  it('hides non-critical cards when the critical risk filter is active', () => {
-    const critical = makeFutureConjunction(20 * 60 * 1000);
-    critical.objectA = 'CRIT-A';
-    critical.objectB = 'CRIT-B';
-    critical.distanceKm = 0.4;
+  it('reorders cards when switching from time sort to criticality sort', () => {
+    const soonFar = makeFutureConjunction(20 * 60 * 1000);
+    soonFar.objectA = 'SOON-A';
+    soonFar.objectB = 'SOON-B';
+    soonFar.distanceKm = 2.1;
 
-    const monitoring = makeFutureConjunction(10 * 60 * 1000);
-    monitoring.objectA = 'MON-A';
-    monitoring.objectB = 'MON-B';
-    monitoring.distanceKm = 2.1;
+    const laterClose = makeFutureConjunction(3 * 60 * 60 * 1000);
+    laterClose.objectA = 'CLOSE-A';
+    laterClose.objectB = 'CLOSE-B';
+    laterClose.distanceKm = 0.4;
 
     setState({
-      conjunctions: [critical, monitoring],
+      conjunctions: [soonFar, laterClose],
       conjunctionHiddenCount: 0,
-      conjunctionRiskFilter: 'all',
-      conjunctionHorizonHours: 24,
+      conjunctionSortMode: 'time',
     });
 
     const container = document.createElement('div');
     document.body.appendChild(container);
     initLeftPanel(container);
 
-    expect(container.querySelectorAll('.conjunction-alert').length).toBe(2);
-
-    setState({ conjunctionRiskFilter: 'critical' });
-    const texts = [...container.querySelectorAll('.conjunction-alert-text')].map(
+    let texts = [...container.querySelectorAll('.conjunction-alert-text')].map(
       (el) => el.textContent ?? '',
     );
-    expect(texts).toHaveLength(1);
-    expect(texts[0]).toContain('CRIT-A');
-    expect(texts[0]).not.toContain('MON-A');
+    expect(texts[0]).toContain('SOON-A');
+
+    setState({ conjunctionSortMode: 'criticality' });
+    texts = [...container.querySelectorAll('.conjunction-alert-text')].map(
+      (el) => el.textContent ?? '',
+    );
+    expect(texts[0]).toContain('CLOSE-A');
+    expect(container.querySelector('input[data-sort="criticality"]')).toBeTruthy();
 
     document.body.removeChild(container);
     setState({
       conjunctions: [],
       conjunctionHiddenCount: 0,
-      conjunctionRiskFilter: 'all',
+      conjunctionSortMode: 'time',
     });
   });
 });
