@@ -1,4 +1,8 @@
-import type { ConjunctionScanResult } from '../orbital/conjunction';
+import type {
+  ConjunctionHorizonHours,
+  ConjunctionRiskFilter,
+  ConjunctionScanResult,
+} from '../orbital/conjunction';
 import {
   clampVerificationTimeMs,
   conjunctionSessionKey,
@@ -59,6 +63,10 @@ export interface AppState {
   stats: AppStats;
   conjunctions: ConjunctionEvent[];
   conjunctionHiddenCount: number;
+  /** Left-panel close-approach time window filter (hours from now). */
+  conjunctionHorizonHours: ConjunctionHorizonHours;
+  /** Left-panel close-approach risk severity filter. */
+  conjunctionRiskFilter: ConjunctionRiskFilter;
   showOrbitTrail: boolean;
   showGroundTrack: boolean;
   colorByFunction: boolean;
@@ -111,6 +119,8 @@ let state: AppState = {
   },
   conjunctions: [],
   conjunctionHiddenCount: 0,
+  conjunctionHorizonHours: 24,
+  conjunctionRiskFilter: 'all',
   showOrbitTrail: false,
   showGroundTrack: true,
   colorByFunction: false,
@@ -542,6 +552,8 @@ export function initState(
     inclinationFilter: null,
     conjunctions: [],
     conjunctionHiddenCount: 0,
+    conjunctionHorizonHours: 24,
+    conjunctionRiskFilter: 'all',
     showOrbitTrail: false,
     showGroundTrack: true,
     colorByFunction: false,
@@ -553,6 +565,16 @@ export function initState(
     },
   };
   listeners.forEach((fn) => fn());
+}
+
+export function setConjunctionHorizonHours(hours: ConjunctionHorizonHours): void {
+  if (state.conjunctionHorizonHours === hours) return;
+  setState({ conjunctionHorizonHours: hours });
+}
+
+export function setConjunctionRiskFilter(risk: ConjunctionRiskFilter): void {
+  if (state.conjunctionRiskFilter === risk) return;
+  setState({ conjunctionRiskFilter: risk });
 }
 
 export function toggleLayerFilter(layer: OrbitLayer): void {

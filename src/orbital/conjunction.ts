@@ -26,6 +26,8 @@ export const CHECK_WALL_INTERVAL_MS = 1_500;
 export const DETECTION_RADIUS_KM = 20;
 /** Max close-approach alerts shown in the left panel (soonest CPA first). */
 export const MAX_DISPLAY_ALERTS = 5;
+/** Max candidates kept in app state so UI filters still have a pool to draw from. */
+export const MAX_STORED_ALERTS = 30;
 export const SUBSET: OrbitLayer = 'LEO';
 export const REFINE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const REFINE_STEP_MS = 60 * 1000;
@@ -405,6 +407,43 @@ export function rankConjunctionAlertsForDisplay(events: ConjunctionEvent[]): Con
   });
 }
 
+export type ConjunctionRiskFilter = 'all' | 'critical' | 'monitoring';
+export type ConjunctionHorizonHours = 1 | 6 | 12 | 24;
+
+export interface ConjunctionAlertFilterOptions {
+  nowMs: number;
+  horizonHours: ConjunctionHorizonHours;
+  risk: ConjunctionRiskFilter;
+  /** Cap after filtering (left panel shows at most this many). */
+  limit?: number;
+}
+
+/**
+ * Apply horizon + risk filters, then return the soonest alerts (default top 5).
+ * `monitoring` means "at least monitoring" (includes critical).
+ */
+export function filterConjunctionAlerts(
+  events: ConjunctionEvent[],
+  options: ConjunctionAlertFilterOptions,
+): ConjunctionEvent[] {
+  const horizonMs = options.horizonHours * 3_600_000;
+  const limit = options.limit ?? MAX_DISPLAY_ALERTS;
+  const endMs = options.nowMs + horizonMs;
+
+  const filtered = events.filter((event) => {
+    const t = event.time.getTime();
+    if (t < options.nowMs - 1_000 || t > endMs) return false;
+    const risk = getRiskAssessment(event.distanceKm);
+    if (options.risk === 'critical') return risk === 'CRITICAL RISK';
+    if (options.risk === 'monitoring') {
+      return risk === 'CRITICAL RISK' || risk === 'MONITORING';
+    }
+    return true;
+  });
+
+  return rankConjunctionAlertsForDisplay(filtered).slice(0, limit);
+}
+
 /** Freeze alert CPA metadata — always resolve indices by NORAD ID, never
  *  by name (debris fields have many same-named fragments) and never reuse
  *  stale indices. */
@@ -666,8 +705,8 @@ export function findConjunctions(objects: TrackedObject[], date: Date): Conjunct
   pairs.sort((a, b) => a.time.getTime() - b.time.getTime() || a.distanceKm - b.distanceKm);
   const ranked = deduplicatePhysicalConjunctions(pairs, objects);
   return {
-    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
-    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+    alerts: ranked.slice(0, MAX_STORED_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_STORED_ALERTS),
   };
 }
 
@@ -835,8 +874,8 @@ export function findUpcomingConjunctions(
     (event) => event.time.getTime() >= startMs - 1_000,
   );
   return {
-    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
-    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+    alerts: ranked.slice(0, MAX_STORED_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_STORED_ALERTS),
   };
 }
 
@@ -900,8 +939,8 @@ function snapshotUpcomingResult(scan: UpcomingScanState): ConjunctionScanResult 
     // Drop CPAs already behind the sweep clock so the panel stays "what's next".
     .filter((event) => event.time.getTime() >= scan.startMs - 1_000);
   return {
-    alerts: ranked.slice(0, MAX_DISPLAY_ALERTS),
-    hiddenCount: Math.max(0, ranked.length - MAX_DISPLAY_ALERTS),
+    alerts: ranked.slice(0, MAX_STORED_ALERTS),
+    hiddenCount: Math.max(0, ranked.length - MAX_STORED_ALERTS),
   };
 }
 
@@ -1105,9 +1144,8 @@ function scheduleUpcomingScanStep(onUpdate: ConjunctionRefreshListener): void {
  * (throttled by `UPCOMING_RESCAN_INTERVAL_MS`) and self-driving once a sweep
  * has started, so callers don't need to do anything beyond calling it.
  *
- * Displayed alerts are the soonest upcoming CPAs (max `MAX_DISPLAY_ALERTS`),
- * not the globally closest misses — that keeps the left panel stable and
- * answers "what happens next".
+ * Displayed alerts are filtered by UI horizon/risk chips, then capped at
+ * `MAX_DISPLAY_ALERTS` from a stored pool of up to `MAX_STORED_ALERTS`.
  */
 export function getUpcomingConjunctions(
   objects: TrackedObject[],

@@ -993,6 +993,56 @@ body {
   gap: 8px;
 }
 
+.conjunction-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.conjunction-filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conjunction-filter-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.conjunction-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.conjunction-filter-chip {
+  font-family: var(--font);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.conjunction-filter-chip:hover {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: var(--text-primary);
+}
+
+.conjunction-filter-chip.active {
+  border-color: rgba(248, 113, 113, 0.7);
+  background: rgba(248, 113, 113, 0.16);
+  color: #fecaca;
+}
+
 .conjunction-empty {
   margin: 0;
   font-size: 0.82rem;

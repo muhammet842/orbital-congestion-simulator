@@ -51,6 +51,8 @@ function resetState(): void {
     colorByFunction: false,
     conjunctions: [],
     conjunctionHiddenCount: 0,
+    conjunctionHorizonHours: 24,
+    conjunctionRiskFilter: 'all',
   });
 }
 

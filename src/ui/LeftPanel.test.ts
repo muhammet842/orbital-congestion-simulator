@@ -71,6 +71,7 @@ describe('initLeftPanel – DOM smoke', () => {
     document.body.appendChild(container);
     initLeftPanel(container);
     expect(container.querySelector('#conjunction-list')).not.toBeNull();
+    expect(container.querySelector('#conjunction-filters')).not.toBeNull();
     document.body.removeChild(container);
   });
 
@@ -230,5 +231,45 @@ describe('renderConjunctions — predicted (future) close approaches', () => {
 
     document.body.removeChild(container);
     setState({ conjunctions: [], conjunctionHiddenCount: 0 });
+  });
+
+  it('hides non-critical cards when the critical risk filter is active', () => {
+    const critical = makeFutureConjunction(20 * 60 * 1000);
+    critical.objectA = 'CRIT-A';
+    critical.objectB = 'CRIT-B';
+    critical.distanceKm = 0.4;
+
+    const monitoring = makeFutureConjunction(10 * 60 * 1000);
+    monitoring.objectA = 'MON-A';
+    monitoring.objectB = 'MON-B';
+    monitoring.distanceKm = 2.1;
+
+    setState({
+      conjunctions: [critical, monitoring],
+      conjunctionHiddenCount: 0,
+      conjunctionRiskFilter: 'all',
+      conjunctionHorizonHours: 24,
+    });
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+
+    expect(container.querySelectorAll('.conjunction-alert').length).toBe(2);
+
+    setState({ conjunctionRiskFilter: 'critical' });
+    const texts = [...container.querySelectorAll('.conjunction-alert-text')].map(
+      (el) => el.textContent ?? '',
+    );
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toContain('CRIT-A');
+    expect(texts[0]).not.toContain('MON-A');
+
+    document.body.removeChild(container);
+    setState({
+      conjunctions: [],
+      conjunctionHiddenCount: 0,
+      conjunctionRiskFilter: 'all',
+    });
   });
 });

@@ -1,8 +1,11 @@
 import { LAYER_HEX, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
+  filterConjunctionAlerts,
   hasUpcomingConjunctionScanCompleted,
   isUpcomingConjunctionScanPending,
+  type ConjunctionHorizonHours,
+  type ConjunctionRiskFilter,
 } from '../orbital/conjunction';
 import {
   formatUtcDateTime,
@@ -14,6 +17,8 @@ import {
   toggleConjunctionFromAlert,
   selectObject,
   setSearchQuery,
+  setConjunctionHorizonHours,
+  setConjunctionRiskFilter,
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
@@ -30,6 +35,11 @@ const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const LIST_ITEM_HEIGHT = 36;
 const LIST_VIEWPORT_HEIGHT = 200;
 const LIST_OVERSCAN = 6;
+const HORIZON_OPTIONS: ConjunctionHorizonHours[] = [1, 6, 12, 24];
+const RISK_OPTIONS: ConjunctionRiskFilter[] = ['all', 'critical', 'monitoring'];
+
+/** Currently visible (filtered) alert cards — click handler reads this, not the raw pool. */
+let displayedConjunctions: ReturnType<typeof filterConjunctionAlerts> = [];
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
@@ -64,6 +74,7 @@ export function initLeftPanel(container: HTMLElement): void {
     <dl class="stats-list" id="live-stats"></dl>
 
     <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts (Next 24h)</h2>
+    <div class="conjunction-filters" id="conjunction-filters"></div>
     <div class="conjunction-list" id="conjunction-list"></div>
 
     <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
@@ -74,19 +85,36 @@ export function initLeftPanel(container: HTMLElement): void {
   renderLayerFilters(container);
   renderDisplayOptions(container);
   renderStats(container);
+  renderConjunctionFilters(container);
   renderConjunctions(container);
   initEventCards(container);
   initAdvancedFilters(container);
 
   container.addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(
+      '#conjunction-filters [data-horizon], #conjunction-filters [data-risk]',
+    );
+    if (chip) {
+      e.preventDefault();
+      const horizon = chip.dataset.horizon;
+      const risk = chip.dataset.risk;
+      if (horizon) {
+        setConjunctionHorizonHours(Number(horizon) as ConjunctionHorizonHours);
+      }
+      if (risk) {
+        setConjunctionRiskFilter(risk as ConjunctionRiskFilter);
+      }
+      return;
+    }
+
     const card = (e.target as HTMLElement).closest<HTMLButtonElement>(
-      '.conjunction-alert[data-alert-index]',
+      '.conjunction-alert[data-session-key]',
     );
     if (!card) return;
 
     e.preventDefault();
-    const index = Number(card.dataset.alertIndex);
-    const match = getState().conjunctions[index];
+    const key = card.dataset.sessionKey;
+    const match = displayedConjunctions.find((c) => conjunctionSessionKey(c) === key);
     if (match) {
       toggleConjunctionFromAlert(match);
     }
@@ -111,6 +139,7 @@ export function initLeftPanel(container: HTMLElement): void {
     applyTranslations(container);
     renderDisplayOptions(container);
     renderStats(container);
+    renderConjunctionFilters(container);
     renderConjunctions(container);
     renderAdvancedFilters(container);
   });
@@ -120,6 +149,7 @@ export function initLeftPanel(container: HTMLElement): void {
 
   subscribe(() => {
     renderStats(container);
+    renderConjunctionFilters(container);
     renderConjunctions(container);
 
     const state = getState();
@@ -349,6 +379,56 @@ function renderStats(container: HTMLElement): void {
   `;
 }
 
+function renderConjunctionFilters(container: HTMLElement): void {
+  const el = container.querySelector('#conjunction-filters');
+  if (!el) return;
+  const { conjunctionHorizonHours, conjunctionRiskFilter } = getState();
+
+  const horizonChips = HORIZON_OPTIONS.map(
+    (h) => `
+      <button
+        type="button"
+        class="conjunction-filter-chip${conjunctionHorizonHours === h ? ' active' : ''}"
+        data-horizon="${h}"
+      >${t('conj.filter_horizon').replace('{h}', String(h))}</button>
+    `,
+  ).join('');
+
+  const riskChips = RISK_OPTIONS.map(
+    (r) => `
+      <button
+        type="button"
+        class="conjunction-filter-chip${conjunctionRiskFilter === r ? ' active' : ''}"
+        data-risk="${r}"
+      >${t(`conj.filter_risk_${r}`)}</button>
+    `,
+  ).join('');
+
+  el.innerHTML = `
+    <div class="conjunction-filter-row" role="group" aria-label="${t('conj.filter_time_label')}">
+      <span class="conjunction-filter-label">${t('conj.filter_time_label')}</span>
+      <div class="conjunction-filter-chips">${horizonChips}</div>
+    </div>
+    <div class="conjunction-filter-row" role="group" aria-label="${t('conj.filter_risk_label')}">
+      <span class="conjunction-filter-label">${t('conj.filter_risk_label')}</span>
+      <div class="conjunction-filter-chips">${riskChips}</div>
+    </div>
+  `;
+}
+
+function getVisibleConjunctions() {
+  const {
+    conjunctions,
+    conjunctionHorizonHours,
+    conjunctionRiskFilter,
+  } = getState();
+  return filterConjunctionAlerts(conjunctions, {
+    nowMs: getGlobalSimulationTime().getTime(),
+    horizonHours: conjunctionHorizonHours,
+    risk: conjunctionRiskFilter,
+  });
+}
+
 function renderConjunctions(container: HTMLElement): void {
   const { conjunctions, conjunctionHiddenCount, selectedConjunctionSessionKey } = getState();
   const listEl = container.querySelector('#conjunction-list')!;
@@ -356,6 +436,7 @@ function renderConjunctions(container: HTMLElement): void {
   if (conjunctions.length === 0) {
     previousAlertKeys.clear();
     lastConjunctionStructureKey = '';
+    displayedConjunctions = [];
     const stillScanning =
       isUpcomingConjunctionScanPending() || !hasUpcomingConjunctionScanCompleted();
     const emptyText = t(stillScanning ? 'conj.scanning' : 'conj.empty');
@@ -368,30 +449,41 @@ function renderConjunctions(container: HTMLElement): void {
     return;
   }
 
+  const visible = getVisibleConjunctions();
+  displayedConjunctions = visible;
+  const nowMs = getGlobalSimulationTime().getTime();
+
+  if (visible.length === 0) {
+    previousAlertKeys.clear();
+    lastConjunctionStructureKey = 'filtered-empty';
+    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.filter_empty')}</p>`;
+    return;
+  }
+
   const structureKey = [
     selectedConjunctionSessionKey ?? '',
     String(conjunctionHiddenCount),
-    ...conjunctions.map(
+    getState().conjunctionHorizonHours,
+    getState().conjunctionRiskFilter,
+    ...visible.map(
       (c) =>
         `${conjunctionSessionKey(c)}:${c.distanceKm.toFixed(2)}:${c.time.getTime()}`,
     ),
   ].join('|');
 
-  const nowMs = getGlobalSimulationTime().getTime();
-
   // Same cards already mounted — only refresh countdown copy (avoids drop animation flicker).
   if (
     structureKey === lastConjunctionStructureKey &&
-    listEl.querySelectorAll('.conjunction-alert').length === conjunctions.length
+    listEl.querySelectorAll('.conjunction-alert').length === visible.length
   ) {
-    updateConjunctionAlertTexts(listEl, conjunctions, nowMs);
+    updateConjunctionAlertTexts(listEl, visible, nowMs);
     return;
   }
 
   lastConjunctionStructureKey = structureKey;
   const nextKeys = new Set<string>();
-  const alertsHtml = conjunctions
-    .map((c, index) => {
+  const alertsHtml = visible
+    .map((c) => {
       const sessionKey = conjunctionSessionKey(c);
       const isNew = !previousAlertKeys.has(sessionKey);
       const isActive = sessionKey === selectedConjunctionSessionKey;
@@ -400,7 +492,7 @@ function renderConjunctions(container: HTMLElement): void {
         <button
           type="button"
           class="conjunction-alert${isNew ? ' conjunction-alert--new' : ''}${isActive ? ' conjunction-alert--active' : ''}"
-          data-alert-index="${index}"
+          data-session-key="${escapeHtml(sessionKey)}"
         >
           <span class="conjunction-alert-icon" aria-hidden="true">⚠</span>
           <span class="conjunction-alert-text">${escapeHtml(formatAlertMessage(c, nowMs))}</span>
@@ -409,9 +501,11 @@ function renderConjunctions(container: HTMLElement): void {
     })
     .join('');
 
+  const poolExtra = Math.max(0, conjunctions.length - visible.length);
+  const overflowTotal = conjunctionHiddenCount + poolExtra;
   const overflowHtml =
-    conjunctionHiddenCount > 0
-      ? `<p class="conjunction-more muted">${t(conjunctionHiddenCount === 1 ? 'conj.more_one' : 'conj.more_other').replace('{n}', conjunctionHiddenCount.toLocaleString())}</p>`
+    overflowTotal > 0
+      ? `<p class="conjunction-more muted">${t(overflowTotal === 1 ? 'conj.more_one' : 'conj.more_other').replace('{n}', overflowTotal.toLocaleString())}</p>`
       : '';
 
   listEl.innerHTML = alertsHtml + overflowHtml;
@@ -450,7 +544,17 @@ function refreshConjunctionCountdowns(container: HTMLElement): void {
     renderConjunctions(container);
     return;
   }
-  updateConjunctionAlertTexts(listEl, conjunctions, getGlobalSimulationTime().getTime());
+  const visible = getVisibleConjunctions();
+  displayedConjunctions = visible;
+  if (visible.length === 0) {
+    renderConjunctions(container);
+    return;
+  }
+  if (listEl.querySelectorAll('.conjunction-alert').length !== visible.length) {
+    renderConjunctions(container);
+    return;
+  }
+  updateConjunctionAlertTexts(listEl, visible, getGlobalSimulationTime().getTime());
 }
 
 let previousAlertKeys = new Set<string>();

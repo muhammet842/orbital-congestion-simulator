@@ -5,6 +5,7 @@ import {
   findCandidatePairsWithinRadius,
   findConjunctions,
   findUpcomingConjunctions,
+  filterConjunctionAlerts,
   formatCloseApproachAlert,
   formatRelativeVelocityKmS,
   getConjunctions,
@@ -67,6 +68,78 @@ describe('rankConjunctionAlertsForDisplay', () => {
     );
     const top = rankConjunctionAlertsForDisplay(events).slice(0, MAX_DISPLAY_ALERTS);
     expect(top.map((e) => e.objectA)).toEqual(['A0', 'A1', 'A2', 'A3', 'A4']);
+  });
+});
+
+describe('filterConjunctionAlerts', () => {
+  const nowMs = Date.parse('2026-07-29T12:00:00Z');
+
+  function alert(partial: Partial<ConjunctionEvent> & Pick<ConjunctionEvent, 'objectA' | 'time' | 'distanceKm'>): ConjunctionEvent {
+    return {
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      relativeVelocityKmS: 7,
+      midpointScene: { x: 0, y: 0, z: 0 },
+      ...partial,
+    };
+  }
+
+  it('drops events outside the selected horizon', () => {
+    const near = alert({
+      objectA: 'NEAR',
+      time: new Date(nowMs + 30 * 60_000),
+      distanceKm: 0.5,
+    });
+    const far = alert({
+      objectA: 'FAR',
+      time: new Date(nowMs + 5 * 3_600_000),
+      distanceKm: 0.4,
+    });
+    const visible = filterConjunctionAlerts([near, far], {
+      nowMs,
+      horizonHours: 1,
+      risk: 'all',
+    });
+    expect(visible.map((e) => e.objectA)).toEqual(['NEAR']);
+  });
+
+  it('critical risk keeps only sub-1 km misses', () => {
+    const critical = alert({
+      objectA: 'CRIT',
+      time: new Date(nowMs + 20 * 60_000),
+      distanceKm: 0.4,
+    });
+    const monitoring = alert({
+      objectA: 'MON',
+      time: new Date(nowMs + 10 * 60_000),
+      distanceKm: 2.0,
+    });
+    const visible = filterConjunctionAlerts([critical, monitoring], {
+      nowMs,
+      horizonHours: 24,
+      risk: 'critical',
+    });
+    expect(visible.map((e) => e.objectA)).toEqual(['CRIT']);
+  });
+
+  it('monitoring includes critical and caps at MAX_DISPLAY_ALERTS', () => {
+    const events = Array.from({ length: 8 }, (_, i) =>
+      alert({
+        objectA: `C${i}`,
+        time: new Date(nowMs + (i + 1) * 60_000),
+        distanceKm: i < 6 ? 0.5 : 2.0,
+      }),
+    );
+    const visible = filterConjunctionAlerts(events, {
+      nowMs,
+      horizonHours: 24,
+      risk: 'monitoring',
+    });
+    expect(visible).toHaveLength(MAX_DISPLAY_ALERTS);
+    expect(visible.map((e) => e.objectA)).toEqual(['C0', 'C1', 'C2', 'C3', 'C4']);
   });
 });
 
