@@ -27,7 +27,7 @@ import { SatelliteFootprint } from './SatelliteFootprint';
 import { SatelliteGroundTrack } from './SatelliteGroundTrack';
 import { getSubSatelliteScenePoints } from '../orbital/coordinates';
 import { SelectionMarker } from './SelectionMarker';
-import type { TrackedObject } from '../types';
+import { EARTH_RADIUS_KM, type TrackedObject } from '../types';
 import {
   getState,
   getSimulationTime,
@@ -224,9 +224,10 @@ export class SceneManager {
   }
 
   /**
-   * Globe view clamps the camera outside Earth (radius ≈ 1). Conjunction
-   * verification orbits the pair midpoint at ~0.1 scene units — the globe
-   * minDistance would otherwise block all zoom-in (and yank the fly-in pose).
+   * Globe view clamps the camera outside Earth (radius ≈ 1). Close-pair
+   * focus (conjunction verification / collision replay) orbits the midpoint
+   * at ~0.1 scene units — the globe minDistance would otherwise block all
+   * zoom-in (and yank the fly-in pose).
    */
   private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
     if (conjunctionFocus) {
@@ -252,6 +253,10 @@ export class SceneManager {
           startEventReplay(selectedEventId, collisionTimeMs);
           this.eventReplayVisuals.setup(event, collisionTimeMs);
           this.cameraFly.captureGlobalView(this.camera, this.controls);
+          // Same close-pair orbit limits as conjunction verification so the
+          // fly-in can lock onto the colliding objects instead of the globe.
+          this.applyOrbitDistanceLimits(true);
+          this.canvasContainer.classList.add('scene-container--conjunction-focus');
 
           // Clear any satellite selection visuals immediately so the footprint
           // cone and orbit trail don't linger while the replay loads.
@@ -266,6 +271,8 @@ export class SceneManager {
           if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
         }
 
+        this.applyOrbitDistanceLimits(true);
+        this.canvasContainer.classList.add('scene-container--conjunction-focus');
         this.earth.mesh.visible = true;
         return;
       }
@@ -284,6 +291,8 @@ export class SceneManager {
       if (eventReplay) stopEventReplay();
       // Restore catalog satellites visibility
       if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
+      this.applyOrbitDistanceLimits(false);
+      this.canvasContainer.classList.remove('scene-container--conjunction-focus');
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
     }
 
@@ -426,8 +435,6 @@ export class SceneManager {
       this.applyDayNight(simTime);
 
       const flying = this.cameraFly.update(this.camera, this.controls, now);
-      if (!flying) this.controls.update();
-      this.camera.updateMatrixWorld();
 
       const replayResult = this.eventReplayVisuals.tick(
         simTime,
@@ -444,41 +451,53 @@ export class SceneManager {
         }
       }
 
-      // One-time initial camera fly to the collision region
+      // One-time fly-in: lock onto the pair like close-approach verification
+      // (midpoint target + close orbit), not a globe-facing frame.
       if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
         this._eventReplayStarted = true;
-        const event = getHistoricalEvent(currentState.eventReplay.eventId);
         const collisionScene = this.eventReplayVisuals.getCollisionScene();
-        const aimAt = collisionScene ?? replayResult.posA;
-        this.cameraFly.frameSelectedOnGlobe(
-          this.camera,
-          this.controls,
-          { x: aimAt.x, y: aimAt.y, z: aimAt.z },
-          event?.altitudeKm ?? 800,
-        );
-      }
-
-      // After initial fly, gently rotate the camera to keep the midpoint of
-      // the two approaching objects facing toward us. This ensures neither
-      // satellite goes off-screen as they converge.
-      if (this._eventReplayStarted && !this.cameraFly.isActive() && replayResult) {
-        const { posA, posB } = replayResult;
-        const midpoint = posB
-          ? posA.clone().add(posB).multiplyScalar(0.5)
-          : posA.clone();
-
-        const camRadius = this.camera.position.length();
-        const currentDir = this.camera.position.clone().normalize();
-        const desiredDir = midpoint.clone().normalize();
-
-        if (currentDir.dot(desiredDir) < 0.9995) {
-          // ~1.5 % lerp per frame → smooth but responsive
-          const newDir = currentDir.lerp(desiredDir, 0.015).normalize();
-          this.camera.position.copy(newDir.multiplyScalar(camRadius));
-          this.controls.target.set(0, 0, 0);
+        const posA = replayResult.posA;
+        const posB = replayResult.posB ?? collisionScene;
+        if (posB) {
+          const sepKm = Math.max(
+            this.eventReplayVisuals.getInitialSeparationKm(),
+            posA.distanceTo(posB) * EARTH_RADIUS_KM,
+            0.5,
+          );
+          const layout = getVisualConjunctionLayout(posA, posB, sepKm);
+          this.controls.target.copy(layout.visualMid);
           this.controls.update();
+          this.cameraFly.flyToConjunctionPair(
+            this.camera,
+            this.controls,
+            posA,
+            posB,
+            sepKm,
+          );
         }
       }
+
+      // Keep the colliding pair framed after the fly-in completes.
+      if (this._eventReplayStarted && !this.cameraFly.isActive() && replayResult) {
+        const posA = replayResult.posA;
+        const posB = replayResult.posB ?? this.eventReplayVisuals.getCollisionScene();
+        if (posB) {
+          const sepKm = Math.max(posA.distanceTo(posB) * EARTH_RADIUS_KM, 0.1);
+          this.cameraFly.followConjunctionMidpoint(
+            this.camera,
+            this.controls,
+            posA,
+            posB,
+            sepKm,
+            deltaMs,
+          );
+        }
+      }
+
+      if (!flying && !this.cameraFly.isActive()) {
+        this.controls.update();
+      }
+      this.camera.updateMatrixWorld();
 
       // Floating info panels over the two objects
       if (replayResult) {
