@@ -1,6 +1,8 @@
 import type { ConjunctionScanResult } from '../orbital/conjunction';
 import {
+  clampVerificationTimeMs,
   conjunctionSessionKey,
+  getVerificationWindowMs,
   hasUpcomingConjunctionScanCompleted,
   invalidateConjunctionCache,
   invalidateUpcomingConjunctionCache,
@@ -434,14 +436,26 @@ export function setVerificationPartial(
   if (!state.verificationTime) return;
   const speed =
     partial.speed !== undefined ? Math.min(partial.speed, 100) : partial.speed;
-  state.verificationTime = { ...state.verificationTime, ...partial, ...(speed !== undefined ? { speed } : {}) };
+  const next = { ...state.verificationTime, ...partial, ...(speed !== undefined ? { speed } : {}) };
+  if (partial.currentMs !== undefined) {
+    next.currentMs = clampVerificationTimeMs(next.cpaTimeMs, partial.currentMs);
+  }
+  state.verificationTime = next;
   listeners.forEach((fn) => fn());
 }
 
 /** Advance verification playback clock without touching global time state. */
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
-  state.verificationTime.currentMs += deltaMs * state.verificationTime.speed;
+  const vt = state.verificationTime;
+  const { endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+  const nextMs = vt.currentMs + deltaMs * vt.speed;
+  if (nextMs >= endMs) {
+    state.verificationTime = { ...vt, currentMs: endMs, playing: false };
+    listeners.forEach((fn) => fn());
+    return;
+  }
+  state.verificationTime.currentMs = nextMs;
 }
 
 export function setShowOrbitTrail(show: boolean): void {

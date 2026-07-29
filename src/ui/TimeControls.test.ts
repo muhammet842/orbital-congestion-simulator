@@ -76,3 +76,48 @@ describe('conjunction verification speed buttons', () => {
     expect(getState().verificationTime?.speed).toBe(10);
   });
 });
+
+describe('conjunction verification scrubbing', () => {
+  const CPA = 1_000_000;
+
+  beforeEach(() => {
+    setState({
+      selectedConjunction: {} as never,
+      verificationTime: {
+        cpaTimeMs: CPA,
+        currentMs: CPA - 60_000,
+        playing: true,
+        speed: 1,
+      },
+    });
+  });
+
+  it('maps the slider across the CPA window (T−60s…T+15s), not ±7 days', () => {
+    const container = mount();
+    const slider = container.querySelector<HTMLInputElement>('#time-slider')!;
+
+    // Midpoint of the 75s window ≈ CPA − 22.5s
+    slider.value = '0';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const vt = getState().verificationTime!;
+    expect(vt.playing).toBe(false);
+    expect(vt.currentMs).toBeGreaterThan(CPA - 60_000);
+    expect(vt.currentMs).toBeLessThan(CPA + 15_000);
+    expect(Math.abs(vt.currentMs - (CPA - 22_500))).toBeLessThan(500);
+  });
+
+  it('steps ±5 seconds with rewind/forward and clamps to the window', () => {
+    const container = mount();
+    const rewind = container.querySelector<HTMLButtonElement>('#btn-rewind')!;
+    const forward = container.querySelector<HTMLButtonElement>('#btn-forward')!;
+
+    // At window start — rewind must clamp, not jump an hour.
+    rewind.click();
+    expect(getState().verificationTime!.currentMs).toBe(CPA - 60_000);
+
+    forward.click();
+    expect(getState().verificationTime!.currentMs).toBe(CPA - 55_000);
+    expect(getState().verificationTime!.playing).toBe(false);
+  });
+});

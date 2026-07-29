@@ -617,6 +617,11 @@ body {
   opacity: 0.55;
 }
 
+.time-slider--verify {
+  opacity: 1;
+  accent-color: #fca5a5;
+}
+
 .stat-value--live {
   color: var(--accent);
   font-weight: 600;

@@ -1,4 +1,8 @@
 import {
+  getVerificationWindowMs,
+  VERIFY_SCRUB_STEP_MS,
+} from '../orbital/conjunction';
+import {
   enterHistoricalMode,
   enterLiveMode,
   formatUtcDateTime,
@@ -54,6 +58,8 @@ export function initTimeControls(container: HTMLElement): void {
   ).join('');
 
   let anchorTime = Date.now();
+  /** True while the user is dragging the scrubber — don't fight their input. */
+  let sliderDragging = false;
 
   playBtn.addEventListener('click', () => {
     const verifying = isConjunctionVerificationActive();
@@ -71,7 +77,12 @@ export function initTimeControls(container: HTMLElement): void {
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
-      setVerificationPartial({ currentMs: vt.currentMs - 3600_000 });
+      setVerificationPartial({
+        currentMs: vt.currentMs - VERIFY_SCRUB_STEP_MS,
+        playing: false,
+      });
+      const next = getVerificationTimeState();
+      if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
       return;
     }
     const base = time.mode === 'live' ? Date.now() : time.current.getTime();
@@ -88,7 +99,12 @@ export function initTimeControls(container: HTMLElement): void {
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
-      setVerificationPartial({ currentMs: vt.currentMs + 3600_000 });
+      setVerificationPartial({
+        currentMs: vt.currentMs + VERIFY_SCRUB_STEP_MS,
+        playing: false,
+      });
+      const next = getVerificationTimeState();
+      if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
       return;
     }
     const base = time.mode === 'live' ? Date.now() : time.current.getTime();
@@ -112,16 +128,30 @@ export function initTimeControls(container: HTMLElement): void {
     slider.value = '0';
   });
 
+  slider.addEventListener('pointerdown', () => {
+    sliderDragging = true;
+  });
+  const endSliderDrag = (): void => {
+    sliderDragging = false;
+  };
+  slider.addEventListener('pointerup', endSliderDrag);
+  slider.addEventListener('pointercancel', endSliderDrag);
+
   slider.addEventListener('input', () => {
-    const offset = (parseFloat(slider.value) / 100) * SLIDER_RANGE_MS;
     const { time } = getState();
 
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
-      setVerificationPartial({ currentMs: vt.cpaTimeMs + offset });
+      const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+      // Map slider −100…+100 → [CPA−60s, CPA+15s].
+      const t = (parseFloat(slider.value) + 100) / 200;
+      const currentMs = startMs + t * (endMs - startMs);
+      setVerificationPartial({ currentMs, playing: false });
       return;
     }
+
+    const offset = (parseFloat(slider.value) / 100) * SLIDER_RANGE_MS;
 
     if (time.mode === 'live') {
       anchorTime = Date.now();
@@ -178,12 +208,21 @@ export function initTimeControls(container: HTMLElement): void {
       anchorTime = Date.now();
       slider.value = '0';
     }
+    if (!wasVerifying && verifying && vt) {
+      syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+    }
     wasVerifying = verifying;
 
     playBtn.textContent = (verifying ? vt?.playing : time.playing) ? '⏸' : '▶';
 
     liveBtn.classList.toggle('active', isLive);
     liveBtn.textContent = verifying ? '● VERIFY' : isLive ? '● LIVE' : 'LIVE';
+
+    rewindBtn.title = verifying ? 'Back 5 seconds' : 'Back 1 hour';
+    forwardBtn.title = verifying ? 'Forward 5 seconds' : 'Forward 1 hour';
+    slider.title = verifying
+      ? 'Scrub within the close-approach window (T−60s → T+15s)'
+      : 'Scrub simulation time (±7 days)';
 
     speedButtons.querySelectorAll('.speed-btn').forEach((btn) => {
       const speed = parseInt((btn as HTMLButtonElement).dataset.speed!, 10);
@@ -193,12 +232,14 @@ export function initTimeControls(container: HTMLElement): void {
     });
 
     slider.classList.toggle('time-slider--live', time.mode === 'live' && !verifying);
+    slider.classList.toggle('time-slider--verify', verifying);
   });
 
   const display = container.querySelector('#time-display')!;
   const refreshTimeDisplay = (): void => {
     const { time } = getState();
     const verifying = isConjunctionVerificationActive();
+    const vt = getVerificationTimeState();
     const isLive = time.mode === 'live' && !verifying;
     const displayTime = verifying || time.mode === 'historical'
       ? getSimulationTime()
@@ -206,7 +247,26 @@ export function initTimeControls(container: HTMLElement): void {
     display.textContent = formatUtcDateTime(displayTime);
     display.classList.toggle('time-display--live', isLive);
     display.classList.toggle('time-display--verify', verifying);
+
+    if (verifying && vt && !sliderDragging) {
+      syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+    }
+
     requestAnimationFrame(refreshTimeDisplay);
   };
   requestAnimationFrame(refreshTimeDisplay);
+}
+
+/** Map verification clock → slider −100…+100 across the CPA window. */
+function syncVerificationSlider(
+  slider: HTMLInputElement,
+  cpaTimeMs: number,
+  currentMs: number,
+): void {
+  const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs);
+  const span = Math.max(1, endMs - startMs);
+  const clamped = Math.min(endMs, Math.max(startMs, currentMs));
+  const t = (clamped - startMs) / span;
+  const next = String(Math.round(t * 200 - 100));
+  if (slider.value !== next) slider.value = next;
 }

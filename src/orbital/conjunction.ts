@@ -47,6 +47,21 @@ export const VERIFY_REWIND_MS = 60 * 1000;
 export const VERIFY_TRAIL_BACK_MS = VERIFY_REWIND_MS;
 export const VERIFY_TRAIL_FORWARD_MS = 15 * 1000;
 export const VERIFY_TRAIL_STEP_MS = 2_000;
+/** Keyboard / transport nudge while scrubbing a verification session. */
+export const VERIFY_SCRUB_STEP_MS = 5_000;
+
+/** Inclusive playback window around CPA (matches drawn verification trails). */
+export function getVerificationWindowMs(cpaTimeMs: number): { startMs: number; endMs: number } {
+  return {
+    startMs: cpaTimeMs - VERIFY_REWIND_MS,
+    endMs: cpaTimeMs + VERIFY_TRAIL_FORWARD_MS,
+  };
+}
+
+export function clampVerificationTimeMs(cpaTimeMs: number, currentMs: number): number {
+  const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs);
+  return Math.min(endMs, Math.max(startMs, currentMs));
+}
 export const COLLISION_THRESHOLD_KM = 0.1;
 /** Crossing-orbit pairs below this relative speed are co-orbiting, not collision flybys. */
 export const CROSSING_MIN_REL_VELOCITY_KM_S = 0.05;
