@@ -3,15 +3,20 @@ import {
   VERIFY_SCRUB_STEP_MS,
 } from '../orbital/conjunction';
 import {
+  EVENT_REPLAY_SCRUB_STEP_MS,
   enterHistoricalMode,
   enterLiveMode,
   formatUtcDateTime,
+  getEventReplayState,
+  getEventReplayWindowMs,
   getSimulationTime,
   getState,
   getVerificationTimeState,
   isConjunctionVerificationActive,
+  isEventReplayActive,
   isVerificationPlaying,
   jumpToNow,
+  setEventReplayPartial,
   setTimePartial,
   setVerificationPartial,
   subscribe,
@@ -62,10 +67,14 @@ export function initTimeControls(container: HTMLElement): void {
   let sliderDragging = false;
 
   playBtn.addEventListener('click', () => {
-    const verifying = isConjunctionVerificationActive();
-    if (verifying) {
+    if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       setVerificationPartial({ playing: !vt?.playing });
+      return;
+    }
+    if (isEventReplayActive()) {
+      const er = getEventReplayState();
+      if (er) setEventReplayPartial({ playing: !er.playing });
       return;
     }
     const { playing } = getState().time;
@@ -73,7 +82,6 @@ export function initTimeControls(container: HTMLElement): void {
   });
 
   rewindBtn.addEventListener('click', () => {
-    const { time } = getState();
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
@@ -85,6 +93,18 @@ export function initTimeControls(container: HTMLElement): void {
       if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
       return;
     }
+    if (isEventReplayActive()) {
+      const er = getEventReplayState();
+      if (!er) return;
+      setEventReplayPartial({
+        currentMs: er.currentMs - EVENT_REPLAY_SCRUB_STEP_MS,
+        playing: false,
+      });
+      const next = getEventReplayState();
+      if (next) syncEventReplaySlider(slider, next.collisionTimeMs, next.currentMs);
+      return;
+    }
+    const { time } = getState();
     const base = time.mode === 'live' ? Date.now() : time.current.getTime();
     enterHistoricalMode({
       current: new Date(base - 3600_000),
@@ -95,7 +115,6 @@ export function initTimeControls(container: HTMLElement): void {
   });
 
   forwardBtn.addEventListener('click', () => {
-    const { time } = getState();
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
@@ -107,6 +126,18 @@ export function initTimeControls(container: HTMLElement): void {
       if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
       return;
     }
+    if (isEventReplayActive()) {
+      const er = getEventReplayState();
+      if (!er) return;
+      setEventReplayPartial({
+        currentMs: er.currentMs + EVENT_REPLAY_SCRUB_STEP_MS,
+        playing: false,
+      });
+      const next = getEventReplayState();
+      if (next) syncEventReplaySlider(slider, next.collisionTimeMs, next.currentMs);
+      return;
+    }
+    const { time } = getState();
     const base = time.mode === 'live' ? Date.now() : time.current.getTime();
     enterHistoricalMode({
       current: new Date(base + 3600_000),
@@ -138,8 +169,6 @@ export function initTimeControls(container: HTMLElement): void {
   slider.addEventListener('pointercancel', endSliderDrag);
 
   slider.addEventListener('input', () => {
-    const { time } = getState();
-
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
@@ -151,6 +180,17 @@ export function initTimeControls(container: HTMLElement): void {
       return;
     }
 
+    if (isEventReplayActive()) {
+      const er = getEventReplayState();
+      if (!er) return;
+      const { startMs, endMs } = getEventReplayWindowMs(er.collisionTimeMs);
+      const t = (parseFloat(slider.value) + 100) / 200;
+      const currentMs = startMs + t * (endMs - startMs);
+      setEventReplayPartial({ currentMs, playing: false });
+      return;
+    }
+
+    const { time } = getState();
     const offset = (parseFloat(slider.value) / 100) * SLIDER_RANGE_MS;
 
     if (time.mode === 'live') {
@@ -178,6 +218,11 @@ export function initTimeControls(container: HTMLElement): void {
         return;
       }
 
+      if (isEventReplayActive()) {
+        setEventReplayPartial({ speed, playing: true });
+        return;
+      }
+
       if (time.mode === 'live') {
         if (speed === 1) return;
         enterHistoricalMode({
@@ -195,61 +240,92 @@ export function initTimeControls(container: HTMLElement): void {
   });
 
   let wasVerifying = false;
+  let wasReplaying = false;
 
   subscribe(() => {
     const { time } = getState();
     const verifying = isConjunctionVerificationActive();
+    const replaying = isEventReplayActive();
     const vt = getVerificationTimeState();
+    const er = getEventReplayState();
+    const focused = verifying || replaying;
     const isLive =
-      (time.mode === 'live' && !verifying) ||
-      (verifying && isVerificationPlaying() && (vt?.speed ?? 1) === 1);
+      (time.mode === 'live' && !focused) ||
+      (verifying && isVerificationPlaying() && (vt?.speed ?? 1) === 1) ||
+      (replaying && !!er?.playing && (er.speed ?? 1) === 1);
 
-    if (wasVerifying && !verifying) {
+    if ((wasVerifying || wasReplaying) && !focused) {
       anchorTime = Date.now();
       slider.value = '0';
     }
     if (!wasVerifying && verifying && vt) {
       syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
     }
+    if (!wasReplaying && replaying && er) {
+      syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
+    }
     wasVerifying = verifying;
+    wasReplaying = replaying;
 
-    playBtn.textContent = (verifying ? vt?.playing : time.playing) ? '⏸' : '▶';
+    const playing = verifying ? vt?.playing : replaying ? er?.playing : time.playing;
+    playBtn.textContent = playing ? '⏸' : '▶';
 
     liveBtn.classList.toggle('active', isLive);
-    liveBtn.textContent = verifying ? '● VERIFY' : isLive ? '● LIVE' : 'LIVE';
+    liveBtn.textContent = verifying
+      ? '● VERIFY'
+      : replaying
+        ? '● REPLAY'
+        : isLive
+          ? '● LIVE'
+          : 'LIVE';
 
-    rewindBtn.title = verifying ? 'Back 5 seconds' : 'Back 1 hour';
-    forwardBtn.title = verifying ? 'Forward 5 seconds' : 'Forward 1 hour';
+    rewindBtn.title = focused ? 'Back 5 seconds' : 'Back 1 hour';
+    forwardBtn.title = focused ? 'Forward 5 seconds' : 'Forward 1 hour';
     slider.title = verifying
       ? 'Scrub within the close-approach window (T−60s → T+15s)'
-      : 'Scrub simulation time (±7 days)';
+      : replaying
+        ? 'Scrub within the event replay window (T−5m → IMPACT)'
+        : 'Scrub simulation time (±7 days)';
 
     speedButtons.querySelectorAll('.speed-btn').forEach((btn) => {
       const speed = parseInt((btn as HTMLButtonElement).dataset.speed!, 10);
       const el = btn as HTMLButtonElement;
-      const activeSpeed = verifying ? vt?.speed ?? 1 : time.mode === 'live' ? 1 : time.speed;
+      const activeSpeed = verifying
+        ? vt?.speed ?? 1
+        : replaying
+          ? er?.speed ?? 1
+          : time.mode === 'live'
+            ? 1
+            : time.speed;
       el.classList.toggle('active', speed === activeSpeed);
     });
 
-    slider.classList.toggle('time-slider--live', time.mode === 'live' && !verifying);
-    slider.classList.toggle('time-slider--verify', verifying);
+    slider.classList.toggle('time-slider--live', time.mode === 'live' && !focused);
+    slider.classList.toggle('time-slider--verify', verifying || replaying);
   });
 
   const display = container.querySelector('#time-display')!;
   const refreshTimeDisplay = (): void => {
     const { time } = getState();
     const verifying = isConjunctionVerificationActive();
+    const replaying = isEventReplayActive();
     const vt = getVerificationTimeState();
-    const isLive = time.mode === 'live' && !verifying;
-    const displayTime = verifying || time.mode === 'historical'
+    const er = getEventReplayState();
+    const focused = verifying || replaying;
+    const isLive = time.mode === 'live' && !focused;
+    const displayTime = focused || time.mode === 'historical'
       ? getSimulationTime()
       : new Date();
     display.textContent = formatUtcDateTime(displayTime);
     display.classList.toggle('time-display--live', isLive);
-    display.classList.toggle('time-display--verify', verifying);
+    display.classList.toggle('time-display--verify', focused);
 
-    if (verifying && vt && !sliderDragging) {
-      syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+    if (!sliderDragging) {
+      if (verifying && vt) {
+        syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+      } else if (replaying && er) {
+        syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
+      }
     }
 
     requestAnimationFrame(refreshTimeDisplay);
@@ -264,6 +340,25 @@ function syncVerificationSlider(
   currentMs: number,
 ): void {
   const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs);
+  syncWindowSlider(slider, startMs, endMs, currentMs);
+}
+
+/** Map event-replay clock → slider −100…+100 across T−5m…IMPACT. */
+function syncEventReplaySlider(
+  slider: HTMLInputElement,
+  collisionTimeMs: number,
+  currentMs: number,
+): void {
+  const { startMs, endMs } = getEventReplayWindowMs(collisionTimeMs);
+  syncWindowSlider(slider, startMs, endMs, currentMs);
+}
+
+function syncWindowSlider(
+  slider: HTMLInputElement,
+  startMs: number,
+  endMs: number,
+  currentMs: number,
+): void {
   const span = Math.max(1, endMs - startMs);
   const clamped = Math.min(endMs, Math.max(startMs, currentMs));
   const t = (clamped - startMs) / span;

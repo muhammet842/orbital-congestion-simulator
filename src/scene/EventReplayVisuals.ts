@@ -569,13 +569,13 @@ export class EventReplayVisuals {
       this.dotB.visible = false;
     }
 
-    // ── Trail opacity: full at the start, fades as dots converge ─────────
-    // At progress=0.7 the trail is at 50% opacity; fully gone at progress=1.
-    const trailOpacity = Math.max(0, 1 - progress * 1.4) * 0.6;
-    (this.trailA.material as LineDashedMaterial).opacity = trailOpacity;
-    this.trailA.visible = trailOpacity > 0.01;
-    (this.trailB.material as LineDashedMaterial).opacity = trailOpacity;
-    this.trailB.visible = trailOpacity > 0.01 && initialPosB !== null;
+    // ── Approach arcs stay visible for the whole scrub window (like
+    // conjunction verification trails). Fading them with progress made the
+    // orbits look like they were being erased as objects converged.
+    (this.trailA.material as LineDashedMaterial).opacity = 0.65;
+    this.trailA.visible = true;
+    (this.trailB.material as LineDashedMaterial).opacity = 0.65;
+    this.trailB.visible = initialPosB !== null;
 
     // ── Impact flash at T=0 ───────────────────────────────────────────────
     // SceneManager freezes the clock at T=0 so progress stays ≈ 1 here.

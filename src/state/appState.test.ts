@@ -15,6 +15,7 @@ import {
   resetAdvancedFilters,
   startEventReplay,
   stopEventReplay,
+  setEventReplayPartial,
   setColorByFunction,
   setShowOnlyRecentLaunches,
   setCategoryFilter,
@@ -129,6 +130,17 @@ describe('startEventReplay', () => {
   it('starts the replay in playing state', () => {
     startEventReplay('iridium-cosmos', Date.now());
     expect(getState().eventReplay!.playing).toBe(true);
+  });
+});
+
+describe('setEventReplayPartial', () => {
+  it('clamps currentMs to the T−5m…IMPACT window', () => {
+    const collisionMs = 1_000_000;
+    startEventReplay('iridium-cosmos', collisionMs);
+    setEventReplayPartial({ currentMs: collisionMs + 60_000, playing: false });
+    expect(getState().eventReplay!.currentMs).toBe(collisionMs);
+    setEventReplayPartial({ currentMs: collisionMs - EVENT_REPLAY_REWIND_MS - 60_000 });
+    expect(getState().eventReplay!.currentMs).toBe(collisionMs - EVENT_REPLAY_REWIND_MS);
   });
 });
 

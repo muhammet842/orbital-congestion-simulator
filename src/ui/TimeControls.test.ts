@@ -121,3 +121,47 @@ describe('conjunction verification scrubbing', () => {
     expect(getState().verificationTime!.playing).toBe(false);
   });
 });
+
+describe('event replay scrubbing', () => {
+  const IMPACT = 2_000_000;
+  const REWIND = 5 * 60 * 1000;
+
+  beforeEach(() => {
+    setState({
+      eventReplay: {
+        eventId: 'fengyun-asat',
+        collisionTimeMs: IMPACT,
+        currentMs: IMPACT - REWIND,
+        playing: true,
+        speed: 15,
+      },
+    });
+  });
+
+  it('maps the slider across T−5m…IMPACT', () => {
+    const container = mount();
+    const slider = container.querySelector<HTMLInputElement>('#time-slider')!;
+
+    slider.value = '0';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const er = getState().eventReplay!;
+    expect(er.playing).toBe(false);
+    expect(er.currentMs).toBeGreaterThan(IMPACT - REWIND);
+    expect(er.currentMs).toBeLessThan(IMPACT);
+    expect(Math.abs(er.currentMs - (IMPACT - REWIND / 2))).toBeLessThan(500);
+  });
+
+  it('steps ±5 seconds with rewind/forward and clamps to the window', () => {
+    const container = mount();
+    const rewind = container.querySelector<HTMLButtonElement>('#btn-rewind')!;
+    const forward = container.querySelector<HTMLButtonElement>('#btn-forward')!;
+
+    rewind.click();
+    expect(getState().eventReplay!.currentMs).toBe(IMPACT - REWIND);
+
+    forward.click();
+    expect(getState().eventReplay!.currentMs).toBe(IMPACT - REWIND + 5_000);
+    expect(getState().eventReplay!.playing).toBe(false);
+  });
+});

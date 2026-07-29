@@ -20,6 +20,8 @@ import {
   stopEventReplay,
   subscribe,
   EVENT_REPLAY_REWIND_MS,
+  EVENT_REPLAY_SCRUB_STEP_MS,
+  getEventReplayWindowMs,
 } from '../state/appState';
 import type { HistoricalEvent } from './EventCards';
 import { getHistoricalEvent } from './EventCards';
@@ -199,11 +201,50 @@ export function initRightPanel(container: HTMLElement): void {
       return;
     }
 
+    const replayBackBtn = (e.target as HTMLElement).closest('#btn-replay-back');
+    if (replayBackBtn) {
+      e.preventDefault();
+      const { eventReplay } = getState();
+      if (eventReplay) {
+        setEventReplayPartial({
+          currentMs: eventReplay.currentMs - EVENT_REPLAY_SCRUB_STEP_MS,
+          playing: false,
+        });
+      }
+      return;
+    }
+
+    const replayFwdBtn = (e.target as HTMLElement).closest('#btn-replay-fwd');
+    if (replayFwdBtn) {
+      e.preventDefault();
+      const { eventReplay } = getState();
+      if (eventReplay) {
+        setEventReplayPartial({
+          currentMs: eventReplay.currentMs + EVENT_REPLAY_SCRUB_STEP_MS,
+          playing: false,
+        });
+      }
+      return;
+    }
+
     const replayExitBtn = (e.target as HTMLElement).closest('#btn-replay-exit');
     if (replayExitBtn) {
       e.preventDefault();
       stopEventReplay();
     }
+  });
+
+  container.addEventListener('input', (e) => {
+    const scrub = (e.target as HTMLElement).closest<HTMLInputElement>('#era-scrub');
+    if (!scrub) return;
+    const { eventReplay } = getState();
+    if (!eventReplay) return;
+    const { startMs, endMs } = getEventReplayWindowMs(eventReplay.collisionTimeMs);
+    const t = Number(scrub.value) / 100;
+    setEventReplayPartial({
+      currentMs: startMs + t * (endMs - startMs),
+      playing: false,
+    });
   });
 
   const refreshDynamicValues = (): void => {
@@ -528,9 +569,16 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     </div>
 
     <div class="era-timeline">
-      <div class="era-timeline-bar">
-        <div class="era-progress" data-field="era-progress" style="width:0%"></div>
-      </div>
+      <input
+        type="range"
+        id="era-scrub"
+        class="era-scrub"
+        min="0"
+        max="100"
+        step="0.1"
+        value="0"
+        aria-label="${t('replay.sim_time')}"
+      />
       <div class="era-timeline-labels">
         <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
         <span>${eType === 'docking' ? t('replay.dock_label') : t('replay.impact_label')}</span>
@@ -556,8 +604,10 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     </div>
 
     <div class="era-controls">
+      <button type="button" id="btn-replay-back" class="btn-era-ctrl" title="Back 5 seconds">⏮</button>
       <button type="button" id="btn-replay-restart" class="btn-era-ctrl" title="Restart">↺</button>
       <button type="button" id="btn-replay-play" class="btn-era-ctrl btn-era-play" data-field="era-play-btn">⏸</button>
+      <button type="button" id="btn-replay-fwd" class="btn-era-ctrl" title="Forward 5 seconds">⏭</button>
     </div>
 
     <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
@@ -584,7 +634,7 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
   const simTimeEl = detailEl.querySelector('[data-field="era-simtime"]');
   const ttiEl = detailEl.querySelector('[data-field="era-tti"]');
   const distEl = detailEl.querySelector('[data-field="era-dist"]');
-  const progressEl = detailEl.querySelector<HTMLElement>('[data-field="era-progress"]');
+  const scrubEl = detailEl.querySelector<HTMLInputElement>('#era-scrub');
   const impactEl = detailEl.querySelector<HTMLElement>('[data-field="era-impact"]');
   const playBtn = detailEl.querySelector<HTMLElement>('[data-field="era-play-btn"]');
 
@@ -604,7 +654,9 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     }
   }
 
-  if (progressEl) progressEl.style.width = `${(progress * 100).toFixed(1)}%`;
+  if (scrubEl && document.activeElement !== scrubEl) {
+    scrubEl.value = String(progress * 100);
+  }
 
   if (playBtn) {
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';

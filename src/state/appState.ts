@@ -16,6 +16,8 @@ import { isRecentlyLaunched } from '../data/newLaunches';
 export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
 /** Playback multiplier for event replays. */
 export const EVENT_REPLAY_SPEED = 15;
+/** Transport nudge while scrubbing an event replay (±). */
+export const EVENT_REPLAY_SCRUB_STEP_MS = 5_000;
 
 export interface EventReplayState {
   eventId: string;
@@ -353,7 +355,12 @@ export function setEventReplayPartial(
   partial: Partial<Pick<EventReplayState, 'playing' | 'speed' | 'currentMs'>>,
 ): void {
   if (!state.eventReplay) return;
-  state.eventReplay = { ...state.eventReplay, ...partial };
+  const next = { ...state.eventReplay, ...partial };
+  if (partial.currentMs !== undefined) {
+    const { startMs, endMs } = getEventReplayWindowMs(next.collisionTimeMs);
+    next.currentMs = Math.min(endMs, Math.max(startMs, partial.currentMs));
+  }
+  state.eventReplay = next;
   listeners.forEach((fn) => fn());
 }
 
@@ -368,11 +375,28 @@ export function stopEventReplay(): void {
 /** Advance event replay clock without triggering full re-render. */
 export function advanceEventReplayTime(deltaMs: number): void {
   if (!state.eventReplay?.playing) return;
-  state.eventReplay.currentMs += deltaMs * state.eventReplay.speed;
+  const { startMs, endMs } = getEventReplayWindowMs(state.eventReplay.collisionTimeMs);
+  const nextMs = state.eventReplay.currentMs + deltaMs * state.eventReplay.speed;
+  if (nextMs >= endMs) {
+    state.eventReplay = { ...state.eventReplay, currentMs: endMs, playing: false };
+    return;
+  }
+  state.eventReplay.currentMs = Math.max(startMs, nextMs);
 }
 
 export function getEventReplayState(): EventReplayState | null {
   return state.eventReplay;
+}
+
+/** Replay clock window: T−5m … IMPACT (T+0). */
+export function getEventReplayWindowMs(collisionTimeMs: number): {
+  startMs: number;
+  endMs: number;
+} {
+  return {
+    startMs: collisionTimeMs - EVENT_REPLAY_REWIND_MS,
+    endMs: collisionTimeMs,
+  };
 }
 
 export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
@@ -613,6 +637,10 @@ export function isLiveMode(): boolean {
 
 export function isConjunctionVerificationActive(): boolean {
   return state.verificationTime != null;
+}
+
+export function isEventReplayActive(): boolean {
+  return state.eventReplay != null;
 }
 
 export function isVerificationPlaying(): boolean {
