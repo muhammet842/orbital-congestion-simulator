@@ -8,3 +8,8 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** World Magnetic Model declination (degrees, east-positive). */
+declare module 'magvar' {
+  export function magvar(latitudeDeg: number, longitudeDeg: number, altitudeKm?: number): number;
+}

@@ -107,4 +107,15 @@ describe('findNextPass', () => {
       expect(pass.rise.time.getTime()).toBeLessThanOrEqual(start.getTime() + 18 * 3_600_000);
     }
   });
+
+  it('refines max elevation similarly for coarse vs fine step sizes', () => {
+    const observer = { latitudeDeg: 41.01, longitudeDeg: 28.97 };
+    const coarse = findNextPass(satrec, observer, start, 18, 60);
+    const fine = findNextPass(satrec, observer, start, 18, 30);
+    expect(coarse.max).not.toBeNull();
+    expect(fine.max).not.toBeNull();
+    // Ternary refine should keep peaks within ~1° even when step differs.
+    expect(Math.abs(coarse.max!.elevationDeg - fine.max!.elevationDeg)).toBeLessThan(1.5);
+    expect(Math.abs(coarse.max!.time.getTime() - fine.max!.time.getTime())).toBeLessThan(90_000);
+  });
 });

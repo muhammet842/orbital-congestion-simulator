@@ -2801,6 +2801,15 @@ body {
   color: #fbbf24;
 }
 .spotter-cue:empty { display: none; }
+.spotter-light {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+  min-height: 0;
+}
+.spotter-light:empty { display: none; }
 .spotter-realtime-note {
   margin: 8px 0 0;
   text-align: center;
@@ -2814,7 +2823,8 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 .spotter-chip {
   font-size: 0.68rem;

@@ -9,6 +9,7 @@
  */
 
 import type { ObserverLocation } from '../orbital/lookAngles';
+import { trueHeadingAtLocationDeg } from '../orbital/magneticDeclination';
 
 const LS_LOCATION_KEY = 'orbital-spotter-location';
 
@@ -18,18 +19,24 @@ const GIMBAL_LOCK_BETA_DEG = 85;
 const ORIENT_EPSILON_DEG = 0.15;
 /** EMA factor for heading/pitch smoothing (higher = snappier). */
 const ORIENT_SMOOTH = 0.35;
+/** Horizontal GPS accuracy above this (meters) is treated as “poor”. */
+export const GPS_ACCURACY_WARN_M = 80;
 
 export interface SensorSnapshot {
   location: ObserverLocation | null;
   locationSource: 'gps' | 'manual' | 'cached' | null;
   locationError: string | null;
-  /** True north heading in degrees, or null if unavailable. */
+  /** Horizontal GPS accuracy in meters (GeolocationCoordinates.accuracy), if known. */
+  accuracyMeters: number | null;
+  /** True-north heading in degrees (magnetic compass corrected by WMM declination). */
   headingDeg: number | null;
   /**
    * Phone look elevation above the horizon (degrees): 0 = horizon, 90 = zenith.
-   * Derived from device beta/gamma (screen-normal / aiming tilt).
+   * Derived from device beta/gamma (top-edge aim while screen faces the user).
    */
   pitchDeg: number | null;
+  /** WMM declination applied at the current location (east-positive), or null. */
+  declinationDeg: number | null;
   headingError: string | null;
   orientationPermission: 'unknown' | 'granted' | 'denied' | 'unsupported';
 }
@@ -43,15 +50,18 @@ let listeners = new Set<Listener>();
 let lastStableHeadingDeg: number | null = null;
 /** Prefer absolute events when the browser provides them (Android). */
 let preferAbsoluteHeading = false;
-let smoothedHeading: number | null = null;
+/** Smoothed magnetic heading before WMM true-north correction. */
+let smoothedMagneticHeading: number | null = null;
 let smoothedPitch: number | null = null;
 
 let snapshot: SensorSnapshot = {
   location: loadCachedLocation(),
   locationSource: loadCachedLocation() ? 'cached' : null,
   locationError: null,
+  accuracyMeters: null,
   headingDeg: null,
   pitchDeg: null,
+  declinationDeg: null,
   headingError: null,
   orientationPermission: 'unknown',
 };
@@ -124,7 +134,13 @@ export function setManualLocation(loc: ObserverLocation): void {
     altitudeKm: loc.altitudeKm ?? 0,
   };
   persistLocation(next);
-  setPartial({ location: next, locationSource: 'manual', locationError: null });
+  setPartial({
+    location: next,
+    locationSource: 'manual',
+    locationError: null,
+    accuracyMeters: null,
+  });
+  refreshTrueHeadingFromMagnetic();
 }
 
 function clamp(v: number, min: number, max: number): number {
@@ -260,11 +276,17 @@ export function startGeolocation(): void {
         altitudeKm: (pos.coords.altitude ?? 0) / 1000,
       };
       persistLocation(next);
+      const accuracyMeters =
+        typeof pos.coords.accuracy === 'number' && Number.isFinite(pos.coords.accuracy)
+          ? pos.coords.accuracy
+          : null;
       setPartial({
         location: next,
         locationSource: 'gps',
         locationError: null,
+        accuracyMeters,
       });
+      refreshTrueHeadingFromMagnetic();
     },
     (err) => {
       const code =
@@ -298,42 +320,81 @@ function onOrientationRelative(event: DeviceOrientationEvent): void {
 
 /** Write smoothed orientation into snapshot without notifying listeners. */
 function applyOrientation(event: DeviceOrientationEvent): void {
-  const rawHeading = headingFromOrientationEvent(event);
+  const rawMagnetic = headingFromOrientationEvent(event);
   const rawPitch = pitchFromOrientationEvent(event);
 
-  if (rawHeading == null && rawPitch == null) {
+  if (rawMagnetic == null && rawPitch == null) {
     if (snapshot.headingError !== 'unavailable') {
       setPartial({ headingError: 'unavailable' }, false);
     }
     return;
   }
 
-  if (rawHeading != null) {
-    smoothedHeading = smoothAngle360(smoothedHeading, rawHeading, ORIENT_SMOOTH);
+  if (rawMagnetic != null) {
+    smoothedMagneticHeading = smoothAngle360(
+      smoothedMagneticHeading,
+      rawMagnetic,
+      ORIENT_SMOOTH,
+    );
   }
   if (rawPitch != null) {
     smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
   }
 
-  const nextHeading = smoothedHeading;
+  const nextTrue = toTrueHeading(smoothedMagneticHeading);
   const nextPitch = smoothedPitch;
   const prevH = snapshot.headingDeg;
   const prevP = snapshot.pitchDeg;
 
   const headingChanged =
-    nextHeading != null &&
-    (prevH == null || Math.abs(signedDeltaDeg(prevH, nextHeading)) >= ORIENT_EPSILON_DEG);
+    nextTrue != null &&
+    (prevH == null || Math.abs(signedDeltaDeg(prevH, nextTrue)) >= ORIENT_EPSILON_DEG);
   const pitchChanged =
     nextPitch != null && (prevP == null || Math.abs(prevP - nextPitch) >= ORIENT_EPSILON_DEG);
 
   if (!headingChanged && !pitchChanged) return;
 
+  const loc = snapshot.location;
+  const declinationDeg =
+    loc != null
+      ? trueHeadingAtLocationDeg(0, loc.latitudeDeg, loc.longitudeDeg, loc.altitudeKm ?? 0)
+      : null;
+
   snapshot = {
     ...snapshot,
-    headingDeg: nextHeading,
+    headingDeg: nextTrue,
     pitchDeg: nextPitch,
+    declinationDeg,
     headingError: null,
     orientationPermission: 'granted',
+  };
+}
+
+function toTrueHeading(magnetic: number | null): number | null {
+  if (magnetic == null) return null;
+  const loc = snapshot.location;
+  if (!loc) return magnetic;
+  return trueHeadingAtLocationDeg(
+    magnetic,
+    loc.latitudeDeg,
+    loc.longitudeDeg,
+    loc.altitudeKm ?? 0,
+  );
+}
+
+/** Re-apply WMM correction after GPS/manual location changes. */
+function refreshTrueHeadingFromMagnetic(): void {
+  if (smoothedMagneticHeading == null) return;
+  const nextTrue = toTrueHeading(smoothedMagneticHeading);
+  const loc = snapshot.location;
+  const declinationDeg =
+    loc != null
+      ? trueHeadingAtLocationDeg(0, loc.latitudeDeg, loc.longitudeDeg, loc.altitudeKm ?? 0)
+      : null;
+  snapshot = {
+    ...snapshot,
+    headingDeg: nextTrue,
+    declinationDeg,
   };
 }
 
@@ -381,9 +442,14 @@ export function stopOrientation(): void {
   }
   lastStableHeadingDeg = null;
   preferAbsoluteHeading = false;
-  smoothedHeading = null;
+  smoothedMagneticHeading = null;
   smoothedPitch = null;
-  snapshot = { ...snapshot, headingDeg: null, pitchDeg: null };
+  snapshot = {
+    ...snapshot,
+    headingDeg: null,
+    pitchDeg: null,
+    declinationDeg: null,
+  };
 }
 
 /** Start both sensors (call when Spotter opens). */

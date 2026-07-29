@@ -187,7 +187,49 @@ export function findNextPass(
   }
 
   if (!tracking && !rise) return empty;
+
+  // Refine the max-elevation sample with a ternary search (±1 coarse step).
+  if (max) {
+    const windowMs = stepMs;
+    const refinedMax = refineMaxElevation(
+      satrec,
+      observer,
+      new Date(max.time.getTime() - windowMs),
+      new Date(max.time.getTime() + windowMs),
+    );
+    if (refinedMax) max = refinedMax;
+  }
+
   return { rise, max, set };
+}
+
+/** Ternary-search peak elevation in [t0, t1] (~1–2 s accuracy). */
+function refineMaxElevation(
+  satrec: SatRec,
+  observer: ObserverLocation,
+  t0: Date,
+  t1: Date,
+): PassEvent['max'] {
+  let lo = t0.getTime();
+  let hi = t1.getTime();
+  if (!(hi > lo)) return null;
+
+  let best: PassEvent['max'] = null;
+  for (let i = 0; i < 18; i++) {
+    const m1 = Math.floor(lo + (hi - lo) / 3);
+    const m2 = Math.floor(hi - (hi - lo) / 3);
+    const a = computeLookAngles(satrec, observer, new Date(m1));
+    const b = computeLookAngles(satrec, observer, new Date(m2));
+    if (!a || !b) break;
+    if (a.elevationDeg < b.elevationDeg) {
+      lo = m1;
+      best = { time: new Date(m2), elevationDeg: b.elevationDeg, azimuthDeg: b.azimuthDeg };
+    } else {
+      hi = m2;
+      best = { time: new Date(m1), elevationDeg: a.elevationDeg, azimuthDeg: a.azimuthDeg };
+    }
+  }
+  return best;
 }
 
 /** Binary-search the horizon crossing inside [t0, t1] (~1s accuracy). */

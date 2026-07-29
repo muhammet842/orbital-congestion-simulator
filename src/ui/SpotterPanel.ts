@@ -6,6 +6,7 @@
  */
 
 import {
+  assessPhotoConditions,
   computeLookAngles,
   findNextPass,
   GOOD_ELEV_DEG,
@@ -14,9 +15,11 @@ import {
   type LookAngles,
   type PassEvent,
 } from '../orbital/lookAngles';
+import { getSunEci } from '../scene/dayNight';
 import { getState, isLiveMode, subscribe } from '../state/appState';
 import { onLangChange, t } from '../i18n/i18n';
 import {
+  GPS_ACCURACY_WARN_M,
   getSensorSnapshot,
   setManualLocation,
   startObserverSensors,
@@ -44,6 +47,11 @@ let lastRadarKey = '';
 let cachedPass: PassEvent | null = null;
 let cachedPassKey = '';
 let passComputeScheduled = false;
+let lastLightText = '';
+let lastChipsHtml = '';
+let lastPhoto: PhotoAssessment | null = null;
+
+type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 
 /** Poll sensors + refresh guide (no continuous rAF). */
 const TICK_MS = 100;
@@ -52,6 +60,9 @@ const LOOK_INTERVAL_MS = 500;
 const LOCK_ENTER_DEG = 5;
 const LOCK_EXIT_DEG = 10;
 const DEADBAND_DEG = 2;
+/** Photo-condition refresh cadence (sunlit / daytime). */
+const PHOTO_INTERVAL_MS = 2_000;
+let lastPhotoMs = 0;
 
 /** Spotter aims at the real sky — always wall-clock, never 10x/100x sim time. */
 function getSpotterTime(): Date {
@@ -94,6 +105,10 @@ export function openSpotterPanel(): void {
   cachedPass = null;
   cachedPassKey = '';
   passComputeScheduled = false;
+  lastLightText = '';
+  lastChipsHtml = '';
+  lastPhoto = null;
+  lastPhotoMs = 0;
 
   startObserverSensors();
   renderShell();
@@ -188,6 +203,8 @@ function renderShell(): void {
 
       <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
       <p class="spotter-cue spotter-cue--tilt" id="spotter-tilt">—</p>
+      <div class="spotter-chips" id="spotter-chips"></div>
+      <p class="spotter-light" id="spotter-light"></p>
       ${!isLiveMode() ? `<p class="spotter-realtime-note">${t('spotter.realtime_only')}</p>` : ''}
 
       <details class="spotter-sensors" ${needLoc ? 'open' : ''}>
@@ -209,6 +226,8 @@ function renderShell(): void {
   radarCtx = radarCanvas?.getContext('2d') ?? null;
   lastTurnText = '';
   lastTiltText = '';
+  lastLightText = '';
+  lastChipsHtml = '';
 }
 
 function bindShellEvents(): void {
@@ -228,7 +247,13 @@ function bindShellEvents(): void {
 }
 
 function locationStatusText(sensors: SensorSnapshot): string {
-  if (sensors.locationSource === 'gps') return t('spotter.loc_gps');
+  if (sensors.locationSource === 'gps') {
+    const acc = sensors.accuracyMeters;
+    if (acc != null && acc >= GPS_ACCURACY_WARN_M) {
+      return t('spotter.loc_gps_weak').replace('{m}', Math.round(acc).toString());
+    }
+    return t('spotter.loc_gps');
+  }
   if (sensors.locationSource === 'manual') return t('spotter.loc_manual');
   if (sensors.locationSource === 'cached') return t('spotter.loc_cached');
   if (sensors.locationError === 'denied') return t('spotter.loc_denied');
@@ -247,8 +272,11 @@ function tick(): void {
 
   if (state.selectedIndex == null || !sensors.location) {
     lastLook = null;
+    lastPhoto = null;
     setCue('spotter-turn', t('spotter.need_location'));
     setCue('spotter-tilt', '');
+    setLight('');
+    setChipsHtml('');
     return;
   }
 
@@ -258,11 +286,25 @@ function tick(): void {
     lastLook = computeLookAngles(obj.satrec, sensors.location, getSpotterTime());
   }
 
+  if (lastLook?.visible && (now - lastPhotoMs >= PHOTO_INTERVAL_MS || !lastPhoto)) {
+    lastPhotoMs = now;
+    lastPhoto = assessPhotoConditions(
+      obj.satrec,
+      sensors.location,
+      getSpotterTime(),
+      getSunEci(getSpotterTime()),
+    );
+  } else if (!lastLook?.visible) {
+    lastPhoto = null;
+  }
+
   if (lastLook && !lastLook.visible) {
     schedulePassCompute(obj.satrec, sensors.location);
   }
 
-  updateCues(lastLook, sensors);
+  updateCues(lastLook, sensors, lastPhoto);
+  updateChips(sensors, lastLook, lastPhoto);
+  updateLightHint(lastLook, lastPhoto);
   maybeDrawRadar(lastLook, sensors.headingDeg, sensors.pitchDeg);
 }
 
@@ -287,13 +329,17 @@ function schedulePassCompute(
     const wallTime = getSpotterTime();
     const nextKey = `${state.selectedIndex}|${sensors.location.latitudeDeg.toFixed(3)}|${sensors.location.longitudeDeg.toFixed(3)}|${Math.floor(wallTime.getTime() / 60_000)}`;
     cachedPassKey = nextKey;
-    cachedPass = findNextPass(obj.satrec, sensors.location, wallTime, 18, 60);
+    cachedPass = findNextPass(obj.satrec, sensors.location, wallTime, 18, 30);
     // Refresh below-horizon cue with the predicted rise.
-    if (lastLook && !lastLook.visible) updateCues(lastLook, sensors);
+    if (lastLook && !lastLook.visible) updateCues(lastLook, sensors, null);
   }, 0);
 }
 
-function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
+function updateCues(
+  look: LookAngles | null,
+  sensors: SensorSnapshot,
+  photo: PhotoAssessment | null,
+): void {
   if (!look) {
     setCue('spotter-turn', t('spotter.propagate_fail'));
     setCue('spotter-tilt', '');
@@ -332,7 +378,9 @@ function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
   if (sensors.headingDeg == null) {
     setCue(
       'spotter-turn',
-      t('spotter.guide_no_compass').replace('{az}', look.azimuthDeg.toFixed(0)).replace('{el}', look.elevationDeg.toFixed(0)),
+      t('spotter.guide_no_compass')
+        .replace('{az}', look.azimuthDeg.toFixed(0))
+        .replace('{el}', look.elevationDeg.toFixed(0)),
     );
     setCue('spotter-tilt', t('spotter.enable_compass'));
     return;
@@ -352,7 +400,15 @@ function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
   }
 
   if (aimLocked) {
-    setCue('spotter-turn', t('spotter.cue_locked'));
+    const lockKey =
+      photo?.favorable
+        ? 'spotter.cue_locked_visible'
+        : !photo?.satelliteLit
+          ? 'spotter.cue_locked_eclipse'
+          : !photo?.observerDark
+            ? 'spotter.cue_locked_day'
+            : 'spotter.cue_locked';
+    setCue('spotter-turn', t(lockKey));
     setCue('spotter-tilt', '');
     return;
   }
@@ -378,6 +434,58 @@ function updateCues(look: LookAngles | null, sensors: SensorSnapshot): void {
   } else {
     setCue('spotter-tilt', t('spotter.guide_tilt_down').replace('{deg}', Math.abs(elevErr).toFixed(0)));
   }
+}
+
+function updateChips(
+  sensors: SensorSnapshot,
+  look: LookAngles | null,
+  photo: PhotoAssessment | null,
+): void {
+  const chips: string[] = [];
+  if (sensors.accuracyMeters != null && sensors.accuracyMeters >= GPS_ACCURACY_WARN_M) {
+    chips.push(chip('warn', t('spotter.chip_gps_weak')));
+  }
+  if (look?.visible && photo) {
+    if (photo.favorable) chips.push(chip('ok', t('spotter.chip_eye_good')));
+    else if (!photo.satelliteLit) chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
+    else if (!photo.observerDark) chips.push(chip('warn', t('spotter.chip_eye_day')));
+  }
+  if (sensors.declinationDeg != null && Math.abs(sensors.declinationDeg) >= 0.5) {
+    const sign = sensors.declinationDeg >= 0 ? '+' : '';
+    chips.push(
+      chip('muted', t('spotter.chip_declination').replace('{deg}', `${sign}${sensors.declinationDeg.toFixed(1)}`)),
+    );
+  }
+  setChipsHtml(chips.join(''));
+}
+
+function updateLightHint(look: LookAngles | null, photo: PhotoAssessment | null): void {
+  if (!look?.visible || !photo) {
+    setLight('');
+    return;
+  }
+  if (photo.favorable) setLight(t('spotter.photo_good_short'));
+  else if (!photo.satelliteLit) setLight(t('spotter.photo_eclipse_short'));
+  else if (!photo.observerDark) setLight(t('spotter.photo_daytime_short'));
+  else setLight(t('spotter.photo_dim_short'));
+}
+
+function chip(kind: string, label: string): string {
+  return `<span class="spotter-chip spotter-chip--${kind}">${escapeHtml(label)}</span>`;
+}
+
+function setLight(text: string): void {
+  if (text === lastLightText) return;
+  lastLightText = text;
+  const el = panelEl?.querySelector('#spotter-light');
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
+function setChipsHtml(html: string): void {
+  if (html === lastChipsHtml) return;
+  lastChipsHtml = html;
+  const el = panelEl?.querySelector('#spotter-chips');
+  if (el && el.innerHTML !== html) el.innerHTML = html;
 }
 
 function setCue(id: 'spotter-turn' | 'spotter-tilt', text: string): void {
