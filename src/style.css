@@ -482,6 +482,9 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.2);
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
 }
 
 .object-list-spacer {
@@ -513,7 +516,8 @@ body {
   text-align: left;
   cursor: pointer;
   transition: background 0.12s;
-  touch-action: manipulation;
+  /* Allow vertical scrolling of the list; selection is handled as a tap. */
+  touch-action: pan-y;
   user-select: none;
 }
 
