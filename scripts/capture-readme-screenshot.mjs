@@ -1,6 +1,6 @@
 /**
- * Captures docs/screenshot.png via Playwright against vite preview.
- * Requires a prior `npm run build`.
+ * Captures docs/screenshot-en.png via Playwright against vite preview.
+ * Forces English UI (localStorage + lang select). Requires a prior `npm run build`.
  */
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const out = join(root, 'docs/screenshot.png');
+const out = join(root, 'docs/screenshot-en.png');
 mkdirSync(dirname(out), { recursive: true });
 
 const preview = spawn(
@@ -44,8 +44,11 @@ if (!ready) {
 try {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await page.addInitScript(() => localStorage.setItem('orbital-lang', 'en'));
   await page.goto('http://127.0.0.1:4179/', { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.locator('canvas').waitFor({ state: 'visible', timeout: 45_000 });
+  const select = page.locator('#lang-select');
+  if (await select.count()) await select.selectOption('en');
   await page.waitForTimeout(3000);
   await page.screenshot({ path: out, type: 'png' });
   await browser.close();

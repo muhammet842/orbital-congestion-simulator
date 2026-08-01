@@ -4,7 +4,7 @@
 
 **Live demo:** [https://orbital-congestion-simulator.vercel.app](https://orbital-congestion-simulator.vercel.app)
 
-![Orbital Congestion Simulator](docs/screenshot.png)
+![Orbital Congestion Simulator](docs/screenshot-en.png)
 
 ## What it does
 
