@@ -98,9 +98,9 @@ test.describe('Future Projection panel', () => {
     await expect(page.locator('#kp-target-year')).toBeVisible();
   });
 
-  test('running a projection reveals results and a narrative', async ({ page }) => {
+  test('opening the panel reveals results and a narrative without a run button', async ({ page }) => {
     await page.locator('#kessler-panel-btn').click();
-    await page.locator('#kp-run').click();
+    await expect(page.locator('#kp-run')).toHaveCount(0);
     await expect(page.locator('#kp-results-section')).toBeVisible();
     const narrative = page.locator('#kp-narrative');
     await expect(narrative).toBeVisible();

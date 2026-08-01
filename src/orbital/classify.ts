@@ -1,5 +1,4 @@
 import type { ObjectCategory, ObjectFunctionGroup, OrbitLayer } from '../types';
-import { isTurkishSatellite } from '../data/objectMetadata';
 
 export function inferFunctionGroup(name: string, category: ObjectCategory): ObjectFunctionGroup {
   if (category === 'debris') return 'debris';
@@ -52,12 +51,8 @@ export function getLayerColor(layer: OrbitLayer): [number, number, number] {
 export function getCategoryColor(
   category: ObjectCategory,
   layer: OrbitLayer,
-  country = '',
+  _country = '',
 ): [number, number, number] {
-  if (isTurkishSatellite(country)) {
-    return [0.05, 0.98, 0.88];
-  }
-
   const [lr, lg, lb] = getLayerColor(layer);
 
   switch (category) {
@@ -73,8 +68,7 @@ export function getCategoryColor(
   }
 }
 
-export function getCategoryScale(category: ObjectCategory, country = ''): number {
-  if (isTurkishSatellite(country)) return 2.2;
+export function getCategoryScale(category: ObjectCategory, _country = ''): number {
   switch (category) {
     case 'stations':
       return 2.4;
@@ -85,10 +79,7 @@ export function getCategoryScale(category: ObjectCategory, country = ''): number
   }
 }
 
-export function getCategoryPulse(category: ObjectCategory, timeMs: number, country = ''): number {
-  if (isTurkishSatellite(country)) {
-    return 0.78 + 0.22 * Math.sin(timeMs * 0.005);
-  }
+export function getCategoryPulse(category: ObjectCategory, timeMs: number, _country = ''): number {
   if (category === 'stations') {
     return 0.82 + 0.18 * Math.sin(timeMs * 0.004);
   }

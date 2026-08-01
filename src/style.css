@@ -2994,26 +2994,6 @@ body {
 }
 
 /* ── Run / animate buttons ────────────────────────────────────────────── */
-.kp-run-btn {
-  width: 100%;
-  appearance: none;
-  border-radius: 8px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #050510;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  padding: 10px;
-  transition: background 0.15s;
-}
-.kp-run-btn:hover { background: #38e4f5; }
-.kp-run-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .kp-scrub-row {
   display: flex;
   align-items: center;
@@ -3220,11 +3200,6 @@ body {
     width: 100%;
     min-height: 42px;
     justify-content: center;
-  }
-
-  .kp-run-btn {
-    min-height: 44px;
-    padding: 12px;
   }
 
   .kp-narrative {

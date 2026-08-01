@@ -54,20 +54,19 @@ describe('initKesslerPanel', () => {
 });
 
 describe('openKesslerPanel / closeKesslerPanel', () => {
-  it('renders the scenario sliders, presets, and run button', () => {
+  it('renders the scenario sliders and presets without a run button', () => {
     openKesslerPanel();
     expect(document.getElementById('kp-launch')).not.toBeNull();
     expect(document.getElementById('kp-mitigation')).not.toBeNull();
     expect(document.getElementById('kp-risk')).not.toBeNull();
     expect(document.getElementById('kp-target-year')).not.toBeNull();
-    expect(document.getElementById('kp-run')).not.toBeNull();
+    expect(document.getElementById('kp-run')).toBeNull();
     expect(document.querySelectorAll('[data-preset]').length).toBe(4);
   });
 
   it('auto-runs the business-as-usual projection when opened', () => {
     openKesslerPanel();
     expect(document.getElementById('kp-results-section')?.hasAttribute('hidden')).toBe(false);
-    expect(document.getElementById('kp-prompt')?.hasAttribute('hidden')).toBe(true);
     expect(document.getElementById('kp-stat-total')?.textContent).not.toBe('—');
     expect(document.getElementById('kp-stat-leo')?.textContent).not.toBe('—');
     expect(document.getElementById('kp-narrative')?.textContent?.length).toBeGreaterThan(0);

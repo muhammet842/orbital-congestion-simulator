@@ -232,8 +232,6 @@ function renderPanelContent(): void {
           <input type="range" id="kp-target-year" class="kp-range"
             min="${CURRENT_YEAR + 5}" max="${CURRENT_YEAR + 75}" step="5" value="${sliderTicks.targetYear}" />
         </div>
-
-        <button class="kp-run-btn" id="kp-run">${t('kessler.run')}</button>
       </div>
 
       <div class="ap-section" id="kp-results-section" ${hasRun ? '' : 'hidden'}>
@@ -286,8 +284,6 @@ function renderPanelContent(): void {
         <p class="kp-narrative" id="kp-narrative"></p>
       </div>
 
-      <p class="kp-prompt" id="kp-prompt" ${hasRun ? 'hidden' : ''}>${t('kessler.run_prompt')}</p>
-
       <p class="kp-disclaimer">${t('kessler.disclaimer')}</p>
     </div>
   `;
@@ -304,7 +300,6 @@ function renderPanelContent(): void {
 
 function bindEvents(): void {
   panelEl?.querySelector('#kp-close')?.addEventListener('click', closeKesslerPanel);
-  panelEl?.querySelector('#kp-run')?.addEventListener('click', () => runProjection());
 
   panelEl?.querySelectorAll<HTMLButtonElement>('[data-preset]')?.forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -385,7 +380,6 @@ function runProjection(opts: { preserveScrubFraction?: boolean } = {}): void {
   }
 
   getEl<HTMLElement>('kp-results-section')?.removeAttribute('hidden');
-  getEl<HTMLElement>('kp-prompt')?.setAttribute('hidden', '');
 
   updateBaselineNote();
 

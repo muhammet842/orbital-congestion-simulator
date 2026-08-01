@@ -50,14 +50,10 @@ describe('getLayerColor', () => {
 });
 
 describe('getCategoryColor', () => {
-  it('overrides with the Turkish highlight color regardless of category or layer', () => {
-    const color = getCategoryColor('active', 'GEO', 'Türkiye 🇹🇷');
-    expect(color).toEqual([0.05, 0.98, 0.88]);
-  });
-
-  it('does not apply the Turkish highlight for other countries', () => {
-    const color = getCategoryColor('active', 'LEO', 'USA 🇺🇸');
-    expect(color).not.toEqual([0.05, 0.98, 0.88]);
+  it('treats Turkish and other countries the same for coloring', () => {
+    expect(getCategoryColor('active', 'GEO', 'Türkiye 🇹🇷')).toEqual(
+      getCategoryColor('active', 'GEO', 'USA 🇺🇸'),
+    );
   });
 
   it('gives stations a distinct near-white color', () => {
@@ -66,11 +62,11 @@ describe('getCategoryColor', () => {
 });
 
 describe('getCategoryScale', () => {
-  it('scales Turkish satellites larger than the default', () => {
-    expect(getCategoryScale('active', 'Türkiye 🇹🇷')).toBe(2.2);
+  it('does not enlarge Turkish satellites beyond their category scale', () => {
+    expect(getCategoryScale('active', 'Türkiye 🇹🇷')).toBe(getCategoryScale('active'));
   });
 
-  it('scales stations largest among non-Turkish categories', () => {
+  it('scales stations largest among categories', () => {
     const stationScale = getCategoryScale('stations');
     const activeScale = getCategoryScale('active');
     const debrisScale = getCategoryScale('debris');
