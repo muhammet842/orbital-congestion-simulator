@@ -1632,29 +1632,33 @@ body {
       'time' auto
       / 1fr;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    min-width: 0;
+    overflow: hidden;
   }
 
   .app-header {
-    gap: 8px;
-    padding: 0 10px;
+    gap: 4px;
+    padding: 0 6px;
     padding-top: env(safe-area-inset-top, 0px);
-    min-height: 56px;
+    min-height: 52px;
     height: auto;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .header-brand {
-    gap: 8px;
-    flex: 1;
+    gap: 6px;
+    flex: 1 1 0;
     min-width: 0;
   }
 
   .header-mark {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 
   .header-mark__core {
-    inset: 8px;
+    inset: 7px;
   }
 
   .header-title-full {
@@ -1663,54 +1667,58 @@ body {
 
   .header-title-short {
     display: block;
-    font-size: 0.86rem;
+    font-size: 0.78rem;
   }
 
   .header-actions {
-    gap: 4px;
-    padding: 3px;
+    gap: 2px;
+    padding: 2px;
+    margin-left: 0;
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .header-github-label,
-  .header-lang-icon {
+  .header-lang-icon,
+  .header-github {
     display: none;
   }
 
-  .header-github {
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    justify-content: center;
-  }
-
   .lang-select {
-    height: 36px;
-    padding: 4px 22px 4px 8px;
-    font-size: 0.72rem;
+    height: 32px;
+    max-width: 3.4rem;
+    padding: 2px 16px 2px 6px;
+    font-size: 0.68rem;
   }
 
   .admin-header-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
     padding: 0;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
   }
 
   .kessler-header-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
   }
 
   .panel-toggle-btn {
     display: flex;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    font-size: 0.95rem;
   }
 
   .panel-left,
   .panel-right {
     position: fixed;
-    top: calc(56px + env(safe-area-inset-top, 0px));
+    top: calc(52px + env(safe-area-inset-top, 0px));
     bottom: 0;
-    width: min(86vw, 340px);
+    width: min(72vw, 280px);
     margin: 0;
     border-radius: 0;
     z-index: 20;
@@ -1760,38 +1768,44 @@ body {
     border-left: none;
     border-right: none;
     border-bottom: none;
-    padding: 10px 12px max(10px, env(safe-area-inset-bottom, 0px));
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom, 0px));
     align-items: stretch;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .time-controls {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: nowrap;
+    min-width: 0;
   }
 
   .time-row--transport,
   .time-row--meta {
     flex: 0 0 auto;
     width: 100%;
+    min-width: 0;
   }
 
   .time-row--transport {
-    gap: 8px;
+    gap: 6px;
   }
 
   .time-row--meta {
-    justify-content: space-between;
-    align-items: center;
-    row-gap: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: stretch;
+    align-items: stretch;
+    gap: 6px;
   }
 
   .time-display {
     flex: 1 1 100%;
     width: 100%;
     order: -1;
-    font-size: 0.78rem;
+    font-size: 0.74rem;
     white-space: normal;
     line-height: 1.35;
     overflow: visible;
@@ -1800,13 +1814,49 @@ body {
 
   .time-mode-btns {
     flex: 1 1 auto;
+    min-width: 0;
   }
 
   .time-mode-btns .btn-now,
   .time-mode-btns .btn-live {
     flex: 1 1 0;
     min-width: 0;
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 0.78rem;
     text-align: center;
+  }
+
+  .speed-controls {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .speed-label {
+    display: none;
+  }
+
+  .speed-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+  }
+
+  .speed-btn {
+    min-width: 0;
+    width: 100%;
+    min-height: 36px;
+    padding: 6px 4px;
+    font-size: 0.78rem;
+  }
+
+  .time-buttons button {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px 8px;
   }
 
   .time-slider {
@@ -1820,39 +1870,20 @@ body {
 }
 
 @media (max-width: 480px) {
-  .header-title-full,
   .header-title-short {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
   }
 
-  .panel-left,
+  .panel-left {
+    width: min(78vw, 260px);
+  }
+
   .panel-right {
-    width: 92vw;
-  }
-
-  .time-buttons button,
-  .btn-now,
-  .btn-live,
-  .speed-btn {
-    min-height: 40px;
-    padding: 8px 12px;
-    font-size: 0.85rem;
-  }
-
-  .time-buttons button {
-    min-width: 40px;
-  }
-
-  .speed-btn {
-    min-width: 44px;
-  }
-
-  .speed-label {
-    display: none;
+    width: min(82vw, 300px);
   }
 
   .time-display {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
   }
 }
 
@@ -1863,16 +1894,6 @@ body {
 
   .filter-row {
     padding: 4px 0;
-  }
-
-  .time-buttons button,
-  .btn-now,
-  .btn-live,
-  .speed-btn,
-  .panel-toggle-btn,
-  .kessler-header-btn,
-  .admin-header-btn {
-    min-height: 40px;
   }
 }
 
