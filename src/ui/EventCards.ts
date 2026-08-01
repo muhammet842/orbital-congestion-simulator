@@ -303,6 +303,14 @@ function eventTypeLabel(type: EventType): string {
   return t(`event_type.${type}`, EVENT_TYPE_LABELS[type] ?? type);
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function formatEventDate(isoDate: string): string {
   return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
     month: 'short',
@@ -333,7 +341,7 @@ export function initEventCards(container: HTMLElement): void {
           aria-expanded="${String(event.id === selectedEventId)}"
         >
           <div class="event-card-top">
-            <span class="event-card-title">${event.title}</span>
+            <span class="event-card-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</span>
             <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
           </div>
           <span class="event-card-date">${formatEventDate(event.date)}</span>

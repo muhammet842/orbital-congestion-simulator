@@ -10,7 +10,7 @@ import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
 import { initKesslerPanel } from './ui/KesslerPanel';
 import { findConjunctions } from './orbital/conjunction';
-import { applyTranslations } from './i18n/i18n';
+import { applyTranslations, t } from './i18n/i18n';
 
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
@@ -19,12 +19,12 @@ async function main(): Promise<void> {
   showLoading(app);
 
   try {
-    showLoading(app, 'Loading orbital data…');
+    showLoading(app, t('boot.loading'));
 
     const dataset = await loadTleDataset();
 
     if (dataset.objects.length === 0) {
-      showError(app, 'No orbital objects loaded.');
+      showError(app, t('boot.no_objects'));
       return;
     }
 
@@ -65,13 +65,13 @@ async function main(): Promise<void> {
         findConjunctions(getState().objects, isoTime ? new Date(isoTime) : new Date());
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to load orbital data.';
+    const message = err instanceof Error ? err.message : t('boot.load_failed');
     showError(app, message);
     console.error(err);
   }
 }
 
-function showLoading(app: HTMLElement, message = 'Loading orbital data…'): void {
+function showLoading(app: HTMLElement, message = t('boot.loading')): void {
   app.innerHTML = `
     <div class="loading-screen">
       <div class="loading-spinner" aria-hidden="true"></div>
@@ -83,9 +83,9 @@ function showLoading(app: HTMLElement, message = 'Loading orbital data…'): voi
 function showError(app: HTMLElement, message: string): void {
   app.innerHTML = `
     <div class="error-screen">
-      <h1>Unable to start simulator</h1>
+      <h1>${escapeHtml(t('boot.error_title'))}</h1>
       <p class="muted">${escapeHtml(message)}</p>
-      <p class="muted">Run: <code>npm run fetch-tle</code></p>
+      <p class="muted">${escapeHtml(t('boot.error_hint'))}</p>
     </div>
   `;
 }

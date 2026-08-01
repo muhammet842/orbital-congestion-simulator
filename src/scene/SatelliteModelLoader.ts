@@ -12,6 +12,7 @@ import {
 import type { GLTFLoader as GLTFLoaderType } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { TrackedObject } from '../types';
 import {
+  isBundledModelKey,
   modelPathForKey,
   resolveModelKey,
   type ModelAssetKey,
@@ -124,16 +125,19 @@ class SatelliteModelLoader {
   private async loadModel(key: ModelAssetKey): Promise<ModelPrototype> {
     const path = modelPathForKey(key);
 
+    // Non-bundled keys intentionally use procedural silhouettes — no 404 spam.
+    if (!path || !isBundledModelKey(key)) {
+      const scene = this.createFallbackScene(key);
+      centerAtOrigin(scene);
+      return { scene, normalizedScale: measureTargetScale(scene) };
+    }
+
     try {
       const loader = await this.getLoader();
       return this.parseGltf(await loader.loadAsync(path));
     } catch (err) {
-      console.warn(`[SatelliteModelLoader] Missing ${path}.`, err);
+      console.warn(`[SatelliteModelLoader] Failed to load ${path}.`, err);
 
-      // Reuses ensureLoaded's own cache/in-flight dedup instead of a
-      // separate ad-hoc "shared model" cache, so N objects whose specific
-      // GLB is missing only ever trigger one shared-model request, not one
-      // each.
       if (key !== SHARED_MODEL_KEY) {
         try {
           console.warn(`[SatelliteModelLoader] Falling back to shared model for "${key}".`);
@@ -167,12 +171,11 @@ class SatelliteModelLoader {
 }
 
 /**
- * No GLB assets are bundled (see public/models/), so every satellite is rendered
- * through this fallback path. Rather than reusing one generic shape for every
- * type, each key gets a distinct low-poly silhouette so ISS-class stations,
- * cargo capsules, cubesats, debris and generic LEO satellites read as visually
- * different objects at a glance. Dropping real .glb files at the paths in
- * `modelResolver.ts` will automatically take priority over these primitives.
+ * Procedural silhouettes for model keys that are not in BUNDLED_MODEL_KEYS
+ * (and as a last-resort fallback if a bundled GLB fails to load). Each key gets
+ * a distinct low-poly shape so stations, cargo, cubesats, debris and LEO sats
+ * stay visually distinct. Add a file under public/models/ and list the key in
+ * BUNDLED_MODEL_KEYS to prefer a real GLB.
  */
 function buildFallbackShape(key: ModelAssetKey): Group {
   switch (key) {

@@ -381,12 +381,33 @@ async function fbIncrementPath(path: string, attempts = 4): Promise<void> {
   }
 }
 
-// ── Simple PIN hash (djb2) ────────────────────────────────────────────────────
+// ── PIN hashing (SHA-256 + app salt; legacy djb2 accepted once for migration) ─
 
-export function hashPin(pin: string): string {
+const PIN_SALT = 'orbital-congestion-sim-admin-v2';
+
+/** Legacy djb2 hash — only used to migrate older localStorage values. */
+export function hashPinLegacy(pin: string): string {
   let h = 5381;
   for (let i = 0; i < pin.length; i++) h = Math.imul(h, 31) + pin.charCodeAt(i);
   return (h >>> 0).toString(36);
+}
+
+/** Device-local PIN digest (SHA-256). Not remote authentication. */
+export async function hashPin(pin: string): Promise<string> {
+  const data = new TextEncoder().encode(`${PIN_SALT}:${pin}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function pinMatchesStored(pin: string, storedHash: string): Promise<boolean> {
+  const modern = await hashPin(pin);
+  if (modern === storedHash) return true;
+  // One-time migration from the old djb2 digest.
+  if (hashPinLegacy(pin) === storedHash) {
+    try { localStorage.setItem(LS_ADMIN_HASH, modern); } catch { /* ignore */ }
+    return true;
+  }
+  return false;
 }
 
 // ── Admin auth helpers ────────────────────────────────────────────────────────
@@ -579,16 +600,21 @@ function showPinDialog(): void {
   const showErr = (m: string): void => { errEl.textContent = m; errEl.style.display = 'block'; };
 
   const submit = (): void => {
-    const pin = input.value.trim();
-    if (pin.length < 4) { showErr(t('admin.pin_err_short')); return; }
-    if (isSetup) {
-      if (pin !== (confirm?.value.trim() ?? '')) { showErr(t('admin.pin_err_mismatch')); return; }
-      try { localStorage.setItem(LS_ADMIN_HASH, hashPin(pin)); } catch { /* ignore */ }
+    void (async () => {
+      const pin = input.value.trim();
+      if (pin.length < 4) { showErr(t('admin.pin_err_short')); return; }
+      if (isSetup) {
+        if (pin !== (confirm?.value.trim() ?? '')) { showErr(t('admin.pin_err_mismatch')); return; }
+        try { localStorage.setItem(LS_ADMIN_HASH, await hashPin(pin)); } catch { /* ignore */ }
+        setAdminActive(); overlay.remove(); openAdminPanel();
+        return;
+      }
+      if (!storedHash || !(await pinMatchesStored(pin, storedHash))) {
+        showErr(t('admin.pin_err_wrong'));
+        return;
+      }
       setAdminActive(); overlay.remove(); openAdminPanel();
-    } else {
-      if (hashPin(pin) !== storedHash) { showErr(t('admin.pin_err_wrong')); return; }
-      setAdminActive(); overlay.remove(); openAdminPanel();
-    }
+    })();
   };
 
   overlay.querySelector('#admin-pin-submit')!.addEventListener('click', submit);
@@ -884,6 +910,7 @@ function renderPanelContent(panel: HTMLElement): void {
       <div class="ap-logo">🛸 <span>${t('admin.panel_title')}</span></div>
       <button class="ap-close" id="ap-close-btn" title="${t('admin.close_title')}">✕</button>
     </div>
+    <p class="ap-debug-note">${t('admin.debug_note')}</p>
 
     <div class="ap-body">
 

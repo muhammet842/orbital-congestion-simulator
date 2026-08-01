@@ -2338,6 +2338,14 @@ body {
   z-index: 1;
   border-radius: 14px 14px 0 0;
 }
+.ap-debug-note {
+  margin: 0;
+  padding: 8px 22px 10px;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
 .ap-logo {
   display: flex;
   align-items: center;

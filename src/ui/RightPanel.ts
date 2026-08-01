@@ -518,9 +518,9 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   detailEl.innerHTML = `
     <h2 class="panel-heading">${t('detail.historical')}</h2>
     <div class="event-detail">
-      <div class="event-detail-title">${escapeHtml(event.title)}</div>
+      <div class="event-detail-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</div>
       <div class="event-detail-date">${formattedDate}</div>
-      <p class="event-detail-description">${escapeHtml(event.description)}</p>
+      <p class="event-detail-description">${escapeHtml(t(`event.${event.id}.description`, event.description))}</p>
       <dl class="detail-list">
         <div class="detail-row"><dt>${t('detail.debris')}</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
       </dl>
@@ -558,7 +558,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
 
   detailEl.innerHTML = `
     <h2 class="panel-heading panel-heading--alert">${escapeHtml(t(meta.headingKey))}</h2>
-    <div class="event-replay-title">${escapeHtml(event.title)}</div>
+    <div class="event-replay-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</div>
 
     <div class="event-replay-approach">
       <div class="era-sat era-sat--a" title="${escapeHtml(event.objectA.name)}">

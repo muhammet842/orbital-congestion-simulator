@@ -33,8 +33,10 @@ jobs:
   e2e:
     name: E2E Tests (Playwright)
     runs-on: ubuntu-latest
-    # Only run E2E on pushes to main or explicit PR merges — keeps PR feedback fast
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Run on main pushes and on PRs into main so regressions are caught before merge.
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.base_ref == 'main')
 
     steps:
       - name: Checkout

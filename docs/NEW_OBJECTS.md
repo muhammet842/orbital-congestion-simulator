@@ -1,0 +1,26 @@
+# Newly tracked objects (`firstSeenAt`)
+
+## What “NEW” means
+
+The cyan **NEW** badge and the “Show only newly tracked objects (last 14 days)” filter mark objects whose NORAD ID was **first observed by this app’s automated TLE fetch** within the last 14 days.
+
+It does **not** mean:
+
+- the object physically formed today,
+- the official SATCAT launch date,
+- or a confirmed collision/breakup event.
+
+Analyst / `UNKNOWN` objects (e.g. CelesTrak analyst satellites) often appear here when Space Force publishes a new track.
+
+## How stamps are written
+
+`scripts/fetch-tle.mjs` loads the previous `public/data/tle.json`, then `applyFirstSeenAt`:
+
+- seeds silently when there is no previous catalog (avoids marking ~10k objects NEW),
+- stamps only IDs absent from the previous `known` set,
+- refuses bulk false positives (`MAX_NEW_LAUNCHES_PER_FETCH`),
+- rejects decades-old international designators even if they reappear after catalog churn.
+
+## Why the filter can look empty
+
+Most of the committed catalog predates the stamping feature (or arrived in a seed fetch), so they have **no** `firstSeenAt`. Only IDs that newly entered on a later refresh keep the stamp for 14 days. Over successive successful TLE refreshes the filter becomes more demonstrable.

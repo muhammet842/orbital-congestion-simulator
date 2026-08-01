@@ -16,6 +16,16 @@ npx firebase-tools deploy --only database
 Or paste `database.rules.json` into **Firebase Console → Realtime Database → Rules**
 and click **Publish**.
 
+### Verify production
+
+1. In Firebase Console → Rules, confirm the published JSON matches this repo
+   (increment-only metrics / presence schema — **not** open root write).
+2. In Vercel → Project → Environment Variables, confirm `VITE_FIREBASE_RTDB_URL`
+   points at that database.
+3. Open the live app, unlock admin (Ctrl+Shift+A), and confirm metrics load
+   without a connection error.
+4. Full ops checklist: [docs/OPERATIONS.md](../docs/OPERATIONS.md).
+
 ## What the rules allow
 
 | Path | Read | Write |

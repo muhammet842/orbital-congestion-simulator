@@ -59,4 +59,12 @@ export function applyTranslations(root: Element | Document = document): void {
     const key = el.dataset.i18nPh!;
     (el as HTMLInputElement).placeholder = t(key);
   });
+  root.querySelectorAll<HTMLElement>('[data-i18n-aria]').forEach((el) => {
+    const key = el.dataset.i18nAria!;
+    el.setAttribute('aria-label', t(key));
+  });
+  root.querySelectorAll<HTMLElement>('[data-i18n-title]').forEach((el) => {
+    const key = el.dataset.i18nTitle!;
+    el.setAttribute('title', t(key));
+  });
 }

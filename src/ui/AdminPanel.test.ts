@@ -41,20 +41,21 @@ afterEach(() => {
 // ── hashPin ───────────────────────────────────────────────────────────────────
 
 describe('hashPin', () => {
-  it('produces a deterministic hash for the same input', () => {
-    expect(hashPin('1234')).toBe(hashPin('1234'));
+  it('produces a deterministic hash for the same input', async () => {
+    expect(await hashPin('1234')).toBe(await hashPin('1234'));
   });
 
-  it('produces different hashes for different inputs', () => {
-    expect(hashPin('1234')).not.toBe(hashPin('4321'));
+  it('produces different hashes for different inputs', async () => {
+    expect(await hashPin('1234')).not.toBe(await hashPin('4321'));
   });
 
-  it('returns a non-empty string', () => {
-    expect(hashPin('0000').length).toBeGreaterThan(0);
+  it('returns a hex SHA-256 digest', async () => {
+    const digest = await hashPin('0000');
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('is sensitive to a single character change', () => {
-    expect(hashPin('123456')).not.toBe(hashPin('123457'));
+  it('is sensitive to a single character change', async () => {
+    expect(await hashPin('123456')).not.toBe(await hashPin('123457'));
   });
 });
 
@@ -243,9 +244,9 @@ describe('isAdminMode / revokeAdmin', () => {
     expect(isAdminMode()).toBe(true);
   });
 
-  it('revokeAdmin clears the flag and hash', () => {
+  it('revokeAdmin clears the flag and hash', async () => {
     localStorage.setItem('orbital_admin_v1', '1');
-    localStorage.setItem('orbital_admin_pin_v1', hashPin('1234'));
+    localStorage.setItem('orbital_admin_pin_v1', await hashPin('1234'));
     revokeAdmin();
     expect(isAdminMode()).toBe(false);
     expect(localStorage.getItem('orbital_admin_pin_v1')).toBeNull();

@@ -456,38 +456,42 @@ export interface ConjunctionEvent {
 
 ## 11. Uygulama fazları
 
+> **Durum (2026-08):** Faz 1–3 çekirdeği tamamlandı ve ürün spec’in ötesine geçti
+> (~10k nesne, 3 km / 24s close-approach, i18n, worker, Kessler, Spotter, Firebase admin).
+> Aşağıdaki kutular tarihsel kontrol listesidir; güncel özellikler için `docs/FEATURES.md`.
+
 ### Faz 1 — MVP (önce bunu bitir)
 
-- [ ] Vite + TS proje iskeleti
-- [ ] `scripts/fetch-tle.mjs` + en az 1000 objelik `tle.json`
-- [ ] `tleLoader.ts` — fetch + satrec oluştur
-- [ ] `propagator.ts` — pozisyon/hız/altitude hesap
-- [ ] `classify.ts` — katman + renk
-- [ ] `SceneManager` + `Earth` + `OrbitalPoints`
-- [ ] `Layout` + sol/sağ panel + time bar (temel)
-- [ ] Katman filtreleri çalışır
-- [ ] Raycast ile obje seçimi + detay paneli
-- [ ] Play/pause + speed + Now
-- [ ] `npm run build` ✓
-- [ ] README (İngilizce) + screenshot
+- [x] Vite + TS proje iskeleti
+- [x] `scripts/fetch-tle.mjs` + en az 1000 objelik `tle.json`
+- [x] `tleLoader.ts` — fetch + satrec oluştur
+- [x] `propagator.ts` — pozisyon/hız/altitude hesap
+- [x] `classify.ts` — katman + renk
+- [x] `SceneManager` + `Earth` + `OrbitalPoints` / `InstancedOrbitalPoints`
+- [x] `Layout` + sol/sağ panel + time bar (temel)
+- [x] Katman filtreleri çalışır
+- [x] Raycast ile obje seçimi + detay paneli
+- [x] Play/pause + speed + Now
+- [x] `npm run build` ✓
+- [x] README (İngilizce) + screenshot
 
 **Faz 1 bitti kriteri:** Tarayıcıda Dünya + hareketli noktalar + filtre + seçim + zaman kontrolü.
 
 ### Faz 2 — Polish
 
-- [ ] `conjunction.ts` — LEO alt kümesinde saatte bir tarama, eşik 10 km, max 5 uyarı
-- [ ] `OrbitTrail.ts` — seçili obje
-- [ ] `EventCards.ts` — 3 tarihsel olay
-- [ ] Loading ekranı ("Loading orbital data…")
-- [ ] Empty/error state (JSON yüklenemezse)
-- [ ] FPS counter (dev mode, `?debug=1`)
+- [x] `conjunction.ts` — (evrim: 3 km eşik, 24s tarama, refine; orijinal 10 km/saatlik plan aşıldı)
+- [x] `OrbitTrail.ts` — seçili obje
+- [x] `EventCards.ts` — 7 tarihsel olay + replay
+- [x] Loading ekranı ("Loading orbital data…")
+- [x] Empty/error state (JSON yüklenemezse)
+- [x] FPS counter (dev mode, `?debug=1`)
 
 ### Faz 3 — Ship
 
-- [ ] Vercel deploy
-- [ ] README GIF (kayıt veya placeholder)
-- [ ] `fetchedAt` tarihi UI'da göster
-- [ ] GitHub repo public
+- [x] Vercel deploy (`https://orbital-congestion-simulator.vercel.app`)
+- [x] README demo + screenshot
+- [x] `fetchedAt` tarihi UI'da göster
+- [x] GitHub repo public
 
 ---
 

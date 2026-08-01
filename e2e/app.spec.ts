@@ -116,12 +116,12 @@ test.describe('Future Projection panel', () => {
 });
 
 test.describe('Left panel filters', () => {
-  test('four orbit-layer checkboxes are present and checked by default', async ({ page }) => {
+  test('four orbit-layer chips are present and active by default', async ({ page }) => {
     await page.goto('/');
-    const checkboxes = page.locator('input[data-layer]');
-    await expect(checkboxes).toHaveCount(4, { timeout: 10_000 });
+    const chips = page.locator('button[data-layer]');
+    await expect(chips).toHaveCount(4, { timeout: 10_000 });
     for (let i = 0; i < 4; i++) {
-      await expect(checkboxes.nth(i)).toBeChecked();
+      await expect(chips.nth(i)).toHaveAttribute('aria-pressed', 'true');
     }
   });
 
