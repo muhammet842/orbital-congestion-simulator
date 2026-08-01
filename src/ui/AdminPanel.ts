@@ -21,7 +21,6 @@
  */
 
 import { getState, subscribe } from '../state/appState';
-import type { TrackedObject } from '../types';
 import { t, getLang, onLangChange } from '../i18n/i18n';
 import { MOBILE_BREAKPOINT_PX } from './Layout';
 
@@ -818,11 +817,7 @@ function updateGlobalSection(result: FbReadResult): void {
 
   const isDefault = url === DEFAULT_FIREBASE_URL;
   sec.innerHTML = `
-    <h4 class="ap-section-title">${t('admin.section_global_fb')}
-      <span style="color:var(--text-muted);font-size:0.65rem;font-weight:400;text-transform:none;letter-spacing:0">
-        — ${url.replace('https://', '').split('.')[0]}
-      </span>
-    </h4>
+    <h4 class="ap-section-title">${t('admin.section_global_fb')}</h4>
     <div class="ap-grid-2" style="margin-bottom:16px">
       ${metricBox(fb.loads.toLocaleString(), t('admin.metric_page_loads'))}
       ${metricBox(fb.sat.toLocaleString(),   t('admin.metric_sat_clicks'))}
@@ -873,12 +868,8 @@ function renderPanelContent(panel: HTMLElement): void {
   const state = getState();
   const s = state.stats;
 
-  const objs         = state.objects;
-  const activeCount  = objs.filter(o => o.category === 'active').length;
-  const debrisCount  = objs.filter(o => o.category === 'debris').length;
-  const stationCount = objs.filter(o => o.category === 'stations').length;
+  const totalCount   = state.objects.length;
   const visibleCount = state.filteredIndices.length;
-  const totalCount   = objs.length;
 
   const fetchedAt = s?.fetchedAt ? new Date(s.fetchedAt) : null;
   const tleDays   = fetchedAt ? Math.floor((Date.now() - fetchedAt.getTime()) / 86_400_000) : null;
@@ -887,19 +878,6 @@ function renderPanelContent(panel: HTMLElement): void {
     : tleDays === 0
       ? t('admin.tle_age_today')
       : t('admin.tle_age_days_ago').replace('{n}', String(tleDays));
-
-  const selObj: TrackedObject | null =
-    state.selectedIndex != null ? (objs[state.selectedIndex] ?? null) : null;
-  const selLabel = selObj
-    ? `${selObj.name} (${selObj.noradId})`
-    : state.selectedEventId
-      ? t('admin.selected_event').replace('{id}', state.selectedEventId)
-      : t('admin.selected_none');
-
-  const activeFilters = Object.entries(state.layerFilters).filter(([, v]) => !v).map(([k]) => k);
-  const filterLabel   = activeFilters.length === 0
-    ? t('admin.filters_all_visible')
-    : t('admin.filters_hidden').replace('{list}', activeFilters.join(', '));
 
   const sesTot_sat = totGet('sat');
   const sesTot_evt = totGet('evt');
@@ -942,49 +920,6 @@ function renderPanelContent(panel: HTMLElement): void {
             <span class="ap-stat-label">${t('admin.resolution')}</span>
             <span class="ap-stat-value">${screen.width}×${screen.height} (${window.devicePixelRatio}x)</span>
           </div>
-        </div>
-      </section>
-
-      <!-- ── Simulation Status ─────────────────────────── -->
-      <section class="ap-section">
-        <h4 class="ap-section-title">${t('admin.section_sim')}</h4>
-        <div class="ap-grid-2">
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.total_objects')}</span>
-            <span class="ap-stat-value ap-accent">${totalCount.toLocaleString()}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.visible')}</span>
-            <span class="ap-stat-value ap-accent">${visibleCount.toLocaleString()}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.active_rockets')}</span>
-            <span class="ap-stat-value">${activeCount.toLocaleString()}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.debris')}</span>
-            <span class="ap-stat-value">${debrisCount.toLocaleString()}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.stations')}</span>
-            <span class="ap-stat-value">${stationCount.toLocaleString()}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.tle_age')}</span>
-            <span class="ap-stat-value ${tleDays !== null && tleDays > 3 ? 'ap-warn' : ''}">${tleAge}</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.speed')}</span>
-            <span class="ap-stat-value">${state.time.speed}×</span>
-          </div>
-          <div class="ap-stat">
-            <span class="ap-stat-label">${t('admin.layer_filters')}</span>
-            <span class="ap-stat-value">${filterLabel}</span>
-          </div>
-        </div>
-        <div class="ap-stat ap-stat--full">
-          <span class="ap-stat-label">${t('admin.selected_object')}</span>
-          <span class="ap-stat-value">${selLabel}</span>
         </div>
       </section>
 

@@ -411,7 +411,7 @@ const en: Translations = {
   'admin.selected_event':       'Event: {id}',
   'admin.unknown':              'Unknown',
 
-  'admin.section_device':      '💾 On This Device (All Sessions)',
+  'admin.section_device':      '💾 On This Device',
   'admin.metric_page_loads':   'Page Loads',
   'admin.metric_sat_clicks':   'Satellite Clicks',
   'admin.metric_event_clicks': 'Event Clicks',
@@ -430,7 +430,7 @@ const en: Translations = {
   'admin.retry_btn':           'Retry',
   'admin.remove_btn':          'Remove',
   'admin.restore_default_btn': 'Restore Default',
-  'admin.section_global_fb':   '🌐 All Users (Firebase)',
+  'admin.section_global_fb':   '🌐 All Users',
   'admin.fb_testing':          '⏳ Testing…',
 
   'admin.section_tools':      '⚙ Quick Tools',
@@ -822,7 +822,7 @@ const tr: Translations = {
   'admin.selected_event':       'Olay: {id}',
   'admin.unknown':              'Bilinmiyor',
 
-  'admin.section_device':      '💾 Bu Cihazda (Tüm Oturumlar)',
+  'admin.section_device':      '💾 Bu Cihazda',
   'admin.metric_page_loads':   'Sayfa Yükleme',
   'admin.metric_sat_clicks':   'Uydu Tıklama',
   'admin.metric_event_clicks': 'Olay Tıklama',
@@ -841,7 +841,7 @@ const tr: Translations = {
   'admin.retry_btn':           'Tekrar Dene',
   'admin.remove_btn':          'Kaldır',
   'admin.restore_default_btn': 'Varsayılana Dön',
-  'admin.section_global_fb':   '🌐 Tüm Kullanıcılar (Firebase)',
+  'admin.section_global_fb':   '🌐 Tüm Kullanıcılar',
   'admin.fb_testing':          '⏳ Test ediliyor…',
 
   'admin.section_tools':      '⚙ Hızlı Araçlar',
@@ -1233,7 +1233,7 @@ const de: Translations = {
   'admin.selected_event':       'Ereignis: {id}',
   'admin.unknown':              'Unbekannt',
 
-  'admin.section_device':      '💾 Auf diesem Gerät (alle Sitzungen)',
+  'admin.section_device':      '💾 Auf diesem Gerät',
   'admin.metric_page_loads':   'Seitenaufrufe',
   'admin.metric_sat_clicks':   'Satelliten-Klicks',
   'admin.metric_event_clicks': 'Ereignis-Klicks',
@@ -1252,7 +1252,7 @@ const de: Translations = {
   'admin.retry_btn':           'Erneut versuchen',
   'admin.remove_btn':          'Entfernen',
   'admin.restore_default_btn': 'Standard wiederherstellen',
-  'admin.section_global_fb':   '🌐 Alle Nutzer (Firebase)',
+  'admin.section_global_fb':   '🌐 Alle Nutzer',
   'admin.fb_testing':          '⏳ Wird getestet…',
 
   'admin.section_tools':      '⚙ Schnellwerkzeuge',
@@ -1644,7 +1644,7 @@ const ru: Translations = {
   'admin.selected_event':       'Событие: {id}',
   'admin.unknown':              'Неизвестно',
 
-  'admin.section_device':      '💾 На этом устройстве (все сессии)',
+  'admin.section_device':      '💾 На этом устройстве',
   'admin.metric_page_loads':   'Загрузок страницы',
   'admin.metric_sat_clicks':   'Кликов по спутникам',
   'admin.metric_event_clicks': 'Кликов по событиям',
@@ -1663,7 +1663,7 @@ const ru: Translations = {
   'admin.retry_btn':           'Повторить',
   'admin.remove_btn':          'Удалить',
   'admin.restore_default_btn': 'Восстановить по умолчанию',
-  'admin.section_global_fb':   '🌐 Все пользователи (Firebase)',
+  'admin.section_global_fb':   '🌐 Все пользователи',
   'admin.fb_testing':          '⏳ Проверка…',
 
   'admin.section_tools':      '⚙ Быстрые инструменты',
@@ -2055,7 +2055,7 @@ const zh: Translations = {
   'admin.selected_event':       '事件：{id}',
   'admin.unknown':              '未知',
 
-  'admin.section_device':      '💾 本设备（所有会话）',
+  'admin.section_device':      '💾 本设备',
   'admin.metric_page_loads':   '页面加载次数',
   'admin.metric_sat_clicks':   '卫星点击次数',
   'admin.metric_event_clicks': '事件点击次数',
@@ -2074,7 +2074,7 @@ const zh: Translations = {
   'admin.retry_btn':           '重试',
   'admin.remove_btn':          '移除',
   'admin.restore_default_btn': '恢复默认',
-  'admin.section_global_fb':   '🌐 所有用户 (Firebase)',
+  'admin.section_global_fb':   '🌐 所有用户',
   'admin.fb_testing':          '⏳ 测试中…',
 
   'admin.section_tools':      '⚙ 快捷工具',
