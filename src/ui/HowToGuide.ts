@@ -39,9 +39,9 @@ const STEP_CONFIG: StepConfig[] = [
   { id: 'approaches', target: '#tour-region-approaches', panel: 'left' },
   { id: 'events', target: '.event-cards', panel: 'left' },
   { id: 'time', target: '#time-bar', panel: null },
-  // Spotlight the header trigger + open the panel; card docks to a screen edge
-  // so it does not cover the modal content being explained.
-  { id: 'projection', target: '#kessler-panel-btn', panel: null, openKessler: true },
+  // Open the projection modal and spotlight the panel itself (not the tiny
+  // header button). The tooltip docks beside it in the free space.
+  { id: 'projection', target: '#kessler-panel', panel: null, openKessler: true },
 ];
 
 let rootEl: HTMLElement | null = null;
@@ -154,7 +154,10 @@ function prepareStep(config: StepConfig): HTMLElement | null {
   if (config.panel) setTourPanel(config.panel);
   if (config.openKessler) openKesslerPanel();
 
-  const target = document.querySelector<HTMLElement>(config.target);
+  // Prefer the live panel when present; fall back to the header trigger.
+  const target =
+    document.querySelector<HTMLElement>(config.target) ??
+    (config.openKessler ? document.querySelector<HTMLElement>('#kessler-panel-btn') : null);
   if (!target) return null;
 
   target.classList.add('tour-target--lit');
@@ -296,20 +299,32 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
   const holeArea = Math.max(1, hole.width * hole.height);
   const viewportArea = vw * vh;
   const largeHole = holeArea / viewportArea > 0.35;
+  const tallModal = hole.height > vh * 0.55 && hole.width > vw * 0.35;
+  const spaceRight = vw - (hole.left + hole.width);
+  const spaceLeft = hole.left;
 
-  const candidates: Array<{ top: number; left: number; dock?: boolean }> = [
-    // Outside the hole (preferred when space exists).
-    { top: hole.top + hole.height + margin, left: hole.left + hole.width / 2 - cardWidth / 2 },
-    { top: hole.top - cardHeight - margin, left: hole.left + hole.width / 2 - cardWidth / 2 },
-    { top: hole.top + 12, left: hole.left + hole.width + margin },
-    { top: hole.top + 12, left: hole.left - cardWidth - margin },
-    // Screen docks — used especially for huge highlights / modals.
-    { top: vh - cardHeight - edge, left: (vw - cardWidth) / 2, dock: true },
-    { top: edge + 56, left: (vw - cardWidth) / 2, dock: true },
-    { top: vh - cardHeight - edge, left: edge, dock: true },
-    { top: vh - cardHeight - edge, left: vw - cardWidth - edge, dock: true },
-    { top: edge + 56, left: edge, dock: true },
-    { top: edge + 56, left: vw - cardWidth - edge, dock: true },
+  const candidates: Array<{ top: number; left: number; weight: number }> = [
+    // Beside the hole (best for open modals like Future Projection).
+    {
+      top: Math.max(edge, hole.top + 24),
+      left: hole.left + hole.width + margin,
+      weight: spaceRight >= cardWidth + margin ? -2e6 : 0,
+    },
+    {
+      top: Math.max(edge, hole.top + 24),
+      left: hole.left - cardWidth - margin,
+      weight: spaceLeft >= cardWidth + margin ? -2e6 : 0,
+    },
+    // Above / below
+    { top: hole.top - cardHeight - margin, left: hole.left + hole.width / 2 - cardWidth / 2, weight: 0 },
+    { top: hole.top + hole.height + margin, left: hole.left + hole.width / 2 - cardWidth / 2, weight: 0 },
+    // Screen-edge docks for huge highlights (globe, full-bleed targets).
+    { top: vh - cardHeight - edge, left: (vw - cardWidth) / 2, weight: largeHole ? -4e5 : 0 },
+    { top: edge + 56, left: (vw - cardWidth) / 2, weight: largeHole ? -3e5 : 0 },
+    { top: vh - cardHeight - edge, left: edge, weight: largeHole ? -3e5 : 0 },
+    { top: vh - cardHeight - edge, left: vw - cardWidth - edge, weight: largeHole || tallModal ? -5e5 : 0 },
+    { top: edge + 56, left: vw - cardWidth - edge, weight: tallModal ? -6e5 : 0 },
+    { top: edge + 56, left: edge, weight: tallModal ? -4e5 : 0 },
   ];
 
   let best = clampCardPos(candidates[0]!.top, candidates[0]!.left, cardWidth, cardHeight);
@@ -319,18 +334,13 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
     const pos = clampCardPos(raw.top, raw.left, cardWidth, cardHeight);
     const cardRect: Rect = { top: pos.top, left: pos.left, width: cardWidth, height: cardHeight };
     const overlap = overlapArea(cardRect, hole);
-    // Prefer zero-overlap placements; for large holes, prefer edge docks.
-    const dockBonus = largeHole && raw.dock ? -viewportArea * 0.05 : 0;
-    const centerPenalty =
-      largeHole && !raw.dock
-        ? overlapArea(cardRect, {
-            top: hole.top + hole.height * 0.2,
-            left: hole.left + hole.width * 0.2,
-            width: hole.width * 0.6,
-            height: hole.height * 0.4,
-          }) * 2
-        : 0;
-    const score = overlap + centerPenalty + dockBonus;
+    const centerPenalty = overlapArea(cardRect, {
+      top: hole.top + hole.height * 0.15,
+      left: hole.left + hole.width * 0.15,
+      width: hole.width * 0.7,
+      height: hole.height * 0.5,
+    });
+    const score = overlap * 3 + centerPenalty + raw.weight;
     if (score < bestScore) {
       bestScore = score;
       best = pos;
