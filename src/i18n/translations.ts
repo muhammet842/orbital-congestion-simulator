@@ -1807,7 +1807,7 @@ const zh: Translations = {
   'help.step.time.title': '控制时间',
   'help.step.time.body': '用此栏播放/暂停、在 ±7 天内拖动、跳到 Now、保持 LIVE，或更改模拟速度。',
   'help.step.projection.title': '尝试未来推演',
-  'help.step.projection.body': '在 Future Projection 面板中调整发射率、缓解措施与风险，尝试 Kessler 情景。可用 ✕ 或 Escape 关闭。',
+  'help.step.projection.body': '这是 Future Projection 面板。调整发射率、缓解措施与风险以尝试 Kessler 情景。可用顶部 🌌 重新打开；用 ✕ 或 Escape 关闭。',
   'boot.loading': '正在加载轨道数据…',
   'boot.no_objects': '未加载任何轨道目标。',
   'boot.load_failed': '轨道数据加载失败。',
