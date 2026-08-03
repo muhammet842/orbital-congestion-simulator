@@ -2,6 +2,12 @@ import { test, expect, devices } from '@playwright/test';
 
 test.use({ ...devices['Pixel 7'] });
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('orbital-help-seen-v1', '1');
+  });
+});
+
 test.describe('Mobile object list', () => {
   test('search list viewport can scroll without requiring a selection', async ({ page }) => {
     await page.goto('/');

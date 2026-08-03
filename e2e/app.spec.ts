@@ -7,6 +7,13 @@ import { test, expect } from '@playwright/test';
  * They verify basic app functionality without relying on implementation details.
  */
 
+// Suppress the first-visit walkthrough so it does not cover the UI under test.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('orbital-help-seen-v1', '1');
+  });
+});
+
 test.describe('App bootstrap', () => {
   test('page loads and renders a <canvas> element', async ({ page }) => {
     await page.goto('/');
@@ -80,6 +87,27 @@ test.describe('Language switcher', () => {
     await select.selectOption('tr');
     await select.selectOption('en');
     await expect(page.getByText('Orbit Layers')).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+test.describe('How-to guide', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.locator('#help-guide-btn').waitFor({ timeout: 10_000 });
+  });
+
+  test('opens from the header "?" button and shows seven steps', async ({ page }) => {
+    await page.locator('#help-guide-btn').click();
+    await expect(page.locator('#help-guide-panel')).toBeVisible();
+    await expect(page.locator('.help-step')).toHaveCount(7);
+    await expect(page.locator('#help-got-it')).toBeVisible();
+  });
+
+  test('closes on Escape', async ({ page }) => {
+    await page.locator('#help-guide-btn').click();
+    await expect(page.locator('#help-guide-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#help-guide-panel')).toHaveCount(0);
   });
 });
 

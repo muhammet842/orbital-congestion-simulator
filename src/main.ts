@@ -9,6 +9,7 @@ import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
 import { initKesslerPanel } from './ui/KesslerPanel';
+import { initHowToGuide } from './ui/HowToGuide';
 import { findConjunctions } from './orbital/conjunction';
 import { applyTranslations, t } from './i18n/i18n';
 
@@ -59,6 +60,9 @@ async function main(): Promise<void> {
 
     // Future Projection: header button opening the Kessler-syndrome "what if" panel.
     initKesslerPanel();
+
+    // First-visit walkthrough + header "?" reopen control.
+    initHowToGuide();
 
     if (import.meta.env.DEV) {
       (window as unknown as Record<string, unknown>).__debugConjunctions = (isoTime?: string) =>
