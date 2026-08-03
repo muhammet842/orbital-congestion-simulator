@@ -2837,11 +2837,12 @@ body {
   color: var(--accent);
 }
 
-/* Interactive product tour */
+/* Interactive product tour — keep above app panels/modals; never raise the
+   highlighted target above this root or the tooltip gets buried. */
 .tour-root {
   position: fixed;
   inset: 0;
-  z-index: 9200;
+  z-index: 20000;
   pointer-events: none;
 }
 
@@ -2862,7 +2863,7 @@ body {
   position: fixed;
   background: rgba(5, 5, 16, 0.72);
   pointer-events: auto;
-  z-index: 9201;
+  z-index: 1;
 }
 
 .tour-highlight {
@@ -2872,24 +2873,24 @@ body {
   box-shadow: 0 0 24px rgba(34, 211, 238, 0.35);
   pointer-events: none;
   transition: top 0.22s ease, left 0.22s ease, width 0.22s ease, height 0.22s ease;
-  z-index: 9202;
+  z-index: 2;
 }
 
+/* Marker only — do not elevate the live UI above the tour root. */
 .tour-target--lit {
-  position: relative;
-  z-index: 9203;
+  outline: none;
 }
 
 .tour-card {
   position: fixed;
-  z-index: 9204;
+  z-index: 3;
   pointer-events: auto;
   width: min(360px, calc(100vw - 24px));
-  max-height: min(70vh, 480px);
+  max-height: min(42vh, 280px);
   overflow: auto;
   padding: 14px 16px 16px;
   border-radius: 14px;
-  background: rgba(10, 14, 28, 0.97);
+  background: rgba(10, 14, 28, 0.98);
   border: 1px solid rgba(34, 211, 238, 0.28);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
   color: var(--text-primary);
@@ -3340,12 +3341,13 @@ body {
 @media (max-width: 640px) {
   .tour-card {
     width: min(100vw - 20px, 400px);
-    max-height: min(58vh, 420px);
+    max-height: min(38vh, 260px);
     padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   }
 
   .tour-card--center {
     width: min(100vw - 20px, 420px);
+    max-height: min(70vh, 480px);
   }
 
   .kessler-backdrop {
