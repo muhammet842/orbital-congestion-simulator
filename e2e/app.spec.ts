@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 // Suppress the first-visit walkthrough so it does not cover the UI under test.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('orbital-help-seen-v1', '1');
+    localStorage.setItem('orbital-help-seen-v2', '1');
   });
 });
 
@@ -96,18 +96,20 @@ test.describe('How-to guide', () => {
     await page.locator('#help-guide-btn').waitFor({ timeout: 10_000 });
   });
 
-  test('opens from the header "?" button and shows seven steps', async ({ page }) => {
+  test('opens with language choice, then a spotlight step', async ({ page }) => {
     await page.locator('#help-guide-btn').click();
-    await expect(page.locator('#help-guide-panel')).toBeVisible();
-    await expect(page.locator('.help-step')).toHaveCount(7);
-    await expect(page.locator('#help-got-it')).toBeVisible();
+    await expect(page.getByText('Choose a language to continue')).toBeVisible();
+    await page.locator('.tour-lang-btn[data-lang="en"]').click();
+    await expect(page.locator('.tour-progress')).toHaveText('1 / 7');
+    await expect(page.locator('#tour-highlight')).toBeVisible();
+    await expect(page.locator('#tour-skip')).toBeVisible();
   });
 
-  test('closes on Escape', async ({ page }) => {
+  test('Skip dismisses the tour', async ({ page }) => {
     await page.locator('#help-guide-btn').click();
-    await expect(page.locator('#help-guide-panel')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#help-guide-panel')).toHaveCount(0);
+    await expect(page.locator('#tour-skip')).toBeVisible();
+    await page.locator('#tour-skip').click();
+    await expect(page.locator('#help-tour-root')).toHaveCount(0);
   });
 });
 

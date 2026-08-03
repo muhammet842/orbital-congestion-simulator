@@ -62,29 +62,31 @@ let displayedConjunctions: ReturnType<typeof selectConjunctionAlertsForDisplay> 
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
-    <h2 class="panel-heading" data-i18n="ui.search_objects">Search Objects</h2>
-    <div class="search-wrap">
-      <input
-        type="search"
-        id="object-search"
-        class="search-input"
-        placeholder="${t('ui.search_ph')}"
-        data-i18n-ph="ui.search_ph"
-        autocomplete="off"
-        spellcheck="false"
-      />
-    </div>
-    <div class="object-list-meta" id="object-list-meta"></div>
-    <div class="object-list-viewport" id="object-list-viewport">
-      <div class="object-list-spacer" id="object-list-spacer"></div>
-      <div class="object-list-items" id="object-list-items"></div>
-    </div>
+    <div id="tour-region-search" class="tour-region">
+      <h2 class="panel-heading" data-i18n="ui.search_objects">Search Objects</h2>
+      <div class="search-wrap">
+        <input
+          type="search"
+          id="object-search"
+          class="search-input"
+          placeholder="${t('ui.search_ph')}"
+          data-i18n-ph="ui.search_ph"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <div class="object-list-meta" id="object-list-meta"></div>
+      <div class="object-list-viewport" id="object-list-viewport">
+        <div class="object-list-spacer" id="object-list-spacer"></div>
+        <div class="object-list-items" id="object-list-items"></div>
+      </div>
 
-    <h2 class="panel-heading" data-i18n="ui.orbit_layers">Orbit Layers</h2>
-    <div class="layer-filters" id="layer-filters"></div>
+      <h2 class="panel-heading" data-i18n="ui.orbit_layers">Orbit Layers</h2>
+      <div class="layer-filters" id="layer-filters"></div>
 
-    <h2 class="panel-heading" data-i18n="ui.object_types">Object Types</h2>
-    <div class="category-filters" id="category-filters"></div>
+      <h2 class="panel-heading" data-i18n="ui.object_types">Object Types</h2>
+      <div class="category-filters" id="category-filters"></div>
+    </div>
 
     <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
     <div class="display-options" id="display-options"></div>
@@ -95,9 +97,11 @@ export function initLeftPanel(container: HTMLElement): void {
     <h2 class="panel-heading" data-i18n="ui.live_stats">Live Stats</h2>
     <dl class="stats-list" id="live-stats"></dl>
 
-    <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts (Next 24h)</h2>
-    <div class="conjunction-filters" id="conjunction-filters"></div>
-    <div class="conjunction-list" id="conjunction-list"></div>
+    <div id="tour-region-approaches" class="tour-region">
+      <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts (Next 24h)</h2>
+      <div class="conjunction-filters" id="conjunction-filters"></div>
+      <div class="conjunction-list" id="conjunction-list"></div>
+    </div>
 
     <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
     <div class="advanced-filters" id="advanced-filters"></div>

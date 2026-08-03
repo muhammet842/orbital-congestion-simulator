@@ -53,15 +53,7 @@ Open `http://localhost:5173` in your browser.
 
 ## How to use
 
-On first visit the app opens a short walkthrough. Reopen it anytime with the **?** button in the header.
-
-1. **Globe** — drag to orbit, scroll/pinch to zoom; click an object to select it  
-2. **Search & filters** — left panel: name/NORAD search, orbit layers, object types  
-3. **Details** — right panel shows orbital parameters for the selection  
-4. **Close approaches** — review near-miss alerts for the next 24 hours  
-5. **Historical events** — replay landmark collisions, ASAT tests, and breakups  
-6. **Time bar** — play, pause, and scrub simulation time  
-7. **Future Projection** — open the Kessler “what if” debris-growth panel  
+On first visit the app asks you to **choose a language**, then walks through the UI step by step with on-screen highlights (globe, search/filters, details, close approaches, historical events, time bar, Future Projection). Use **Skip** anytime; reopen the tour with the **?** button in the header.
 
 Deep links: `?object=<NORAD>` and `?event=<id>`.
 

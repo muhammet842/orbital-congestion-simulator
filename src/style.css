@@ -2837,88 +2837,203 @@ body {
   color: var(--accent);
 }
 
-.help-panel {
-  width: min(520px, 100%);
+/* Interactive product tour */
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9200;
+  pointer-events: none;
 }
 
-.help-subtitle {
-  margin: 0 0 4px;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  line-height: 1.5;
+.tour-dim {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  transition: background 0.2s ease;
+}
+.tour-dim--full {
+  background: rgba(5, 5, 16, 0.72);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
 }
 
-.help-steps {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.tour-pad {
+  position: fixed;
+  background: rgba(5, 5, 16, 0.72);
+  pointer-events: auto;
+  z-index: 9201;
+}
+
+.tour-highlight {
+  position: fixed;
+  border-radius: 12px;
+  border: 2px solid rgba(34, 211, 238, 0.85);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.35);
+  pointer-events: none;
+  transition: top 0.22s ease, left 0.22s ease, width 0.22s ease, height 0.22s ease;
+  z-index: 9202;
+}
+
+.tour-target--lit {
+  position: relative;
+  z-index: 9203;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 9204;
+  pointer-events: auto;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 480px);
+  overflow: auto;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  background: rgba(10, 14, 28, 0.97);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text-primary);
+  font-family: var(--font);
+}
+
+.tour-card--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(420px, calc(100vw - 28px));
+}
+
+.tour-card-top {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.help-step {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-}
-
-.help-step-num {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tour-progress {
   font-size: 0.72rem;
   font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--accent);
-  background: rgba(34, 211, 238, 0.12);
-  border: 1px solid rgba(34, 211, 238, 0.35);
+  font-variant-numeric: tabular-nums;
 }
 
-.help-step-body {
-  min-width: 0;
-}
-
-.help-step-title {
-  margin: 0 0 2px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.help-step-text {
-  margin: 0;
-  font-size: 0.78rem;
+.tour-skip {
+  appearance: none;
+  margin-left: auto;
+  border: none;
+  background: transparent;
   color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 6px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tour-skip:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tour-title {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.tour-body {
+  margin: 0 0 14px;
+  font-size: 0.84rem;
   line-height: 1.5;
+  color: var(--text-muted);
 }
 
-.help-actions {
+.tour-lang-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.tour-lang-btn {
+  appearance: none;
   display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+.tour-lang-btn:hover {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.45);
 }
 
-.help-primary-btn {
+.tour-lang-native {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.tour-lang-code {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tour-primary-btn,
+.tour-secondary-btn {
   appearance: none;
   border-radius: 8px;
-  border: 1px solid rgba(34, 211, 238, 0.45);
-  background: rgba(34, 211, 238, 0.16);
-  color: var(--accent);
   cursor: pointer;
   font-family: inherit;
   font-size: 0.82rem;
   font-weight: 600;
-  padding: 9px 16px;
-  transition: background 0.15s, border-color 0.15s;
+  padding: 9px 14px;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
-.help-primary-btn:hover {
+
+.tour-primary-btn {
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  background: rgba(34, 211, 238, 0.16);
+  color: var(--accent);
+  margin-left: auto;
+}
+.tour-primary-btn:hover {
   background: rgba(34, 211, 238, 0.26);
   border-color: rgba(34, 211, 238, 0.65);
+}
+
+.tour-secondary-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+}
+.tour-secondary-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+.tour-secondary-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .kessler-panel {
@@ -3223,30 +3338,14 @@ body {
 }
 
 @media (max-width: 640px) {
-  .help-backdrop {
-    align-items: flex-end;
-    justify-content: stretch;
-    padding: 0;
+  .tour-card {
+    width: min(100vw - 20px, 400px);
+    max-height: min(58vh, 420px);
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   }
 
-  .help-panel.admin-panel {
-    width: 100%;
-    max-width: none;
-    max-height: min(92dvh, 100%);
-    border-radius: 16px 16px 0 0;
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-
-  .help-panel .ap-header {
-    padding: 14px 16px 12px;
-    border-radius: 16px 16px 0 0;
-  }
-
-  .help-panel .ap-body {
-    padding: 12px 14px 20px;
+  .tour-card--center {
+    width: min(100vw - 20px, 420px);
   }
 
   .kessler-backdrop {

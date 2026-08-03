@@ -143,3 +143,34 @@ function setupMobilePanelToggles(
     if (!e.matches) closePanels();
   });
 }
+
+export function isMobileLayout(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`).matches
+  );
+}
+
+/** Open/close mobile drawers for guided tours. No-op on desktop. */
+export function setTourPanel(side: 'left' | 'right' | null): void {
+  const leftPanel = document.getElementById('left-panel');
+  const rightPanel = document.getElementById('right-panel');
+  const backdrop = document.getElementById('mobile-backdrop');
+  const toggleLeftBtn = document.getElementById('toggle-left-panel');
+  const toggleRightBtn = document.getElementById('toggle-right-panel');
+  if (!leftPanel || !rightPanel || !backdrop || !toggleLeftBtn || !toggleRightBtn) return;
+
+  leftPanel.classList.remove('panel--open');
+  rightPanel.classList.remove('panel--open');
+  backdrop.classList.remove('mobile-backdrop--visible');
+  toggleLeftBtn.setAttribute('aria-expanded', 'false');
+  toggleRightBtn.setAttribute('aria-expanded', 'false');
+
+  if (!isMobileLayout() || side == null) return;
+
+  const panel = side === 'left' ? leftPanel : rightPanel;
+  const btn = side === 'left' ? toggleLeftBtn : toggleRightBtn;
+  panel.classList.add('panel--open');
+  btn.setAttribute('aria-expanded', 'true');
+  backdrop.classList.add('mobile-backdrop--visible');
+}
