@@ -1,6 +1,10 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { getConjunctionCameraPose, getVisualConjunctionLayout } from '../orbital/visualConjunction';
+import {
+  getConjunctionCameraPose,
+  getConjunctionViewDistance,
+  getVisualConjunctionLayout,
+} from '../orbital/visualConjunction';
 import { EARTH_RADIUS_KM } from '../types';
 
 const FLY_DURATION_MS = 1600;
@@ -9,6 +13,7 @@ const DEFAULT_FOV = 45;
 const DEFAULT_POSITION = new Vector3(0, 0, 4.5);
 const DEFAULT_TARGET = new Vector3(0, 0, 0);
 const TRACKING_SMOOTHING = 10;
+const scratchOffset = new Vector3();
 
 /** Camera distance from Earth center, scaled by orbital altitude. */
 function globeCameraRadiusFromAltitude(altitudeKm: number): number {
@@ -166,8 +171,9 @@ export class CameraFly {
   }
 
   /**
-   * Pan target + camera together so the pair stays centered while preserving
-   * the user's orbit angle (OrbitControls remains fully interactive).
+   * Pan target + camera together so the pair stays centered, and dolly in/out
+   * as the framed separation shrinks — matching the model-scale shrink in
+   * verification mode. Orbit angle stays under user control.
    */
   followConjunctionMidpoint(
     camera: PerspectiveCamera,
@@ -179,7 +185,8 @@ export class CameraFly {
   ): void {
     if (!this.conjunctionTracking || this.active) return;
 
-    const desiredMid = getVisualConjunctionLayout(posA, posB, separationKm).visualMid;
+    const layout = getVisualConjunctionLayout(posA, posB, separationKm);
+    const desiredMid = layout.visualMid;
 
     if (!this.trackingInitialized) {
       this.trackedMid.copy(desiredMid);
@@ -194,6 +201,20 @@ export class CameraFly {
 
     controls.target.add(delta);
     camera.position.add(delta);
+
+    // Dolly toward the ideal framing distance for the current visual gap.
+    const desiredDist = getConjunctionViewDistance(layout.separationScene);
+    scratchOffset.copy(camera.position).sub(controls.target);
+    const currentDist = scratchOffset.length();
+    if (currentDist < 1e-8) return;
+
+    const nextDist = currentDist + (desiredDist - currentDist) * alpha;
+    const clamped = Math.min(
+      Math.max(nextDist, controls.minDistance),
+      controls.maxDistance,
+    );
+    scratchOffset.multiplyScalar(clamped / currentDist);
+    camera.position.copy(controls.target).add(scratchOffset);
   }
 
   update(camera: PerspectiveCamera, controls: OrbitControls, now: number): boolean {

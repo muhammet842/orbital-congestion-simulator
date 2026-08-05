@@ -323,7 +323,11 @@ export class SceneManager {
         if (propA && propB) {
           const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
           const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-          const layout = getVisualConjunctionLayout(posA, posB, selectedConjunction.distanceKm);
+          const dx = propA.positionEci.x - propB.positionEci.x;
+          const dy = propA.positionEci.y - propB.positionEci.y;
+          const dz = propA.positionEci.z - propB.positionEci.z;
+          const liveKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          const layout = getVisualConjunctionLayout(posA, posB, liveKm);
 
           this.conjunctionVerification.update(selectedConjunction, objects, flyTime);
 
@@ -334,7 +338,7 @@ export class SceneManager {
             this.controls,
             posA,
             posB,
-            selectedConjunction.distanceKm,
+            liveKm,
           );
         }
       }
@@ -632,12 +636,15 @@ export class SceneManager {
         if (propA && propB) {
           const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
           const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
+          // Follow the *live* gap so the camera dollies in as the pair closes,
+          // matching model-scale shrink during VERIFY playback.
+          const liveKm = conjunctionLiveDistanceKm ?? conj.distanceKm;
           this.cameraFly.followConjunctionMidpoint(
             this.camera,
             this.controls,
             posA,
             posB,
-            conj.distanceKm,
+            liveKm,
             deltaMs,
           );
         }

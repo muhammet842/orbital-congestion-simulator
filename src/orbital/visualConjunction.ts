@@ -2,8 +2,8 @@ import { Vector3 } from 'three';
 import { ORBIT_DISPLAY_SCALE } from '../types';
 
 /** Minimum on-screen separation so two close objects can be framed side by side. */
-const MIN_VISUAL_SEPARATION_SCENE = 0.014;
-const MIN_VIEW_DISTANCE = 0.1;
+export const MIN_VISUAL_SEPARATION_SCENE = 0.014;
+const MIN_VIEW_DISTANCE = 0.035;
 
 export function getVisualConjunctionLayout(
   posA: { x: number; y: number; z: number },
@@ -14,6 +14,7 @@ export function getVisualConjunctionLayout(
   visualB: Vector3;
   visualMid: Vector3;
   exaggerated: boolean;
+  separationScene: number;
 } {
   const a = new Vector3(posA.x, posA.y, posA.z);
   const b = new Vector3(posB.x, posB.y, posB.z);
@@ -22,7 +23,13 @@ export function getVisualConjunctionLayout(
   const targetSep = Math.max(actualSep, separationKm * ORBIT_DISPLAY_SCALE, MIN_VISUAL_SEPARATION_SCENE);
 
   if (actualSep >= targetSep * 0.85) {
-    return { visualA: a, visualB: b, visualMid: mid, exaggerated: false };
+    return {
+      visualA: a,
+      visualB: b,
+      visualMid: mid,
+      exaggerated: false,
+      separationScene: actualSep,
+    };
   }
 
   let dir = b.clone().sub(a);
@@ -38,7 +45,24 @@ export function getVisualConjunctionLayout(
     visualB: mid.clone().add(dir.multiplyScalar(half)),
     visualMid: mid.clone(),
     exaggerated: true,
+    separationScene: targetSep,
   };
+}
+
+/**
+ * Separation used for model sizing / camera framing. Never smaller than the
+ * on-screen exaggeration floor, otherwise models shrink to invisible specks
+ * while the camera still frames the enlarged pair.
+ */
+export function getConjunctionFramingSeparationKm(liveDistanceKm: number): number {
+  const liveScene = Math.max(0, liveDistanceKm) * ORBIT_DISPLAY_SCALE;
+  const framingScene = Math.max(liveScene, MIN_VISUAL_SEPARATION_SCENE);
+  return framingScene / ORBIT_DISPLAY_SCALE;
+}
+
+/** Camera distance that keeps a framed pair readable in the viewport. */
+export function getConjunctionViewDistance(separationScene: number): number {
+  return Math.max(MIN_VIEW_DISTANCE, separationScene * 3.6 + 0.04);
 }
 
 /** Camera pose that keeps the pair framed with the lens pointed outward from Earth. */
@@ -51,8 +75,8 @@ export function getConjunctionCameraPose(
   const mid = layout.visualMid;
   const radial = mid.clone().normalize();
 
-  const separationScene = layout.visualA.distanceTo(layout.visualB);
-  const viewDistance = Math.max(MIN_VIEW_DISTANCE, separationScene * 4.5 + 0.08);
+  const separationScene = layout.separationScene;
+  const viewDistance = getConjunctionViewDistance(separationScene);
 
   const offsetDir = layout.visualB.clone().sub(layout.visualA).normalize();
   const side = new Vector3().crossVectors(radial, offsetDir);
