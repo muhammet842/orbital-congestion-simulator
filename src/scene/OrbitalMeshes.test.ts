@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { conjunctionModelScale } from './OrbitalMeshes';
 import { TARGET_MODEL_SIZE } from './SatelliteModelLoader';
 import { ORBIT_DISPLAY_SCALE } from '../types';
-import { getConjunctionFramingSeparationKm } from '../orbital/visualConjunction';
 
 /** Model footprint in scene units for a given scale multiplier. */
 function modelSizeSceneUnits(scaleMul: number): number {
@@ -21,28 +20,24 @@ describe('conjunctionModelScale', () => {
     expect(conjunctionModelScale(-5)).toBe(2.2);
   });
 
-  it('caps the model under the framed separation for a wide near-miss', () => {
-    // Above the visual-exaggeration floor so framing == live distance.
-    const distanceKm = 200;
+  it('caps the model well under the real separation for a multi-km near-miss', () => {
+    const distanceKm = 2.565;
     const scale = conjunctionModelScale(distanceKm);
     const modelSizeKm = modelSizeSceneUnits(scale) / ORBIT_DISPLAY_SCALE;
-    const framingKm = getConjunctionFramingSeparationKm(distanceKm);
 
-    expect(modelSizeKm).toBeLessThan(framingKm);
-    expect(modelSizeKm).toBeLessThan(framingKm * 0.5);
+    expect(modelSizeKm).toBeLessThan(distanceKm);
+    expect(modelSizeKm).toBeLessThan(distanceKm * 0.5);
   });
 
-  it('shrinks as framed separation shrinks (wide vs mid-range)', () => {
-    const wide = conjunctionModelScale(500);
-    const mid = conjunctionModelScale(120);
-    expect(mid).toBeLessThan(wide);
+  it('shrinks further as the pair gets closer to their CPA', () => {
+    const wide = conjunctionModelScale(112);
+    const narrow = conjunctionModelScale(2.565);
+    expect(narrow).toBeLessThan(wide);
   });
 
-  it('keeps tight CPA models readable via the framing floor', () => {
-    const scale = conjunctionModelScale(0.22);
-    expect(scale).toBeGreaterThanOrEqual(0.12);
-    // Same framing floor as a few-km gap — models stay visible while zoomed in.
-    expect(conjunctionModelScale(2)).toBeCloseTo(scale, 5);
+  it('never shrinks below the absolute visibility floor', () => {
+    const scale = conjunctionModelScale(0.05);
+    expect(scale).toBeGreaterThanOrEqual(0.02);
   });
 
   it('never exceeds the default scale even for a very wide separation', () => {

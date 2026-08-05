@@ -18,7 +18,6 @@ import {
 import { propagateObject, type PropagationResult } from '../orbital/propagator';
 import type { TrackedObject, OrbitLayer, ObjectCategory } from '../types';
 import { ORBIT_DISPLAY_SCALE } from '../types';
-import { getConjunctionFramingSeparationKm } from '../orbital/visualConjunction';
 import { matchesSearchQuery } from '../state/appState';
 import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
 import { resolveModelKey } from './modelResolver';
@@ -28,10 +27,10 @@ const SELECTED_SCALE = 3;
 const DEFAULT_CONJUNCTION_SCALE = 2.2;
 /** Absolute floor so the model never shrinks to an unclickable speck even
  *  for a genuine near-collision (tens to low hundreds of meters apart). */
-const MIN_CONJUNCTION_SCALE = 0.12;
-/** Keep each model's rendered footprint under this fraction of the framed
- *  (possibly exaggerated) separation so the pair stays readable on screen. */
-const CONJUNCTION_SIZE_FRACTION_OF_SEPARATION = 0.3;
+const MIN_CONJUNCTION_SCALE = 0.02;
+/** Keep each model's footprint under this fraction of the *live* separation
+ *  so a multi-km near-miss still shows a visible gap (zoom manually to inspect). */
+const CONJUNCTION_SIZE_FRACTION_OF_SEPARATION = 0.25;
 const scratchVel = new Vector3();
 const scratchDir = new Vector3();
 const scratchUp = new Vector3();
@@ -292,18 +291,15 @@ export class OrbitalMeshes {
 }
 
 /**
- * The base satellite model is exaggerated to ~25km wide (TARGET_MODEL_SIZE)
- * so it's visible at normal global-view zoom. Cap the scale so each model's
- * footprint stays a modest fraction of the *framed* separation (including the
- * on-screen exaggeration floor). Using raw live km alone shrinks models to
- * invisible specks while the camera still frames the enlarged pair.
+ * Cap conjunction models by live separation so they shrink as the pair
+ * closes. The camera no longer auto-dollies — the user zooms manually for
+ * precise inspection while the gap stays honest in world space.
  */
 export function conjunctionModelScale(liveDistanceKm: number | null): number {
   if (liveDistanceKm == null || !Number.isFinite(liveDistanceKm) || liveDistanceKm <= 0) {
     return DEFAULT_CONJUNCTION_SCALE;
   }
-  const framingKm = getConjunctionFramingSeparationKm(liveDistanceKm);
-  const maxModelSizeScene = framingKm * ORBIT_DISPLAY_SCALE * CONJUNCTION_SIZE_FRACTION_OF_SEPARATION;
+  const maxModelSizeScene = liveDistanceKm * ORBIT_DISPLAY_SCALE * CONJUNCTION_SIZE_FRACTION_OF_SEPARATION;
   const distanceCappedScale = maxModelSizeScene / TARGET_MODEL_SIZE;
   return Math.min(DEFAULT_CONJUNCTION_SCALE, Math.max(MIN_CONJUNCTION_SCALE, distanceCappedScale));
 }
