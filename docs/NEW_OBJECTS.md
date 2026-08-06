@@ -8,7 +8,7 @@ It does **not** mean:
 
 - the object was launched in the last 14 days,
 - the object physically formed today,
-- the official SATCAT launch date,
+- the official SATCAT `LAUNCH_DATE` (SATCAT is used for **country/owner** enrichment in `tle.json`, not for this badge),
 - or a confirmed collision/breakup event.
 
 Analyst / `UNKNOWN` objects (e.g. CelesTrak analyst satellites) often appear here when Space Force publishes a new track.

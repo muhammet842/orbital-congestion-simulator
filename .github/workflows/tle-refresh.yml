@@ -30,7 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Fetch latest TLE data from CelesTrak
+      # fetch-tle.mjs also downloads satcat.csv and joins OWNER → country/owner.
+      - name: Fetch latest TLE + SATCAT enrichment from CelesTrak
         run: npm run fetch-tle
 
       - name: Commit and push updated dataset

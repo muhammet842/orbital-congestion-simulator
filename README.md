@@ -16,14 +16,16 @@ Explore orbit layers (LEO, MEO, GEO, HEO), filter by congestion type, click any 
 
 - **Live 3D globe** with instanced orbital points and day/night shading
 - **Orbit layers & filters** — LEO / MEO / GEO / HEO, satellites / stations / debris, search
+- **Object details** — altitude, velocity, country/owner, orbit trail, ground track, footprint
 - **Close-approach alerts** — next-24h scanning with verification UI
 - **Historical event replays** — seven landmark collisions, ASAT tests, docking, and breakups
 - **Kessler “Future Projection”** — interactive what-if debris growth panel
 - **Satellite Spotter** — mobile sky guide using device sensors
+- **Interactive how-to tour** — language gate + spotlight walkthrough (header `?`)
 - **i18n** — English, Turkish, German, Russian, Chinese
 - **Deep links** — `?object=<NORAD>` / `?event=<id>`
 - **Admin analytics overlay** (optional Firebase RTDB) — local PIN, visitor metrics
-- **Automated TLE refresh** — GitHub Actions twice weekly
+- **Automated TLE refresh** — GitHub Actions twice weekly (TLE + SATCAT country join)
 
 ## Why it matters
 
@@ -36,7 +38,7 @@ Earth orbit is increasingly crowded. More than 27,000 tracked objects share near
 | Build | Vite 6 + TypeScript (strict) |
 | 3D | Three.js |
 | Orbital mechanics | satellite.js (SGP4) |
-| Data | CelesTrak TLE (static JSON) |
+| Data | CelesTrak TLE + SATCAT (static `tle.json`) |
 | Deploy | [Vercel](https://orbital-congestion-simulator.vercel.app) |
 
 ## Getting started
@@ -59,15 +61,14 @@ Deep links: `?object=<NORAD>` and `?event=<id>`.
 
 ## Data source
 
-TLE data is fetched from [CelesTrak](https://celestrak.org/):
+Orbital elements and catalog metadata come from [CelesTrak](https://celestrak.org/):
 
-- Active satellites (capped at 7,000 — Starlink/OneWeb sub-capped to leave room for other constellations)
-- Debris catalog (capped at 3,000 — Cosmos 2251, Fengyun-1C, Iridium 33, analyst objects)
-- Space stations (ISS, Tiangong, etc.)
+- **TLE / GP** — active satellites (capped at 7,000 — Starlink/OneWeb sub-capped), debris (capped at 3,000 — Cosmos 2251, Fengyun-1C, Iridium 33, analyst objects), and stations (ISS, Tiangong, etc.)
+- **SATCAT** — one download of [`satcat.csv`](https://celestrak.org/pub/satcat.csv) joined by NORAD ID so each object can carry a **country** (and organization **owner** when SATCAT’s `OWNER` is an agency/consortium code). Name-based heuristics in `objectMetadata.ts` remain the fallback when SATCAT has no match or only supplies a country code (so operators like SpaceX can still come from the name).
 
 Output: `public/data/tle.json` — up to **10,000 objects**, deduplicated by NORAD ID.
 
-A [GitHub Actions workflow](.github/workflows/tle-refresh.yml) refreshes this dataset automatically twice a week (Monday & Thursday) and commits the result, so the deployed app stays under the in-app 3-day staleness warning threshold. To refresh it manually:
+A [GitHub Actions workflow](.github/workflows/tle-refresh.yml) runs `npm run fetch-tle` twice a week (Monday & Thursday), which refreshes TLEs **and** re-joins SATCAT, then commits `public/data/tle.json` so the deployed app stays under the in-app 3-day staleness warning. Manual refresh:
 
 ```bash
 npm run fetch-tle
@@ -75,7 +76,7 @@ npm run fetch-tle
 
 ### “NEW” objects filter
 
-Objects can carry a `firstSeenAt` stamp when they first appear in an automated fetch relative to the previous catalog snapshot. The UI filter **“New to this catalog”** uses that stamp — it means **first seen in this app’s TLE list within the last 14 days**, not the physical launch or formation date. Stamps accumulate across refreshes; a cold/empty baseline does not mark the whole catalog as new. See [docs/NEW_OBJECTS.md](docs/NEW_OBJECTS.md).
+Objects can carry a `firstSeenAt` stamp when they first appear in an automated fetch relative to the previous catalog snapshot. The UI filter **“New to this catalog”** uses that stamp — it means **first seen in this app’s TLE list within the last 14 days**, not the physical launch or formation date (and not SATCAT `LAUNCH_DATE`). Stamps accumulate across refreshes; a cold/empty baseline does not mark the whole catalog as new. See [docs/NEW_OBJECTS.md](docs/NEW_OBJECTS.md).
 
 ## Orbital mechanics
 

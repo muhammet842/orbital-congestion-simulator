@@ -14,5 +14,8 @@ Post-MVP capabilities shipped in this repository (beyond the original `CURSOR_PR
 | Deep links | `src/routing/deepLink.ts` (`?object=`, `?event=`) |
 | i18n (en/tr/de/ru/zh) | `src/i18n/` |
 | Newly tracked filter | `firstSeenAt` via `scripts/applyFirstSeenAt.mjs` |
+| SATCAT country / owner join | `scripts/enrichFromSatcat.mjs`, `scripts/satcatOwnerMap.mjs` (during `fetch-tle`) |
+| Ground track (selected object) | `src/scene/SatelliteGroundTrack.ts` |
+| Orbit trail / footprint | `SatelliteOrbitTrail`, `SatelliteFootprint` |
 
 See also [NEW_OBJECTS.md](./NEW_OBJECTS.md) and [OPERATIONS.md](./OPERATIONS.md).
