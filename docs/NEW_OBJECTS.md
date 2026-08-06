@@ -2,10 +2,11 @@
 
 ## What “NEW” means
 
-The cyan **NEW** badge and the “Show only newly tracked objects (last 14 days)” filter mark objects whose NORAD ID was **first observed by this app’s automated TLE fetch** within the last 14 days.
+The **NEW** badge and the **“New to this catalog”** filter mark objects whose NORAD ID was **first observed by this app’s automated TLE fetch** within the last 14 days.
 
 It does **not** mean:
 
+- the object was launched in the last 14 days,
 - the object physically formed today,
 - the official SATCAT launch date,
 - or a confirmed collision/breakup event.

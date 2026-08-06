@@ -423,10 +423,12 @@ function renderDisplayOptions(container: HTMLElement): void {
       class="filter-toggle-card${showOnlyRecentLaunches ? ' filter-toggle-card--on' : ''}"
       id="show-recent-launches"
       aria-pressed="${showOnlyRecentLaunches}"
+      title="${escapeHtml(t('badge.new_launch_title'))}"
     >
       <span class="new-launch-badge" aria-hidden="true">${t('badge.new_launch')}</span>
       <span class="filter-toggle-copy">
         <strong>${t('ui.recent_launches')}</strong>
+        <span class="muted">${t('ui.recent_launches_hint')}</span>
       </span>
     </button>
     `
