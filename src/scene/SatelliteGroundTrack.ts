@@ -15,16 +15,18 @@ import { propagateObject } from '../orbital/propagator';
 import type { TrackedObject, OrbitLayer } from '../types';
 
 /** Slightly higher than SURFACE_LIFT (1.001) to prevent z-fighting with Earth mesh. */
-const GT_LIFT = 1.004;
+export const GT_LIFT = 1.004;
 
-/** Number of forward-projection samples per orbit. */
-const SAMPLES_LEO = 240;
-const SAMPLES_GEO = 96;
+/**
+ * Chord length on the lifted unit sphere above which we treat the path as
+ * discontinuous (propagation hole). Normal HEO perigee motion is far below
+ * this — the old 0.14 threshold (~8°) wrongly shredded Molniya tracks into
+ * single-point segments that were then discarded.
+ */
+export const GAP_BREAK = 0.75;
 
-/** Angular jump threshold between consecutive samples (in scene units on unit sphere).
- *  Anything larger than ~0.15 units (≈8.6°) is treated as a date-line break and
- *  the line is split into a new segment. */
-const BREAK_DIST = 0.14;
+/** Max chord between rendered vertices (~2.3°) so straight Line segments hug the surface. */
+export const MAX_RENDER_CHORD = 0.04;
 
 const LAYER_COLORS: Record<OrbitLayer, number> = {
   LEO: 0x22d3ee,
@@ -33,11 +35,21 @@ const LAYER_COLORS: Record<OrbitLayer, number> = {
   HEO: 0xa78bfa,
 };
 
-function getOrbitalPeriodMs(satrec: SatRec): number {
+export function getOrbitalPeriodMs(satrec: SatRec): number {
   const no = satrec.no;
   if (!no || no <= 0) return 90 * 60 * 1000;
   const periodMs = ((2 * Math.PI) / no) * 60 * 1000;
   return Math.min(24 * 60 * 60 * 1000, Math.max(45 * 60 * 1000, periodMs));
+}
+
+/** Enough samples that HEO perigee still steps by only a few degrees. */
+export function groundTrackSampleCount(layer: OrbitLayer, totalMs: number): number {
+  if (layer === 'GEO') return 96;
+  // ≤45 s between samples; HEO floors higher because ground-track angular rate spikes at perigee.
+  const byTime = Math.ceil(totalMs / 45_000);
+  if (layer === 'HEO') return Math.max(720, byTime);
+  if (layer === 'MEO') return Math.max(360, byTime);
+  return Math.max(240, byTime);
 }
 
 /**
@@ -56,7 +68,7 @@ function getOrbitalPeriodMs(satrec: SatRec): number {
  *     ecef.z =  eci.z
  *   ECEF→Three.js Y-up local frame: (X=ECEF.X, Y=ECEF.Z, Z=−ECEF.Y)
  */
-function eciToEarthLocal(ex: number, ey: number, ez: number, gmst: number): Vector3 {
+export function eciToEarthLocal(ex: number, ey: number, ez: number, gmst: number): Vector3 {
   const r = Math.sqrt(ex * ex + ey * ey + ez * ez);
   if (r < 1e-9) return new Vector3(GT_LIFT, 0, 0);
   const s = GT_LIFT / r;
@@ -67,6 +79,65 @@ function eciToEarthLocal(ex: number, ey: number, ez: number, gmst: number): Vect
   const ecefZ = ez * s;
   // Y-up axis swap: Three.js local X = ECEF X, local Y = ECEF Z (north pole), local Z = −ECEF Y
   return new Vector3(ecefX, ecefZ, -ecefY);
+}
+
+/** Great-circle interpolation on a sphere of the given radius. */
+export function slerpOnSphere(a: Vector3, b: Vector3, t: number, radius: number): Vector3 {
+  const an = a.clone().normalize();
+  const bn = b.clone().normalize();
+  let dot = an.dot(bn);
+  dot = Math.min(1, Math.max(-1, dot));
+  const omega = Math.acos(dot);
+  if (omega < 1e-8) {
+    return an.multiplyScalar(radius);
+  }
+  const so = Math.sin(omega);
+  an.multiplyScalar(Math.sin((1 - t) * omega) / so);
+  bn.multiplyScalar(Math.sin(t * omega) / so);
+  return an.add(bn).multiplyScalar(radius);
+}
+
+/**
+ * Split only on true discontinuities. In ECEF, antimeridian crossings are
+ * continuous — do not break there.
+ */
+export function splitOnLargeGaps(pts: Vector3[], gapDist = GAP_BREAK): Vector3[][] {
+  const segments: Vector3[][] = [];
+  let seg: Vector3[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (i > 0 && pts[i].distanceTo(pts[i - 1]) > gapDist) {
+      if (seg.length >= 2) segments.push(seg);
+      seg = [];
+    }
+    seg.push(pts[i]);
+  }
+  if (seg.length >= 2) segments.push(seg);
+  return segments;
+}
+
+/** Insert spherical midpoints so consecutive vertices stay within maxChord. */
+export function densifySpherePolyline(
+  pts: Vector3[],
+  maxChord = MAX_RENDER_CHORD,
+  radius = GT_LIFT,
+): Vector3[] {
+  if (pts.length < 2) return pts.map((p) => p.clone());
+  // Step by central angle so great-circle chords stay ≤ maxChord (chord/radius
+  // underestimates the needed count on long arcs).
+  const maxAngle = Math.max(1e-6, maxChord / radius);
+  const out: Vector3[] = [pts[0].clone()];
+  for (let i = 1; i < pts.length; i++) {
+    const a = out[out.length - 1];
+    const b = pts[i];
+    const an = a.clone().normalize();
+    const bn = b.clone().normalize();
+    const omega = Math.acos(Math.min(1, Math.max(-1, an.dot(bn))));
+    const steps = Math.max(1, Math.ceil(omega / maxAngle));
+    for (let s = 1; s <= steps; s++) {
+      out.push(slerpOnSphere(a, b, s / steps, radius));
+    }
+  }
+  return out;
 }
 
 export class SatelliteGroundTrack {
@@ -140,7 +211,7 @@ export class SatelliteGroundTrack {
     // LEO/HEO: 1.5 orbits forward; MEO: 1.0; GEO: 1.0 (analemma)
     const numOrbits = obj.layer === 'GEO' || obj.layer === 'MEO' ? 1.0 : 1.5;
     const totalMs = periodMs * numOrbits;
-    const samples = obj.layer === 'GEO' ? SAMPLES_GEO : SAMPLES_LEO;
+    const samples = groundTrackSampleCount(obj.layer, totalMs);
 
     // Collect sub-satellite points in Earth-local coordinates
     const pts: Vector3[] = [];
@@ -175,17 +246,7 @@ export class SatelliteGroundTrack {
       return;
     }
 
-    // Split into segments where the date-line (or any large angular gap) occurs
-    const segments: Vector3[][] = [];
-    let seg: Vector3[] = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      if (pts[i].distanceTo(pts[i - 1]) > BREAK_DIST) {
-        if (seg.length >= 2) segments.push(seg);
-        seg = [];
-      }
-      seg.push(pts[i]);
-    }
-    if (seg.length >= 2) segments.push(seg);
+    const segments = splitOnLargeGaps(pts).map((seg) => densifySpherePolyline(seg));
 
     // Build one Line per segment
     const mat = new LineBasicMaterial({
