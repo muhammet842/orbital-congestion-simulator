@@ -16,6 +16,11 @@ interface MetadataRule {
   owner: string;
 }
 
+/**
+ * Name / NORAD heuristics used only when tle.json has no country/owner.
+ * Prefer SATCAT OWNER enrichment written by `scripts/fetch-tle.mjs`
+ * (see `scripts/enrichFromSatcat.mjs`); these rules are the fallback.
+ */
 /** Most specific patterns first — first match wins. */
 const NAME_RULES: MetadataRule[] = [
   { pattern: /GOKTURK|GÖKTÜRK/i, country: 'Türkiye 🇹🇷', owner: 'TSK / TAI' },

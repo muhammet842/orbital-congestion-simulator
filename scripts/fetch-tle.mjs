@@ -1,4 +1,5 @@
 import { applyFirstSeenAt } from './applyFirstSeenAt.mjs';
+import { applySatcatOwners, fetchSatcatOwnerMap } from './enrichFromSatcat.mjs';
 
 const STATION_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', category: 'stations' },
@@ -482,6 +483,21 @@ async function main() {
     console.log(`  new-launch stamping skipped (${skippedReason})`);
   }
   console.log(`  new since last fetch: ${newlyLaunchedCount} object(s)`);
+
+  // Join CelesTrak SATCAT OWNER → country (and org owner when applicable).
+  // One CSV download covers the full catalog; name heuristics remain the
+  // runtime fallback in objectMetadata.ts when a field is still missing.
+  console.log('Enriching country/owner from SATCAT…');
+  try {
+    await sleep(FETCH_DELAY_MS);
+    const ownerByNorad = await fetchSatcatOwnerMap(fetch, { headers: REQUEST_HEADERS });
+    const { matched, unmatched, withOwner } = applySatcatOwners(seen, ownerByNorad);
+    console.log(
+      `  satcat: ${ownerByNorad.size} catalog rows → ${matched} matched, ${unmatched} unmatched, ${withOwner} with org owner`,
+    );
+  } catch (err) {
+    console.warn(`  satcat enrichment failed — ${err.message} (heuristics will fill gaps)`);
+  }
 
   const allObjects = Array.from(seen.values()).sort((a, b) => {
     const rank = { stations: 0, active: 1, debris: 2 };

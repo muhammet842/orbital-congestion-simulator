@@ -97,4 +97,31 @@ describe('enrichRecord', () => {
     expect(enriched.country).toBe('USA 🇺🇸');
     expect(enriched.owner).toBe('SpaceX');
   });
+
+  it('keeps SATCAT country and fills operator from name heuristics when owner is absent', () => {
+    // Country-code SATCAT owners (US, SVK, …) only write `country` into
+    // tle.json so constellation heuristics can still supply SpaceX etc.
+    const record = {
+      name: 'STARLINK-3938',
+      category: 'active' as const,
+      noradId: 1,
+      country: 'USA 🇺🇸',
+    };
+    const enriched = enrichRecord(record);
+    expect(enriched.country).toBe('USA 🇺🇸');
+    expect(enriched.owner).toBe('SpaceX');
+  });
+
+  it('attributes MARINA via SATCAT country even without a name-rule owner', () => {
+    const record = {
+      name: 'MARINA',
+      category: 'active' as const,
+      noradId: 69920,
+      country: 'Slovakia 🇸🇰',
+    };
+    const enriched = enrichRecord(record);
+    expect(enriched.country).toBe('Slovakia 🇸🇰');
+    // Featured override / name rule still supplies a better operator label.
+    expect(enriched.owner).toBe('Amateur radio (OM9MAR)');
+  });
 });
