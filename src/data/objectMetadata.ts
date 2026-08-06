@@ -73,6 +73,7 @@ const NAME_RULES: MetadataRule[] = [
   { pattern: /ANGOSAT|AMAZONIA|SGDC|STAR ONE|SCD/i, country: 'Brazil 🇧🇷', owner: 'AEB / INPE' },
   { pattern: /AFRICASAT|NILESAT|NIGCOMSAT/i, country: 'Africa 🌍', owner: 'Regional Operator' },
   { pattern: /OPTUS|SKY MIMO|SKYMED/i, country: 'Australia 🇦🇺', owner: 'Optus / CSIRO' },
+  { pattern: /^MARINA$|OM9MAR/i, country: 'Slovakia 🇸🇰', owner: 'Amateur radio (OM9MAR)' },
 ];
 
 const FEATURED_OVERRIDES = new Map<number, { country: string; owner: string }>([
@@ -85,6 +86,8 @@ const FEATURED_OVERRIDES = new Map<number, { country: string; owner: string }>([
   [47306, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
   [50212, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
   [60233, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
+  // Amateur radio cubesat (OM9MAR); origin Slovakia — SatNOGS / IARU.
+  [69920, { country: 'Slovakia 🇸🇰', owner: 'Amateur radio (OM9MAR)' }],
 ]);
 
 function hasValue(value: string | undefined): value is string {
