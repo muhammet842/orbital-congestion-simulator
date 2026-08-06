@@ -50,6 +50,8 @@ let stepIndex = 0;
 let langUnsub: (() => void) | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let repositionRaf = 0;
+let boundScrollParents: HTMLElement[] = [];
+let scrollGuardRaf = 0;
 
 function hasSeenGuide(): boolean {
   try {
@@ -98,8 +100,11 @@ export function closeHowToGuide(): void {
   document.removeEventListener('keydown', handleEsc, true);
   window.removeEventListener('resize', scheduleReposition);
   window.removeEventListener('scroll', scheduleReposition, true);
+  unbindScrollParents();
   if (repositionRaf) cancelAnimationFrame(repositionRaf);
   repositionRaf = 0;
+  if (scrollGuardRaf) cancelAnimationFrame(scrollGuardRaf);
+  scrollGuardRaf = 0;
   resizeObserver?.disconnect();
   resizeObserver = null;
   langUnsub?.();
@@ -149,6 +154,92 @@ function scheduleReposition(): void {
   });
 }
 
+/** Nearest ancestor that actually scrolls (panel overflow), if any. */
+function getScrollParent(el: HTMLElement): HTMLElement | null {
+  let parent = el.parentElement;
+  while (parent && parent !== document.body) {
+    const style = window.getComputedStyle(parent);
+    const overflowY = style.overflowY;
+    const canScroll =
+      (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+      parent.scrollHeight > parent.clientHeight + 1;
+    if (canScroll) return parent;
+    parent = parent.parentElement;
+  }
+  return null;
+}
+
+function scrollTargetIntoView(target: HTMLElement): void {
+  const parent = getScrollParent(target);
+  if (!parent) {
+    if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+    }
+    return;
+  }
+
+  const parentRect = parent.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const delta =
+    targetRect.top - parentRect.top - (parentRect.height - targetRect.height) / 2;
+  parent.scrollTop += delta;
+}
+
+function unbindScrollParents(): void {
+  for (const el of boundScrollParents) {
+    el.removeEventListener('scroll', handleTourParentScroll);
+  }
+  boundScrollParents = [];
+}
+
+function bindScrollParent(target: HTMLElement | null): void {
+  unbindScrollParents();
+  if (!target) return;
+  const parent = getScrollParent(target);
+  if (!parent) return;
+  parent.addEventListener('scroll', handleTourParentScroll, { passive: true });
+  boundScrollParents.push(parent);
+}
+
+/** If the user scrolls the spotlight away, pull it back and re-place the hole. */
+function handleTourParentScroll(): void {
+  if (!rootEl || phase !== 'tour') return;
+  if (scrollGuardRaf) cancelAnimationFrame(scrollGuardRaf);
+  scrollGuardRaf = requestAnimationFrame(() => {
+    scrollGuardRaf = 0;
+    const config = STEP_CONFIG[stepIndex];
+    if (!config) return;
+    const target = document.querySelector<HTMLElement>(config.target);
+    if (!target) return;
+
+    const parent = getScrollParent(target);
+    const visible = getVisibleTargetRect(target, parent);
+    if (!visible) {
+      scrollTargetIntoView(target);
+    }
+    positionHighlightAndCard();
+  });
+}
+
+type HoleRect = { top: number; left: number; width: number; height: number };
+
+/** Target box clipped to its scroll parent’s visible area (null if fully scrolled away). */
+function getVisibleTargetRect(target: HTMLElement, parent: HTMLElement | null): HoleRect | null {
+  const rect = target.getBoundingClientRect();
+  if (!parent) {
+    return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  }
+  const pr = parent.getBoundingClientRect();
+  const top = Math.max(rect.top, pr.top + 4);
+  const left = Math.max(rect.left, pr.left + 4);
+  const right = Math.min(rect.right, pr.right - 4);
+  const bottom = Math.min(rect.bottom, pr.bottom - 4);
+  const width = right - left;
+  const height = bottom - top;
+  if (width < 24 || height < 24) return null;
+  return { top, left, width, height };
+}
+
 function prepareStep(config: StepConfig): HTMLElement | null {
   cleanupStepSideEffects();
   if (config.panel) setTourPanel(config.panel);
@@ -157,13 +248,12 @@ function prepareStep(config: StepConfig): HTMLElement | null {
   // Prefer the live panel when present; fall back to the header trigger.
   const target =
     document.querySelector<HTMLElement>(config.target) ??
-    (config.openKessler ? document.querySelector<HTMLElement>('#kessler-panel-btn') : null);
+    (config.openKessler ? document.querySelector<HTMLButtonElement>('#kessler-panel-btn') : null);
   if (!target) return null;
 
   target.classList.add('tour-target--lit');
-  if (typeof target.scrollIntoView === 'function') {
-    target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-  }
+  scrollTargetIntoView(target);
+  bindScrollParent(target);
   return target;
 }
 
@@ -175,7 +265,7 @@ function setPadsHidden(hidden: boolean): void {
   }
 }
 
-function layoutPads(hole: { top: number; left: number; width: number; height: number }): void {
+function layoutPads(hole: HoleRect): void {
   if (!rootEl) return;
   const top = rootEl.querySelector<HTMLElement>('#tour-pad-top')!;
   const left = rootEl.querySelector<HTMLElement>('#tour-pad-left')!;
@@ -227,24 +317,37 @@ function positionHighlightAndCard(): void {
     return;
   }
 
+  const parent = getScrollParent(target);
+  let hole = getVisibleTargetRect(target, parent);
+  if (!hole) {
+    scrollTargetIntoView(target);
+    hole = getVisibleTargetRect(target, parent);
+  }
+  if (!hole) {
+    highlight.hidden = true;
+    setPadsHidden(true);
+    dim.classList.add('tour-dim--full');
+    placeCardCentered(card);
+    return;
+  }
+
   dim.classList.remove('tour-dim--full');
   highlight.hidden = false;
 
   const pad = 8;
-  const rect = target.getBoundingClientRect();
-  const top = Math.max(8, rect.top - pad);
-  const left = Math.max(8, rect.left - pad);
-  const width = Math.min(window.innerWidth - left - 8, rect.width + pad * 2);
-  const height = Math.min(window.innerHeight - top - 8, rect.height + pad * 2);
-  const hole = { top, left, width, height };
+  const top = Math.max(8, hole.top - pad);
+  const left = Math.max(8, hole.left - pad);
+  const width = Math.min(window.innerWidth - left - 8, hole.width + pad * 2);
+  const height = Math.min(window.innerHeight - top - 8, hole.height + pad * 2);
+  const framed: HoleRect = { top, left, width, height };
 
   highlight.style.top = `${top}px`;
   highlight.style.left = `${left}px`;
   highlight.style.width = `${width}px`;
   highlight.style.height = `${height}px`;
-  layoutPads(hole);
+  layoutPads(framed);
 
-  placeCardNear(card, hole);
+  placeCardNear(card, framed);
 }
 
 function placeCardCentered(card: HTMLElement): void {
@@ -436,6 +539,7 @@ function renderTour(): void {
 
   if (phase === 'lang') {
     cleanupStepSideEffects();
+    unbindScrollParents();
     highlight.hidden = true;
     setPadsHidden(true);
     dim.classList.add('tour-dim--full');

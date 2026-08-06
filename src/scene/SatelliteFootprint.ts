@@ -14,9 +14,9 @@ import { getSubSatelliteScenePoints, SURFACE_LIFT } from '../orbital/coordinates
 import { propagateObject } from '../orbital/propagator';
 import type { TrackedObject } from '../types';
 
-const SWATH_COLOR = 0xe8a45a;
-const CONE_OPACITY = 0.18;
-const RING_OPACITY = 0.72;
+const SWATH_COLOR = 0xc9b896;
+const CONE_OPACITY = 0.16;
+const RING_OPACITY = 0.58;
 
 /** Unit cone (height = 1, radius = 1) with apex at local origin, body opening along −Y. */
 const UNIT_CONE_HEIGHT = 1;

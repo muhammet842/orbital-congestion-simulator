@@ -25,10 +25,10 @@ function mountAppShell(): void {
         </div>
       </div>
     </header>
-    <aside id="left-panel" class="panel panel-left">
-      <div id="tour-region-search"></div>
-      <div id="tour-region-approaches"></div>
-      <div class="event-cards"></div>
+    <aside id="left-panel" class="panel panel-left" style="overflow-y: auto; height: 200px;">
+      <div id="tour-region-search" style="height: 120px;"></div>
+      <div id="tour-region-approaches" style="height: 120px;"></div>
+      <div class="event-cards" style="height: 120px;"></div>
     </aside>
     <main id="scene-container" class="scene-container"></main>
     <aside id="right-panel" class="panel panel-right"></aside>
