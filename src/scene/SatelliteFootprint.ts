@@ -14,7 +14,7 @@ import { getSubSatelliteScenePoints, SURFACE_LIFT } from '../orbital/coordinates
 import { propagateObject } from '../orbital/propagator';
 import type { TrackedObject } from '../types';
 
-const SWATH_COLOR = 0x22d3ee;
+const SWATH_COLOR = 0xe8a45a;
 const CONE_OPACITY = 0.18;
 const RING_OPACITY = 0.72;
 

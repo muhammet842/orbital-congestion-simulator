@@ -549,7 +549,7 @@ function drawRadar(
   ctx.fillStyle = 'rgba(8, 18, 36, 0.95)';
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(34, 211, 238, 0.3)';
+  ctx.strokeStyle = 'rgba(232, 164, 90, 0.3)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
@@ -591,12 +591,12 @@ function drawRadar(
     const tx = cx + Math.sin(relAz) * rr;
     const ty = cy - Math.cos(relAz) * rr;
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
+    ctx.strokeStyle = 'rgba(232, 164, 90, 0.35)';
     ctx.moveTo(cx, cy);
     ctx.lineTo(tx, ty);
     ctx.stroke();
     ctx.beginPath();
-    ctx.fillStyle = 'rgba(34, 211, 238, 0.95)';
+    ctx.fillStyle = 'rgba(232, 164, 90, 0.95)';
     ctx.arc(tx, ty, 6, 0, Math.PI * 2);
     ctx.fill();
   }

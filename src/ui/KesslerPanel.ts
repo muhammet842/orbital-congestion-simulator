@@ -591,8 +591,8 @@ function drawChart(
   ctx.lineTo(xAt(timeline.length - 1), yAt(0));
   ctx.closePath();
   const gradient = ctx.createLinearGradient(0, padT, 0, padT + plotH);
-  gradient.addColorStop(0, 'rgba(34,211,238,0.28)');
-  gradient.addColorStop(1, 'rgba(34,211,238,0.02)');
+  gradient.addColorStop(0, 'rgba(232, 164, 90,0.28)');
+  gradient.addColorStop(1, 'rgba(232, 164, 90,0.02)');
   ctx.fillStyle = gradient;
   ctx.fill();
 
@@ -616,7 +616,7 @@ function drawChart(
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
-  ctx.strokeStyle = '#22d3ee';
+  ctx.strokeStyle = '#e8a45a';
   ctx.lineWidth = 2;
   ctx.stroke();
 
@@ -660,7 +660,7 @@ function drawDensity(ctx: CanvasRenderingContext2D, width: number, height: numbe
   const bandRadii = [maxRadius * 0.38, maxRadius * 0.66, maxRadius * 0.92];
   const bandJitter = [maxRadius * 0.12, maxRadius * 0.07, maxRadius * 0.035];
   const bandColors = [
-    'rgba(34,211,238,0.88)',
+    'rgba(232, 164, 90,0.88)',
     'rgba(96,165,250,0.85)',
     'rgba(167,139,250,0.8)',
   ];

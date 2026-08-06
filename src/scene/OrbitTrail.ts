@@ -15,7 +15,7 @@ import type { TrackedObject } from '../types';
 const ORBIT_SAMPLES = 180;
 const MIN_PERIOD_MS = 45 * 60 * 1000;
 const MAX_PERIOD_MS = 24 * 60 * 60 * 1000;
-const TRAIL_COLOR = new Color(0x22d3ee);
+const TRAIL_COLOR = new Color(0xe8a45a);
 
 function getOrbitalPeriodMs(satrec: SatRec): number {
   const no = satrec.no;

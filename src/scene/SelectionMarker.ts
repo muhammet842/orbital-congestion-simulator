@@ -42,7 +42,7 @@ export class SelectionMarker {
     this.ring = new Mesh(
       new RingGeometry(MARKER_RING_INNER, MARKER_RING_OUTER, 48),
       new MeshBasicMaterial({
-        color: 0x22d3ee,
+        color: 0xe8a45a,
         transparent: true,
         opacity: 0.9,
         side: DoubleSide,
@@ -54,7 +54,7 @@ export class SelectionMarker {
     this.nadirDot = new Mesh(
       new SphereGeometry(NADIR_DOT_RADIUS, 12, 12),
       new MeshBasicMaterial({
-        color: 0x22d3ee,
+        color: 0xe8a45a,
         transparent: true,
         opacity: 0.85,
         toneMapped: false,
@@ -68,7 +68,7 @@ export class SelectionMarker {
     this.line = new Line(
       lineGeometry,
       new LineBasicMaterial({
-        color: 0x22d3ee,
+        color: 0xe8a45a,
         transparent: true,
         opacity: 0.45,
         toneMapped: false,
