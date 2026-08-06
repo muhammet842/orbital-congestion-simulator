@@ -16,6 +16,6 @@ Post-MVP capabilities shipped in this repository (beyond the original `CURSOR_PR
 | Newly tracked filter | `firstSeenAt` via `scripts/applyFirstSeenAt.mjs` |
 | SATCAT country / owner join | `scripts/enrichFromSatcat.mjs`, `scripts/satcatOwnerMap.mjs` (during `fetch-tle`) |
 | Ground track (selected object) | `src/scene/SatelliteGroundTrack.ts` |
-| Orbit trail / footprint | `SatelliteOrbitTrail`, `SatelliteFootprint` |
+| Orbit trail / footprint | `src/scene/OrbitTrail.ts`, `src/scene/SatelliteFootprint.ts` |
 
 See also [NEW_OBJECTS.md](./NEW_OBJECTS.md) and [OPERATIONS.md](./OPERATIONS.md).
