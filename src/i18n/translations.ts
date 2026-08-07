@@ -812,7 +812,7 @@ const tr: Translations = {
   'spotter.photo_daytime':        'Işık: gündüz gökyüzü — yön bulma çalışır ama çoğu uydu çıplak gözle görünmez.',
   'spotter.photo_dim':            'Işık: ufuk üstünde ama net bir çıplak göz penceresi değil.',
   'spotter.photo_good_short':     'Güneşte + karanlık gökyüzü — en iyi çıplak göz şansı',
-  'spotter.photo_eclipse_short':  'Dünya gölgesinde — genelde görünmez',
+  'spotter.photo_eclipse_short':  'Uydu Dünya gölgesinde (güneş yok) — genelde görünmez',
   'spotter.photo_daytime_short':  'Gündüz gökyüzü — gözle görmek zor',
   'spotter.photo_dim_short':      'Ufuk üstünde, net çıplak göz penceresi yok',
   'spotter.pass_none':            'Bu konumdan sonraki ~6 saatte geçiş öngörülmedi.',
