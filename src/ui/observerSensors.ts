@@ -5,7 +5,11 @@
  * Compass uses DeviceOrientationEvent (iOS requires an explicit permission grant).
  *
  * Orientation updates write into a mutable snapshot without notifying listeners on
- * every sensor tick — the spotter rAF loop polls instead (avoids UI jank).
+ * every sensor tick — the Spotter interval polls instead (avoids UI jank).
+ *
+ * Heading is only trusted from iOS `webkitCompassHeading` or
+ * `deviceorientationabsolute`. Plain relative `deviceorientation` uses an
+ * arbitrary reference frame and must not drive turn cues.
  */
 
 import type { ObserverLocation } from '../orbital/lookAngles';
@@ -21,6 +25,13 @@ const ORIENT_EPSILON_DEG = 0.15;
 const ORIENT_SMOOTH = 0.35;
 /** Horizontal GPS accuracy above this (meters) is treated as “poor”. */
 export const GPS_ACCURACY_WARN_M = 80;
+/**
+ * If absolute orientation goes silent this long, drop sticky absolute preference
+ * and clear heading (do not fall back to relative-as-compass).
+ */
+export const ABSOLUTE_HEADING_STALE_MS = 2_500;
+
+export type HeadingSource = 'webkit' | 'absolute' | null;
 
 export interface SensorSnapshot {
   location: ObserverLocation | null;
@@ -30,6 +41,10 @@ export interface SensorSnapshot {
   accuracyMeters: number | null;
   /** True-north heading in degrees (magnetic compass corrected by WMM declination). */
   headingDeg: number | null;
+  /** True when headingDeg comes from webkit or absolute orientation (safe for turn cues). */
+  headingReliable: boolean;
+  /** Which trusted API produced the current heading. */
+  headingSource: HeadingSource;
   /**
    * Phone look elevation above the horizon (degrees): 0 = horizon, 90 = zenith.
    * Derived from device beta/gamma (top-edge aim while screen faces the user).
@@ -48,8 +63,11 @@ let orientationBound = false;
 let listeners = new Set<Listener>();
 /** Last heading accepted outside gimbal lock (looking straight up). */
 let lastStableHeadingDeg: number | null = null;
+let lastStableHeadingSource: Exclude<HeadingSource, null> | null = null;
 /** Prefer absolute events when the browser provides them (Android). */
 let preferAbsoluteHeading = false;
+/** Last time a trusted absolute/webkit heading sample arrived. */
+let lastTrustedHeadingMs = 0;
 /** Smoothed magnetic heading before WMM true-north correction. */
 let smoothedMagneticHeading: number | null = null;
 let smoothedPitch: number | null = null;
@@ -60,6 +78,8 @@ let snapshot: SensorSnapshot = {
   locationError: null,
   accuracyMeters: null,
   headingDeg: null,
+  headingReliable: false,
+  headingSource: null,
   pitchDeg: null,
   declinationDeg: null,
   headingError: null,
@@ -170,7 +190,7 @@ function smoothLinear(prev: number | null, next: number, alpha: number): number 
 }
 
 /**
- * Compass heading (degrees from true/magnetic north) that stays stable when the
+ * Compass heading (degrees from magnetic north) that stays stable when the
  * phone is tilted to look at the sky — unlike raw `360 - alpha`, which flips
  * around β ≈ ±90° (gimbal lock).
  *
@@ -212,7 +232,7 @@ export function lookElevationFromEuler(beta: number, gamma: number): number {
   return clamp(90 - screenNormalElev, -90, 90);
 }
 
-function screenOrientationOffsetDeg(): number {
+export function screenOrientationOffsetDeg(): number {
   if (typeof window === 'undefined') return 0;
   const so = window.screen?.orientation?.angle;
   if (typeof so === 'number' && Number.isFinite(so)) return so;
@@ -221,38 +241,57 @@ function screenOrientationOffsetDeg(): number {
   return 0;
 }
 
+export interface ParsedOrientationHeading {
+  /** Magnetic heading degrees [0, 360), already screen-orientation compensated. */
+  heading: number;
+  source: Exclude<HeadingSource, null>;
+}
+
 /**
- * Extract compass heading (degrees from north) from a DeviceOrientation event.
- * Prefers iOS webkitCompassHeading; otherwise uses alpha/beta/gamma so looking
- * up past ~90° does not invert the dial.
+ * Extract a *trusted* compass heading from a DeviceOrientation event.
+ * Returns null for untrusted relative-only Euler frames (arbitrary zero).
  */
-export function headingFromOrientationEvent(event: DeviceOrientationEvent): number | null {
+export function headingFromOrientationEvent(
+  event: DeviceOrientationEvent,
+  opts: { treatAsAbsolute?: boolean } = {},
+): ParsedOrientationHeading | null {
   const beta = typeof event.beta === 'number' && Number.isFinite(event.beta) ? event.beta : null;
 
   // Near zenith pointing, Euler angles are singular — keep last stable heading.
   if (beta != null && Math.abs(beta) >= GIMBAL_LOCK_BETA_DEG) {
-    return lastStableHeadingDeg;
+    if (lastStableHeadingDeg == null || lastStableHeadingSource == null) return null;
+    return { heading: lastStableHeadingDeg, source: lastStableHeadingSource };
   }
 
   const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
   if (typeof webkit === 'number' && Number.isFinite(webkit)) {
-    // iOS heading is relative to the top of the device; compensate screen rotation.
+    // iOS heading is relative to the top of the device; compensate screen rotation
+    // so “top of the UI” matches the radar/turn cues.
     const heading = wrap360(webkit - screenOrientationOffsetDeg());
     lastStableHeadingDeg = heading;
-    return heading;
+    lastStableHeadingSource = 'webkit';
+    return { heading, source: 'webkit' };
+  }
+
+  const trustedAbsolute = opts.treatAsAbsolute === true || event.absolute === true;
+  if (!trustedAbsolute) {
+    // Relative deviceorientation without webkitCompassHeading is not a compass.
+    return null;
   }
 
   if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) return null;
 
   const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
   const b = beta ?? 0;
-  const heading =
+  const raw =
     beta != null
       ? compassHeadingFromEuler(event.alpha, b, gamma)
       : wrap360(360 - event.alpha);
-
+  // Same screen-angle compensation as the webkit path (landscape Android).
+  const heading = wrap360(raw - screenOrientationOffsetDeg());
   lastStableHeadingDeg = heading;
-  return heading;
+  lastStableHeadingSource = 'absolute';
+  return { heading, source: 'absolute' };
 }
 
 export function pitchFromOrientationEvent(event: DeviceOrientationEvent): number | null {
@@ -308,64 +347,122 @@ export function stopGeolocation(): void {
   }
 }
 
+function nowMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
 function onOrientationAbsolute(event: DeviceOrientationEvent): void {
   preferAbsoluteHeading = true;
-  applyOrientation(event);
+  lastTrustedHeadingMs = nowMs();
+  applyOrientation(event, { treatAsAbsolute: true });
 }
 
 function onOrientationRelative(event: DeviceOrientationEvent): void {
-  if (preferAbsoluteHeading) return;
-  applyOrientation(event);
+  if (preferAbsoluteHeading) {
+    if (nowMs() - lastTrustedHeadingMs > ABSOLUTE_HEADING_STALE_MS) {
+      // Absolute stream died — do not silently fall back to relative-as-compass.
+      preferAbsoluteHeading = false;
+      clearTrustedHeading('stale');
+      applyPitchOnly(event);
+      return;
+    }
+    // Absolute is healthy: still update pitch from relative (often higher rate).
+    applyPitchOnly(event);
+    return;
+  }
+  applyOrientation(event, { treatAsAbsolute: false });
+}
+
+function clearTrustedHeading(reason: string): void {
+  smoothedMagneticHeading = null;
+  snapshot = {
+    ...snapshot,
+    headingDeg: null,
+    headingReliable: false,
+    headingSource: null,
+    headingError: reason,
+  };
+}
+
+function applyPitchOnly(event: DeviceOrientationEvent): void {
+  const rawPitch = pitchFromOrientationEvent(event);
+  if (rawPitch == null) return;
+  smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
+  const prevP = snapshot.pitchDeg;
+  if (prevP != null && Math.abs(prevP - smoothedPitch) < ORIENT_EPSILON_DEG) return;
+  snapshot = {
+    ...snapshot,
+    pitchDeg: smoothedPitch,
+    orientationPermission: 'granted',
+  };
 }
 
 /** Write smoothed orientation into snapshot without notifying listeners. */
-function applyOrientation(event: DeviceOrientationEvent): void {
-  const rawMagnetic = headingFromOrientationEvent(event);
+function applyOrientation(
+  event: DeviceOrientationEvent,
+  opts: { treatAsAbsolute: boolean },
+): void {
+  const parsed = headingFromOrientationEvent(event, opts);
   const rawPitch = pitchFromOrientationEvent(event);
 
-  if (rawMagnetic == null && rawPitch == null) {
-    if (snapshot.headingError !== 'unavailable') {
+  if (parsed == null && rawPitch == null) {
+    if (snapshot.headingError !== 'unavailable' && snapshot.headingDeg == null) {
       setPartial({ headingError: 'unavailable' }, false);
     }
     return;
   }
 
-  if (rawMagnetic != null) {
+  if (parsed != null) {
     smoothedMagneticHeading = smoothAngle360(
       smoothedMagneticHeading,
-      rawMagnetic,
+      parsed.heading,
       ORIENT_SMOOTH,
     );
+    lastTrustedHeadingMs = nowMs();
+  } else if (snapshot.headingDeg == null && snapshot.headingError !== 'needs_compass') {
+    // Pitch-only relative stream — tell the UI that turn cues are unavailable.
+    snapshot = {
+      ...snapshot,
+      headingReliable: false,
+      headingSource: null,
+      headingError: 'needs_compass',
+    };
   }
+
   if (rawPitch != null) {
     smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
   }
 
-  const nextTrue = toTrueHeading(smoothedMagneticHeading);
-  const nextPitch = smoothedPitch;
+  const nextTrue = parsed != null ? toTrueHeading(smoothedMagneticHeading) : snapshot.headingDeg;
+  const nextPitch = smoothedPitch ?? snapshot.pitchDeg;
   const prevH = snapshot.headingDeg;
   const prevP = snapshot.pitchDeg;
 
   const headingChanged =
+    parsed != null &&
     nextTrue != null &&
     (prevH == null || Math.abs(signedDeltaDeg(prevH, nextTrue)) >= ORIENT_EPSILON_DEG);
   const pitchChanged =
     nextPitch != null && (prevP == null || Math.abs(prevP - nextPitch) >= ORIENT_EPSILON_DEG);
 
-  if (!headingChanged && !pitchChanged) return;
+  if (!headingChanged && !pitchChanged && parsed == null) return;
 
   const loc = snapshot.location;
   const declinationDeg =
     loc != null
       ? trueHeadingAtLocationDeg(0, loc.latitudeDeg, loc.longitudeDeg, loc.altitudeKm ?? 0)
-      : null;
+      : snapshot.declinationDeg;
 
   snapshot = {
     ...snapshot,
-    headingDeg: nextTrue,
+    headingDeg: parsed != null ? nextTrue : snapshot.headingDeg,
+    headingReliable: parsed != null || snapshot.headingReliable,
+    headingSource: parsed?.source ?? snapshot.headingSource,
     pitchDeg: nextPitch,
     declinationDeg,
-    headingError: null,
+    headingError: parsed != null ? null : snapshot.headingError,
     orientationPermission: 'granted',
   };
 }
@@ -384,7 +481,7 @@ function toTrueHeading(magnetic: number | null): number | null {
 
 /** Re-apply WMM correction after GPS/manual location changes. */
 function refreshTrueHeadingFromMagnetic(): void {
-  if (smoothedMagneticHeading == null) return;
+  if (smoothedMagneticHeading == null || !snapshot.headingReliable) return;
   const nextTrue = toTrueHeading(smoothedMagneticHeading);
   const loc = snapshot.location;
   const declinationDeg =
@@ -441,12 +538,16 @@ export function stopOrientation(): void {
     orientationBound = false;
   }
   lastStableHeadingDeg = null;
+  lastStableHeadingSource = null;
   preferAbsoluteHeading = false;
+  lastTrustedHeadingMs = 0;
   smoothedMagneticHeading = null;
   smoothedPitch = null;
   snapshot = {
     ...snapshot,
     headingDeg: null,
+    headingReliable: false,
+    headingSource: null,
     pitchDeg: null,
     declinationDeg: null,
   };
@@ -462,4 +563,23 @@ export function startObserverSensors(): void {
 export function stopObserverSensors(): void {
   stopGeolocation();
   stopOrientation();
+}
+
+/** Test helper — reset module-level orientation state between cases. */
+export function __resetOrientationStateForTests(): void {
+  lastStableHeadingDeg = null;
+  lastStableHeadingSource = null;
+  preferAbsoluteHeading = false;
+  lastTrustedHeadingMs = 0;
+  smoothedMagneticHeading = null;
+  smoothedPitch = null;
+  snapshot = {
+    ...snapshot,
+    headingDeg: null,
+    headingReliable: false,
+    headingSource: null,
+    pitchDeg: null,
+    declinationDeg: null,
+    headingError: null,
+  };
 }

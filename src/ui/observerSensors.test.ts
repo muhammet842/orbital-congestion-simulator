@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  __resetOrientationStateForTests,
   compassHeadingFromEuler,
   headingFromOrientationEvent,
   lookElevationFromEuler,
   pitchFromOrientationEvent,
+  screenOrientationOffsetDeg,
 } from './observerSensors';
+
+beforeEach(() => {
+  __resetOrientationStateForTests();
+  vi.unstubAllGlobals();
+});
 
 describe('headingFromOrientationEvent', () => {
   it('prefers webkitCompassHeading when present', () => {
@@ -14,15 +21,26 @@ describe('headingFromOrientationEvent', () => {
       gamma: 0,
       webkitCompassHeading: 45,
     } as DeviceOrientationEvent & { webkitCompassHeading: number };
-    expect(headingFromOrientationEvent(event)).toBe(45);
+    expect(headingFromOrientationEvent(event)).toEqual({ heading: 45, source: 'webkit' });
   });
 
-  it('uses tilt-aware Euler heading instead of raw inverted alpha', () => {
+  it('rejects relative Euler frames without webkit (arbitrary zero)', () => {
     const event = { alpha: 90, beta: 40, gamma: 20 } as DeviceOrientationEvent;
-    const heading = headingFromOrientationEvent(event);
-    expect(heading).not.toBeNull();
-    expect(heading).toBe(compassHeadingFromEuler(90, 40, 20));
-    expect(heading).not.toBe(270);
+    expect(headingFromOrientationEvent(event)).toBeNull();
+    expect(headingFromOrientationEvent(event, { treatAsAbsolute: false })).toBeNull();
+  });
+
+  it('accepts absolute Euler heading and applies screen orientation offset', () => {
+    vi.stubGlobal('window', {
+      screen: { orientation: { angle: 90 } },
+    });
+    const event = { alpha: 90, beta: 40, gamma: 20, absolute: true } as DeviceOrientationEvent;
+    const raw = compassHeadingFromEuler(90, 40, 20);
+    const parsed = headingFromOrientationEvent(event, { treatAsAbsolute: true });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.source).toBe('absolute');
+    expect(parsed?.heading).toBe(((raw - 90) % 360 + 360) % 360);
+    expect(screenOrientationOffsetDeg()).toBe(90);
   });
 
   it('freezes heading near gimbal lock (beta >= 85)', () => {
@@ -32,10 +50,10 @@ describe('headingFromOrientationEvent', () => {
       gamma: 0,
       webkitCompassHeading: 120,
     } as DeviceOrientationEvent & { webkitCompassHeading: number };
-    expect(headingFromOrientationEvent(stable)).toBe(120);
+    expect(headingFromOrientationEvent(stable)).toEqual({ heading: 120, source: 'webkit' });
 
     const locked = { alpha: 200, beta: 90, gamma: 0 } as DeviceOrientationEvent;
-    expect(headingFromOrientationEvent(locked)).toBe(120);
+    expect(headingFromOrientationEvent(locked)).toEqual({ heading: 120, source: 'webkit' });
   });
 
   it('returns null when no orientation data is available', () => {

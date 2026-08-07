@@ -57,9 +57,11 @@ type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 const TICK_MS = 100;
 /** Recompute satellite az/el at most this often. */
 const LOOK_INTERVAL_MS = 500;
-const LOCK_ENTER_DEG = 5;
-const LOCK_EXIT_DEG = 10;
-const DEADBAND_DEG = 2;
+const LOCK_ENTER_DEG = 8;
+const LOCK_EXIT_DEG = 14;
+const DEADBAND_DEG = 3;
+/** Warn in Spotter when catalog is older than this (LEO drifts fast). */
+const TLE_STALE_WARN_DAYS = 2;
 /** Photo-condition refresh cadence (sunlit / daytime). */
 const PHOTO_INTERVAL_MS = 2_000;
 let lastPhotoMs = 0;
@@ -196,6 +198,8 @@ function renderShell(): void {
     </div>
     <div class="spotter-body spotter-body--minimal">
       <p class="spotter-target">${escapeHtml(name)}</p>
+      <p class="spotter-hint">${t('spotter.compass_hint')}</p>
+      <p class="spotter-hint spotter-hint--muted">${t('spotter.hold_hint')}</p>
 
       <div class="spotter-radar-wrap">
         <canvas id="spotter-radar" class="spotter-radar spotter-radar--sm" width="200" height="200"></canvas>
@@ -305,7 +309,11 @@ function tick(): void {
   updateCues(lastLook, sensors, lastPhoto);
   updateChips(sensors, lastLook, lastPhoto);
   updateLightHint(lastLook, lastPhoto);
-  maybeDrawRadar(lastLook, sensors.headingDeg, sensors.pitchDeg);
+  maybeDrawRadar(
+    lastLook,
+    sensors.headingReliable ? sensors.headingDeg : null,
+    sensors.pitchDeg,
+  );
 }
 
 function schedulePassCompute(
@@ -375,14 +383,19 @@ function updateCues(
     return;
   }
 
-  if (sensors.headingDeg == null) {
+  if (sensors.headingDeg == null || !sensors.headingReliable) {
     setCue(
       'spotter-turn',
       t('spotter.guide_no_compass')
         .replace('{az}', look.azimuthDeg.toFixed(0))
         .replace('{el}', look.elevationDeg.toFixed(0)),
     );
-    setCue('spotter-tilt', t('spotter.enable_compass'));
+    setCue(
+      'spotter-tilt',
+      sensors.headingError === 'needs_compass' || sensors.headingError === 'stale'
+        ? t('spotter.compass_calibrate')
+        : t('spotter.enable_compass'),
+    );
     return;
   }
 
@@ -445,18 +458,42 @@ function updateChips(
   if (sensors.accuracyMeters != null && sensors.accuracyMeters >= GPS_ACCURACY_WARN_M) {
     chips.push(chip('warn', t('spotter.chip_gps_weak')));
   }
+  if (sensors.locationSource === 'cached') {
+    chips.push(chip('warn', t('spotter.chip_loc_cached')));
+  }
+  if (!sensors.headingReliable) {
+    chips.push(chip('warn', t('spotter.chip_compass_off')));
+  }
+  const tleAgeDays = tleAgeDaysNow();
+  if (tleAgeDays != null && tleAgeDays >= TLE_STALE_WARN_DAYS) {
+    chips.push(
+      chip('warn', t('spotter.chip_tle_stale').replace('{n}', String(Math.floor(tleAgeDays)))),
+    );
+  }
   if (look?.visible && photo) {
     if (photo.favorable) chips.push(chip('ok', t('spotter.chip_eye_good')));
     else if (!photo.satelliteLit) chips.push(chip('warn', t('spotter.chip_eye_eclipse')));
     else if (!photo.observerDark) chips.push(chip('warn', t('spotter.chip_eye_day')));
   }
-  if (sensors.declinationDeg != null && Math.abs(sensors.declinationDeg) >= 0.5) {
+  if (
+    sensors.headingReliable &&
+    sensors.declinationDeg != null &&
+    Math.abs(sensors.declinationDeg) >= 0.5
+  ) {
     const sign = sensors.declinationDeg >= 0 ? '+' : '';
     chips.push(
       chip('muted', t('spotter.chip_declination').replace('{deg}', `${sign}${sensors.declinationDeg.toFixed(1)}`)),
     );
   }
   setChipsHtml(chips.join(''));
+}
+
+function tleAgeDaysNow(): number | null {
+  const fetchedAt = getState().stats?.fetchedAt;
+  if (!fetchedAt) return null;
+  const ms = Date.now() - new Date(fetchedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return ms / 86_400_000;
 }
 
 function updateLightHint(look: LookAngles | null, photo: PhotoAssessment | null): void {
