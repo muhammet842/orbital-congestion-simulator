@@ -22,10 +22,18 @@ const LS_LOCATION_KEY = 'orbital-spotter-location';
  * freeze the last stable camera heading.
  */
 const GIMBAL_LOCK_ELEV_DEG = 85;
-/** Ignore heading/pitch micro-jitter below this (degrees). */
-const ORIENT_EPSILON_DEG = 0.15;
-/** EMA factor for heading/pitch smoothing (higher = snappier). */
-const ORIENT_SMOOTH = 0.35;
+/** Ignore heading micro-jitter below this before updating the snapshot (degrees). */
+const ORIENT_EPSILON_HEADING_DEG = 0.35;
+/** Ignore pitch micro-jitter below this — pitch noise causes sky “bounce”. */
+const ORIENT_EPSILON_PITCH_DEG = 0.5;
+/** EMA when nearly still (lower = calmer sky). */
+const HEADING_SMOOTH_SLOW = 0.12;
+const PITCH_SMOOTH_SLOW = 0.08;
+/** EMA when the user makes a clear intentional move. */
+const HEADING_SMOOTH_FAST = 0.4;
+const PITCH_SMOOTH_FAST = 0.32;
+/** Delta (deg) at which smoothing reaches the fast rate. */
+const ORIENT_FAST_DELTA_DEG = 7;
 /** Horizontal GPS accuracy above this (meters) is treated as “poor”. */
 export const GPS_ACCURACY_WARN_M = 80;
 /**
@@ -190,6 +198,12 @@ function smoothAngle360(prev: number | null, next: number, alpha: number): numbe
 function smoothLinear(prev: number | null, next: number, alpha: number): number {
   if (prev == null) return next;
   return prev + (next - prev) * alpha;
+}
+
+/** Heavier smoothing when nearly still; snappier on intentional sweeps. */
+function adaptiveSmoothAlpha(deltaDeg: number, slow: number, fast: number): number {
+  const t = Math.min(1, Math.max(0, Math.abs(deltaDeg) / ORIENT_FAST_DELTA_DEG));
+  return slow + (fast - slow) * t * t;
 }
 
 /**
@@ -446,9 +460,14 @@ function clearTrustedHeading(reason: string): void {
 function applyPitchOnly(event: DeviceOrientationEvent): void {
   const rawPitch = pitchFromOrientationEvent(event);
   if (rawPitch == null) return;
-  smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
+  const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(rawPitch - smoothedPitch);
+  smoothedPitch = smoothLinear(
+    smoothedPitch,
+    rawPitch,
+    adaptiveSmoothAlpha(pitchDelta, PITCH_SMOOTH_SLOW, PITCH_SMOOTH_FAST),
+  );
   const prevP = snapshot.pitchDeg;
-  if (prevP != null && Math.abs(prevP - smoothedPitch) < ORIENT_EPSILON_DEG) return;
+  if (prevP != null && Math.abs(prevP - smoothedPitch) < ORIENT_EPSILON_PITCH_DEG) return;
   snapshot = {
     ...snapshot,
     pitchDeg: smoothedPitch,
@@ -472,10 +491,14 @@ function applyOrientation(
   }
 
   if (parsed != null) {
+    const headingDelta =
+      smoothedMagneticHeading == null
+        ? ORIENT_FAST_DELTA_DEG
+        : Math.abs(signedDeltaDeg(smoothedMagneticHeading, parsed.heading));
     smoothedMagneticHeading = smoothAngle360(
       smoothedMagneticHeading,
       parsed.heading,
-      ORIENT_SMOOTH,
+      adaptiveSmoothAlpha(headingDelta, HEADING_SMOOTH_SLOW, HEADING_SMOOTH_FAST),
     );
     lastTrustedHeadingMs = nowMs();
   } else if (snapshot.headingDeg == null && snapshot.headingError !== 'needs_compass') {
@@ -489,7 +512,12 @@ function applyOrientation(
   }
 
   if (rawPitch != null) {
-    smoothedPitch = smoothLinear(smoothedPitch, rawPitch, ORIENT_SMOOTH);
+    const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(rawPitch - smoothedPitch);
+    smoothedPitch = smoothLinear(
+      smoothedPitch,
+      rawPitch,
+      adaptiveSmoothAlpha(pitchDelta, PITCH_SMOOTH_SLOW, PITCH_SMOOTH_FAST),
+    );
   }
 
   const nextTrue = parsed != null ? toTrueHeading(smoothedMagneticHeading) : snapshot.headingDeg;
@@ -500,9 +528,9 @@ function applyOrientation(
   const headingChanged =
     parsed != null &&
     nextTrue != null &&
-    (prevH == null || Math.abs(signedDeltaDeg(prevH, nextTrue)) >= ORIENT_EPSILON_DEG);
+    (prevH == null || Math.abs(signedDeltaDeg(prevH, nextTrue)) >= ORIENT_EPSILON_HEADING_DEG);
   const pitchChanged =
-    nextPitch != null && (prevP == null || Math.abs(prevP - nextPitch) >= ORIENT_EPSILON_DEG);
+    nextPitch != null && (prevP == null || Math.abs(prevP - nextPitch) >= ORIENT_EPSILON_PITCH_DEG);
 
   if (!headingChanged && !pitchChanged && parsed == null) return;
 

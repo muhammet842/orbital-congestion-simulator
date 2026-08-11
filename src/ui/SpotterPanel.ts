@@ -219,18 +219,18 @@ function renderShell(): void {
       <div class="spotter-title">${t('spotter.title')}</div>
       <button type="button" class="spotter-close" id="spotter-close" aria-label="${t('spotter.close')}">✕</button>
     </div>
-    <div class="spotter-body spotter-body--minimal">
+    <div class="spotter-body spotter-body--sky">
       <p class="spotter-target">${escapeHtml(name)}</p>
-      <p class="spotter-hint">${t('spotter.compass_hint')}</p>
-      <p class="spotter-hint spotter-hint--muted">${t('spotter.hold_hint')}</p>
 
       <div class="spotter-sky-wrap">
         <canvas id="spotter-sky" class="spotter-sky" width="${SKY_CSS_W}" height="${SKY_CSS_H}" aria-label="${t('spotter.sky_label')}"></canvas>
+        <div class="spotter-sky-hud" aria-live="polite">
+          <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
+          <p class="spotter-cue spotter-cue--tilt" id="spotter-tilt">—</p>
+        </div>
         <p class="spotter-sky-meta" id="spotter-sky-meta"></p>
       </div>
 
-      <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
-      <p class="spotter-cue spotter-cue--tilt" id="spotter-tilt">—</p>
       <div class="spotter-chips" id="spotter-chips"></div>
       <p class="spotter-light" id="spotter-light"></p>
       ${!isLiveMode() ? `<p class="spotter-realtime-note">${t('spotter.realtime_only')}</p>` : ''}
@@ -603,9 +603,10 @@ function setCue(id: 'spotter-turn' | 'spotter-tilt', text: string): void {
 function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): void {
   const heading = sensors.headingReliable ? sensors.headingDeg : null;
   const pitch = sensors.pitchDeg;
+  // Quantize orientation for redraws so sensor noise does not bounce the sky map.
   const key = [
-    heading?.toFixed(1) ?? 'x',
-    pitch?.toFixed(1) ?? 'x',
+    quantizeDeg(heading, 0.5),
+    quantizeDeg(pitch, 0.5),
     selectedNoradId ?? 'n',
     aimLocked ? '1' : '0',
     skyHits.length,
@@ -613,7 +614,14 @@ function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): 
   ].join('|');
   if (key === lastSkyKey) return;
   lastSkyKey = key;
-  drawSky(heading, pitch ?? 45, selectedNoradId, sensors.headingReliable);
+  const drawHeading = heading == null ? null : Number(quantizeDeg(heading, 0.5));
+  const drawPitch = pitch == null ? 45 : Number(quantizeDeg(pitch, 0.5));
+  drawSky(drawHeading, drawPitch, selectedNoradId, sensors.headingReliable);
+}
+
+function quantizeDeg(deg: number | null | undefined, step: number): string {
+  if (deg == null || !Number.isFinite(deg)) return 'x';
+  return (Math.round(deg / step) * step).toFixed(1);
 }
 
 function drawSky(
