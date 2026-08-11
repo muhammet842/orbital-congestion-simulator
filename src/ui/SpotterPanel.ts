@@ -556,7 +556,11 @@ function maybeRefreshSkyScan(
     category: o.category,
     functionGroup: o.functionGroup,
   }));
-  skyScanObserver = { ...sensors.location };
+  skyScanObserver = {
+    latitudeDeg: sensors.location.latitudeDeg,
+    longitudeDeg: sensors.location.longitudeDeg,
+    altitudeKm: sensors.location.altitudeKm ?? 0,
+  };
   skyScanDateMs = getSpotterTime().getTime();
   skyScanView = { headingDeg: heading, pitchDeg: pitch };
   skyScanSelectedId = selected?.noradId ?? null;
