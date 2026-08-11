@@ -23,7 +23,6 @@ import {
   MIN_FOV_DEG,
   horizonYForPitch,
   projectAzElToCanvas,
-  signedAzimuthDeltaDeg,
 } from '../orbital/skyProjection';
 import {
   finalizeSkyScanHits,
@@ -31,6 +30,7 @@ import {
   type SkyScanHit,
   type SkyScanObject,
 } from '../orbital/skyScan';
+import { createSkyViewStabilizer } from '../orbital/skyViewStabilizer';
 import { getFunctionGroupColor } from '../orbital/classify';
 import type { ObjectFunctionGroup } from '../types';
 import { getSunEci } from '../scene/dayNight';
@@ -76,13 +76,8 @@ let skyFovDeg = DEFAULT_FOV_DEG;
 let pinchStartDist = 0;
 let pinchStartFov = DEFAULT_FOV_DEG;
 let zoomUnbind: (() => void) | null = null;
-/** Latched view center for sky drawing — freezes while the phone is nearly still. */
-let skyViewHeading: number | null = null;
-let skyViewPitch: number | null = null;
-/** When true, sky canvas ignores sensor noise until a sustained intentional move. */
-let skyViewFrozen = true;
-let skyUnlockStreak = 0;
-let skyRefreezeStreak = 0;
+/** Net-motion sky stabilizer — freezes display against sensor drift/noise. */
+const skyViewStab = createSkyViewStabilizer();
 /** Chunked catalog scan state (avoids multi-thousand SGP4 stalls). */
 let skyScanActive = false;
 let skyScanIndex = 0;
@@ -107,17 +102,6 @@ const SKY_SCAN_CHUNK = 280;
 const LOCK_ENTER_DEG = 8;
 const LOCK_EXIT_DEG = 14;
 const DEADBAND_DEG = 3;
-/** Hold sky view frozen until pitch moves this far for several ticks (noise is smaller). */
-const SKY_UNLOCK_PITCH_DEG = 5.5;
-/** Hold sky view frozen until heading moves this far for several ticks. */
-const SKY_UNLOCK_HEADING_DEG = 4.5;
-/** Consecutive ticks past unlock threshold required before the sky follows again. */
-const SKY_UNLOCK_TICKS = 5;
-/** After unlocking, re-freeze when motion stays below this for several ticks. */
-const SKY_REFREEZE_DEG = 1.6;
-const SKY_REFREEZE_TICKS = 4;
-/** Blend toward sensors only while unlocked (intentional aiming). */
-const SKY_VIEW_FOLLOW = 0.28;
 /** Warn in Spotter when catalog is older than this (LEO drifts fast). */
 const TLE_STALE_WARN_DAYS = 2;
 /** Photo-condition refresh cadence (sunlit / daytime). */
@@ -177,11 +161,7 @@ export function openSpotterPanel(): void {
   skyFovDeg = DEFAULT_FOV_DEG;
   pinchStartDist = 0;
   pinchStartFov = DEFAULT_FOV_DEG;
-  skyViewHeading = null;
-  skyViewPitch = null;
-  skyViewFrozen = true;
-  skyUnlockStreak = 0;
-  skyRefreezeStreak = 0;
+  skyViewStab.reset();
   resetSkyScanState();
 
   startObserverSensors();
@@ -254,11 +234,7 @@ export function closeSpotterPanel(): void {
   cachedPassKey = '';
   skyHits = [];
   resetSkyScanState();
-  skyViewHeading = null;
-  skyViewPitch = null;
-  skyViewFrozen = true;
-  skyUnlockStreak = 0;
-  skyRefreezeStreak = 0;
+  skyViewStab.reset();
   zoomUnbind?.();
   zoomUnbind = null;
 }
@@ -544,8 +520,9 @@ function maybeRefreshSkyScan(
 
   if (now - lastSkyScanMs < SKY_SCAN_INTERVAL_MS && skyHits.length > 0) return;
 
-  const pitch = skyViewPitch ?? sensors.pitchDeg ?? 45;
-  const heading = skyViewHeading ?? sensors.headingDeg;
+  const center = skyViewStab.getCenter();
+  const pitch = center?.pitchDeg ?? sensors.pitchDeg ?? 45;
+  const heading = center?.headingDeg ?? sensors.headingDeg;
   const selected =
     state.selectedIndex != null ? state.objects[state.selectedIndex] : null;
 
@@ -567,71 +544,6 @@ function maybeRefreshSkyScan(
   skyScanAccum = [];
   skyScanIndex = 0;
   skyScanActive = true;
-}
-
-/**
- * Hard-freeze the sky-map look direction until the phone makes a sustained,
- * intentional move. Single-sample noise (even a few degrees) must not unlock.
- */
-function updateSkyViewCenter(
-  headingDeg: number | null,
-  pitchDeg: number | null,
-): { headingDeg: number | null; pitchDeg: number } {
-  const pitch = pitchDeg ?? 45;
-  if (headingDeg == null) {
-    return { headingDeg: null, pitchDeg: skyViewPitch ?? pitch };
-  }
-  if (skyViewHeading == null || skyViewPitch == null) {
-    skyViewHeading = headingDeg;
-    skyViewPitch = pitch;
-    skyViewFrozen = true;
-    skyUnlockStreak = 0;
-    skyRefreezeStreak = 0;
-    return { headingDeg, pitchDeg: pitch };
-  }
-
-  const dH = Math.abs(signedAzimuthDeltaDeg(skyViewHeading, headingDeg));
-  const dP = Math.abs(skyViewPitch - pitch);
-
-  if (skyViewFrozen) {
-    const unlockCandidate = dP >= SKY_UNLOCK_PITCH_DEG || dH >= SKY_UNLOCK_HEADING_DEG;
-    if (unlockCandidate) {
-      skyUnlockStreak += 1;
-      if (skyUnlockStreak >= SKY_UNLOCK_TICKS) {
-        skyViewFrozen = false;
-        skyUnlockStreak = 0;
-        skyRefreezeStreak = 0;
-        // Catch up immediately so the first unlocked frame isn't laggy.
-        skyViewHeading = headingDeg;
-        skyViewPitch = pitch;
-        return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
-      }
-    } else {
-      skyUnlockStreak = 0;
-    }
-    // Frozen: never let sensor chatter move the canvas.
-    return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
-  }
-
-  // Unlocked — follow intentional aiming.
-  skyViewHeading =
-    ((skyViewHeading + signedAzimuthDeltaDeg(skyViewHeading, headingDeg) * SKY_VIEW_FOLLOW) % 360 +
-      360) %
-    360;
-  skyViewPitch = skyViewPitch + (pitch - skyViewPitch) * SKY_VIEW_FOLLOW;
-
-  if (dH < SKY_REFREEZE_DEG && dP < SKY_REFREEZE_DEG) {
-    skyRefreezeStreak += 1;
-    if (skyRefreezeStreak >= SKY_REFREEZE_TICKS) {
-      skyViewFrozen = true;
-      skyUnlockStreak = 0;
-      skyRefreezeStreak = 0;
-    }
-  } else {
-    skyRefreezeStreak = 0;
-  }
-
-  return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
 }
 
 function schedulePassCompute(
@@ -857,8 +769,8 @@ function setCue(id: 'spotter-turn' | 'spotter-tilt', text: string): void {
 
 function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): void {
   const rawHeading = sensors.headingReliable ? sensors.headingDeg : null;
-  const view = updateSkyViewCenter(rawHeading, sensors.pitchDeg);
-  // Coarser steps when zoomed in — 0.5° becomes several pixels at narrow FOV.
+  const view = skyViewStab.update(rawHeading, sensors.pitchDeg, performance.now());
+  // While frozen the stabilizer returns bit-identical pitch; keep a coarse key anyway.
   const step = Math.max(1, skyFovDeg / 45);
   const key = [
     quantizeDeg(view.headingDeg, step),
