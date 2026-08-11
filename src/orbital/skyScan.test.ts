@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { twoline2satrec } from 'satellite.js';
-import { scanSkyCandidates } from './skyScan';
+import {
+  finalizeSkyScanHits,
+  scanSkyCandidates,
+  scanSkyCandidatesChunk,
+  type SkyScanHit,
+} from './skyScan';
 
 /** ISS TLE near a known epoch — used only for elev filter shape, not absolute sky. */
 function issObject() {
@@ -54,5 +59,29 @@ describe('scanSkyCandidates', () => {
     if (hits.length > 0) {
       expect(hits[0].noradId).toBe(25544);
     }
+  });
+
+  it('chunk scan matches full scan results', () => {
+    const objects = [issObject()];
+    const full = scanSkyCandidates(objects, observer, date, view, { maxCount: 20 });
+    const accum: SkyScanHit[] = [];
+    let idx = 0;
+    let done = false;
+    while (!done) {
+      const step = scanSkyCandidatesChunk(
+        objects,
+        observer,
+        date,
+        view,
+        { maxCount: 20 },
+        idx,
+        1,
+        accum,
+      );
+      idx = step.nextIndex;
+      done = step.done;
+    }
+    const chunked = finalizeSkyScanHits(accum, { maxCount: 20 });
+    expect(chunked.map((h) => h.noradId)).toEqual(full.map((h) => h.noradId));
   });
 });

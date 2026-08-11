@@ -23,17 +23,21 @@ const LS_LOCATION_KEY = 'orbital-spotter-location';
  */
 const GIMBAL_LOCK_ELEV_DEG = 85;
 /** Ignore heading micro-jitter below this before updating the snapshot (degrees). */
-const ORIENT_EPSILON_HEADING_DEG = 0.35;
+const ORIENT_EPSILON_HEADING_DEG = 0.45;
 /** Ignore pitch micro-jitter below this — pitch noise causes sky “bounce”. */
-const ORIENT_EPSILON_PITCH_DEG = 0.5;
+const ORIENT_EPSILON_PITCH_DEG = 0.85;
 /** EMA when nearly still (lower = calmer sky). */
-const HEADING_SMOOTH_SLOW = 0.12;
-const PITCH_SMOOTH_SLOW = 0.08;
+const HEADING_SMOOTH_SLOW = 0.1;
+const PITCH_SMOOTH_SLOW = 0.045;
 /** EMA when the user makes a clear intentional move. */
-const HEADING_SMOOTH_FAST = 0.4;
-const PITCH_SMOOTH_FAST = 0.32;
-/** Delta (deg) at which smoothing reaches the fast rate. */
-const ORIENT_FAST_DELTA_DEG = 7;
+const HEADING_SMOOTH_FAST = 0.35;
+const PITCH_SMOOTH_FAST = 0.22;
+/** Delta (deg) at which smoothing reaches the fast rate — keep high so noise ≠ “move”. */
+const ORIENT_FAST_DELTA_DEG = 14;
+/** Drop single-sample pitch spikes farther than this from the median (degrees). */
+const PITCH_SPIKE_REJECT_DEG = 8;
+/** Rolling window for pitch median pre-filter. */
+const PITCH_MEDIAN_WINDOW = 5;
 /** Horizontal GPS accuracy above this (meters) is treated as “poor”. */
 export const GPS_ACCURACY_WARN_M = 80;
 /**
@@ -82,6 +86,8 @@ let lastTrustedHeadingMs = 0;
 /** Smoothed magnetic heading before WMM true-north correction. */
 let smoothedMagneticHeading: number | null = null;
 let smoothedPitch: number | null = null;
+/** Recent raw pitch samples for median spike rejection. */
+let pitchRawWindow: number[] = [];
 
 let snapshot: SensorSnapshot = {
   location: loadCachedLocation(),
@@ -204,6 +210,26 @@ function smoothLinear(prev: number | null, next: number, alpha: number): number 
 function adaptiveSmoothAlpha(deltaDeg: number, slow: number, fast: number): number {
   const t = Math.min(1, Math.max(0, Math.abs(deltaDeg) / ORIENT_FAST_DELTA_DEG));
   return slow + (fast - slow) * t * t;
+}
+
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * Median-filter raw pitch, reject wild single-sample spikes, then return the
+ * value to feed into the EMA. Returns null when the sample should be ignored.
+ */
+function stabilizeRawPitch(rawPitch: number): number | null {
+  pitchRawWindow.push(rawPitch);
+  if (pitchRawWindow.length > PITCH_MEDIAN_WINDOW) pitchRawWindow.shift();
+  const med = medianOf(pitchRawWindow);
+  if (Math.abs(rawPitch - med) > PITCH_SPIKE_REJECT_DEG && pitchRawWindow.length >= 3) {
+    return med;
+  }
+  return med;
 }
 
 /**
@@ -460,10 +486,12 @@ function clearTrustedHeading(reason: string): void {
 function applyPitchOnly(event: DeviceOrientationEvent): void {
   const rawPitch = pitchFromOrientationEvent(event);
   if (rawPitch == null) return;
-  const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(rawPitch - smoothedPitch);
+  const stable = stabilizeRawPitch(rawPitch);
+  if (stable == null) return;
+  const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(stable - smoothedPitch);
   smoothedPitch = smoothLinear(
     smoothedPitch,
-    rawPitch,
+    stable,
     adaptiveSmoothAlpha(pitchDelta, PITCH_SMOOTH_SLOW, PITCH_SMOOTH_FAST),
   );
   const prevP = snapshot.pitchDeg;
@@ -512,12 +540,15 @@ function applyOrientation(
   }
 
   if (rawPitch != null) {
-    const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(rawPitch - smoothedPitch);
-    smoothedPitch = smoothLinear(
-      smoothedPitch,
-      rawPitch,
-      adaptiveSmoothAlpha(pitchDelta, PITCH_SMOOTH_SLOW, PITCH_SMOOTH_FAST),
-    );
+    const stable = stabilizeRawPitch(rawPitch);
+    if (stable != null) {
+      const pitchDelta = smoothedPitch == null ? ORIENT_FAST_DELTA_DEG : Math.abs(stable - smoothedPitch);
+      smoothedPitch = smoothLinear(
+        smoothedPitch,
+        stable,
+        adaptiveSmoothAlpha(pitchDelta, PITCH_SMOOTH_SLOW, PITCH_SMOOTH_FAST),
+      );
+    }
   }
 
   const nextTrue = parsed != null ? toTrueHeading(smoothedMagneticHeading) : snapshot.headingDeg;
@@ -628,6 +659,7 @@ export function stopOrientation(): void {
   lastTrustedHeadingMs = 0;
   smoothedMagneticHeading = null;
   smoothedPitch = null;
+  pitchRawWindow = [];
   snapshot = {
     ...snapshot,
     headingDeg: null,
@@ -658,6 +690,7 @@ export function __resetOrientationStateForTests(): void {
   lastTrustedHeadingMs = 0;
   smoothedMagneticHeading = null;
   smoothedPitch = null;
+  pitchRawWindow = [];
   snapshot = {
     ...snapshot,
     headingDeg: null,

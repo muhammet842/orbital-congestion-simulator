@@ -23,8 +23,14 @@ import {
   MIN_FOV_DEG,
   horizonYForPitch,
   projectAzElToCanvas,
+  signedAzimuthDeltaDeg,
 } from '../orbital/skyProjection';
-import { scanSkyCandidates, type SkyScanHit } from '../orbital/skyScan';
+import {
+  finalizeSkyScanHits,
+  scanSkyCandidatesChunk,
+  type SkyScanHit,
+  type SkyScanObject,
+} from '../orbital/skyScan';
 import { getFunctionGroupColor } from '../orbital/classify';
 import type { ObjectFunctionGroup } from '../types';
 import { getSunEci } from '../scene/dayNight';
@@ -70,6 +76,19 @@ let skyFovDeg = DEFAULT_FOV_DEG;
 let pinchStartDist = 0;
 let pinchStartFov = DEFAULT_FOV_DEG;
 let zoomUnbind: (() => void) | null = null;
+/** Latched view center for sky drawing — freezes while the phone is nearly still. */
+let skyViewHeading: number | null = null;
+let skyViewPitch: number | null = null;
+/** Chunked catalog scan state (avoids multi-thousand SGP4 stalls). */
+let skyScanActive = false;
+let skyScanIndex = 0;
+let skyScanAccum: SkyScanHit[] = [];
+let skyScanObjects: SkyScanObject[] = [];
+let skyScanView = { headingDeg: 0, pitchDeg: 45 };
+let skyScanSelectedId: number | null = null;
+let skyScanObserver: { latitudeDeg: number; longitudeDeg: number; altitudeKm: number } | null =
+  null;
+let skyScanDateMs = 0;
 
 type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 
@@ -77,11 +96,19 @@ type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 const TICK_MS = 100;
 /** Recompute selected satellite az/el at most this often. */
 const LOOK_INTERVAL_MS = 500;
-/** Full-catalog sky scan cadence. */
-const SKY_SCAN_INTERVAL_MS = 1_000;
+/** Start a new full-catalog sky scan at most this often. */
+const SKY_SCAN_INTERVAL_MS = 2_000;
+/** SGP4 objects processed per tick while a scan is in flight. */
+const SKY_SCAN_CHUNK = 280;
 const LOCK_ENTER_DEG = 8;
 const LOCK_EXIT_DEG = 14;
 const DEADBAND_DEG = 3;
+/** Hold sky view still until the phone moves more than this (degrees). */
+const SKY_HOLD_EXIT_DEG = 2.6;
+/** Below this delta, treat orientation as still (no sky view update). */
+const SKY_HOLD_ENTER_DEG = 0.9;
+/** Blend toward sensors once past the hold-exit threshold. */
+const SKY_VIEW_FOLLOW = 0.22;
 /** Warn in Spotter when catalog is older than this (LEO drifts fast). */
 const TLE_STALE_WARN_DAYS = 2;
 /** Photo-condition refresh cadence (sunlit / daytime). */
@@ -141,6 +168,9 @@ export function openSpotterPanel(): void {
   skyFovDeg = DEFAULT_FOV_DEG;
   pinchStartDist = 0;
   pinchStartFov = DEFAULT_FOV_DEG;
+  skyViewHeading = null;
+  skyViewPitch = null;
+  resetSkyScanState();
 
   startObserverSensors();
   renderShell();
@@ -168,6 +198,7 @@ export function openSpotterPanel(): void {
       skyHits = [];
       lastSkyScanMs = 0;
       lastSkyKey = '';
+      resetSkyScanState();
       renderShell();
       bindShellEvents();
       tick();
@@ -210,8 +241,21 @@ export function closeSpotterPanel(): void {
   cachedPass = null;
   cachedPassKey = '';
   skyHits = [];
+  resetSkyScanState();
+  skyViewHeading = null;
+  skyViewPitch = null;
   zoomUnbind?.();
   zoomUnbind = null;
+}
+
+function resetSkyScanState(): void {
+  skyScanActive = false;
+  skyScanIndex = 0;
+  skyScanAccum = [];
+  skyScanObjects = [];
+  skyScanSelectedId = null;
+  skyScanObserver = null;
+  skyScanDateMs = 0;
 }
 
 function handleEsc(e: KeyboardEvent): void {
@@ -447,32 +491,102 @@ function maybeRefreshSkyScan(
 ): void {
   if (!sensors.location || !sensors.headingReliable || sensors.headingDeg == null) {
     skyHits = [];
+    resetSkyScanState();
     return;
   }
+
+  // Continue an in-flight chunked scan (keeps frames responsive).
+  if (skyScanActive && skyScanObserver) {
+    const chunk = scanSkyCandidatesChunk(
+      skyScanObjects,
+      skyScanObserver,
+      new Date(skyScanDateMs),
+      skyScanView,
+      {
+        selectedNoradId: skyScanSelectedId,
+        maxCount: 100,
+        minElevationDeg: 0,
+        includeDebris: false,
+        fovDeg: skyFovDeg,
+      },
+      skyScanIndex,
+      SKY_SCAN_CHUNK,
+      skyScanAccum,
+    );
+    skyScanIndex = chunk.nextIndex;
+    if (chunk.done) {
+      skyHits = finalizeSkyScanHits(skyScanAccum, {
+        selectedNoradId: skyScanSelectedId,
+        maxCount: 100,
+        fovDeg: skyFovDeg,
+      });
+      lastSkyScanMs = now;
+      lastSkyKey = '';
+      resetSkyScanState();
+    }
+    return;
+  }
+
   if (now - lastSkyScanMs < SKY_SCAN_INTERVAL_MS && skyHits.length > 0) return;
-  lastSkyScanMs = now;
-  const pitch = sensors.pitchDeg ?? 45;
+
+  const pitch = skyViewPitch ?? sensors.pitchDeg ?? 45;
+  const heading = skyViewHeading ?? sensors.headingDeg;
   const selected =
     state.selectedIndex != null ? state.objects[state.selectedIndex] : null;
-  skyHits = scanSkyCandidates(
-    state.objects.map((o) => ({
-      noradId: o.noradId,
-      name: o.name,
-      satrec: o.satrec,
-      category: o.category,
-      functionGroup: o.functionGroup,
-    })),
-    sensors.location,
-    getSpotterTime(),
-    { headingDeg: sensors.headingDeg, pitchDeg: pitch },
-    {
-      selectedNoradId: selected?.noradId ?? null,
-      maxCount: 100,
-      minElevationDeg: 0,
-      includeDebris: false,
-      fovDeg: skyFovDeg,
-    },
-  );
+
+  skyScanObjects = state.objects.map((o) => ({
+    noradId: o.noradId,
+    name: o.name,
+    satrec: o.satrec,
+    category: o.category,
+    functionGroup: o.functionGroup,
+  }));
+  skyScanObserver = { ...sensors.location };
+  skyScanDateMs = getSpotterTime().getTime();
+  skyScanView = { headingDeg: heading, pitchDeg: pitch };
+  skyScanSelectedId = selected?.noradId ?? null;
+  skyScanAccum = [];
+  skyScanIndex = 0;
+  skyScanActive = true;
+}
+
+/**
+ * Latch sky-map look direction while the phone is nearly still so sensor noise
+ * does not bounce the canvas. Follow again after a clear intentional move.
+ */
+function updateSkyViewCenter(
+  headingDeg: number | null,
+  pitchDeg: number | null,
+): { headingDeg: number | null; pitchDeg: number } {
+  const pitch = pitchDeg ?? 45;
+  if (headingDeg == null) {
+    return { headingDeg: null, pitchDeg: pitch };
+  }
+  if (skyViewHeading == null || skyViewPitch == null) {
+    skyViewHeading = headingDeg;
+    skyViewPitch = pitch;
+    return { headingDeg, pitchDeg: pitch };
+  }
+
+  const dH = Math.abs(signedAzimuthDeltaDeg(skyViewHeading, headingDeg));
+  const dP = Math.abs(skyViewPitch - pitch);
+
+  if (dH <= SKY_HOLD_ENTER_DEG && dP <= SKY_HOLD_ENTER_DEG) {
+    return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
+  }
+
+  if (dH >= SKY_HOLD_EXIT_DEG || dP >= SKY_HOLD_EXIT_DEG) {
+    skyViewHeading =
+      ((skyViewHeading + signedAzimuthDeltaDeg(skyViewHeading, headingDeg) * SKY_VIEW_FOLLOW) %
+        360 +
+        360) %
+      360;
+    skyViewPitch = skyViewPitch + (pitch - skyViewPitch) * SKY_VIEW_FOLLOW;
+    return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
+  }
+
+  // Micro-motion band: hold steady (kills the up/down bounce).
+  return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
 }
 
 function schedulePassCompute(
@@ -697,12 +811,13 @@ function setCue(id: 'spotter-turn' | 'spotter-tilt', text: string): void {
 }
 
 function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): void {
-  const heading = sensors.headingReliable ? sensors.headingDeg : null;
-  const pitch = sensors.pitchDeg;
-  // Quantize orientation for redraws so sensor noise does not bounce the sky map.
+  const rawHeading = sensors.headingReliable ? sensors.headingDeg : null;
+  const view = updateSkyViewCenter(rawHeading, sensors.pitchDeg);
+  // Coarser steps when zoomed in — 0.5° becomes several pixels at narrow FOV.
+  const step = Math.max(1, skyFovDeg / 45);
   const key = [
-    quantizeDeg(heading, 0.5),
-    quantizeDeg(pitch, 0.5),
+    quantizeDeg(view.headingDeg, step),
+    quantizeDeg(view.pitchDeg, step),
     skyFovDeg.toFixed(1),
     selectedNoradId ?? 'n',
     aimLocked ? '1' : '0',
@@ -711,8 +826,9 @@ function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): 
   ].join('|');
   if (key === lastSkyKey) return;
   lastSkyKey = key;
-  const drawHeading = heading == null ? null : Number(quantizeDeg(heading, 0.5));
-  const drawPitch = pitch == null ? 45 : Number(quantizeDeg(pitch, 0.5));
+  const drawHeading =
+    view.headingDeg == null ? null : Number(quantizeDeg(view.headingDeg, step));
+  const drawPitch = Number(quantizeDeg(view.pitchDeg, step));
   drawSky(drawHeading, drawPitch, selectedNoradId, sensors.headingReliable);
 }
 
