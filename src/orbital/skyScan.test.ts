@@ -13,6 +13,7 @@ function issObject() {
     name: 'ISS (ZARYA)',
     satrec,
     category: 'stations' as const,
+    functionGroup: 'station' as const,
   };
 }
 

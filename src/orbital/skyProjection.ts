@@ -6,6 +6,10 @@
  */
 
 export const DEFAULT_FOV_DEG = 60;
+/** Narrowest Spotter sky FOV (pinch / zoom in). */
+export const MIN_FOV_DEG = 25;
+/** Widest Spotter sky FOV (pinch / zoom out). */
+export const MAX_FOV_DEG = 90;
 
 export interface SkyViewCenter {
   headingDeg: number;

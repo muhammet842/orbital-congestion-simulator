@@ -4,6 +4,7 @@
  */
 
 import type { SatRec } from 'satellite.js';
+import type { ObjectCategory, ObjectFunctionGroup } from '../types';
 import {
   computeLookAngles,
   type LookAngles,
@@ -20,7 +21,8 @@ export interface SkyScanObject {
   name: string;
   satrec: SatRec;
   /** Skip debris-heavy clutter in V1 unless selected. */
-  category: string;
+  category: ObjectCategory | string;
+  functionGroup: ObjectFunctionGroup;
 }
 
 export interface SkyScanHit {
@@ -29,6 +31,8 @@ export interface SkyScanHit {
   look: LookAngles;
   /** Angular distance from phone FOV center (degrees). */
   centerDistDeg: number;
+  functionGroup: ObjectFunctionGroup;
+  category: ObjectCategory | string;
 }
 
 export interface SkyScanOptions {
@@ -81,6 +85,8 @@ export function scanSkyCandidates(
       name: obj.name,
       look,
       centerDistDeg,
+      functionGroup: obj.functionGroup,
+      category: obj.category,
     });
   }
 

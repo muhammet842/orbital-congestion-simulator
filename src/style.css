@@ -3578,6 +3578,7 @@ body {
   border: 1px solid rgba(232, 164, 90, 0.2);
   background: #070b18;
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35);
+  touch-action: none;
 }
 .spotter-sky-hud {
   position: absolute;
@@ -3617,6 +3618,55 @@ body {
 .spotter-sky-meta:empty {
   display: none;
 }
+.spotter-sky-zoom {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+.spotter-zoom-btn {
+  appearance: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(7, 11, 24, 0.72);
+  color: #f8fafc;
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.spotter-zoom-btn:active {
+  background: rgba(232, 164, 90, 0.28);
+}
+.spotter-sky-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  margin: -4px 0 10px;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+.spotter-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.spotter-legend-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.spotter-legend-dot--station { background: rgb(255, 230, 133); }
+.spotter-legend-dot--active { background: rgb(82, 230, 115); }
+.spotter-legend-dot--starlink { background: rgb(31, 209, 255); }
 .spotter-compass-hint {
   font-size: 0.68rem;
   color: var(--text-muted);

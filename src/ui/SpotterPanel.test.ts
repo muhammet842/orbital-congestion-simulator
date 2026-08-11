@@ -67,6 +67,7 @@ describe('SpotterPanel', () => {
     expect(isSpotterOpen()).toBe(true);
     expect(document.getElementById('spotter-panel')).not.toBeNull();
     expect(document.getElementById('spotter-sky')).not.toBeNull();
+    expect(document.getElementById('spotter-zoom-in')).not.toBeNull();
     expect(document.getElementById('spotter-lat')).not.toBeNull();
     expect(document.getElementById('spotter-turn')?.textContent?.length).toBeGreaterThan(0);
   });

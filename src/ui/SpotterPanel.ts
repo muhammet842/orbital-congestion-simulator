@@ -19,10 +19,14 @@ import {
 import {
   CARDINAL_AZIMUTHS,
   DEFAULT_FOV_DEG,
+  MAX_FOV_DEG,
+  MIN_FOV_DEG,
   horizonYForPitch,
   projectAzElToCanvas,
 } from '../orbital/skyProjection';
 import { scanSkyCandidates, type SkyScanHit } from '../orbital/skyScan';
+import { getFunctionGroupColor } from '../orbital/classify';
+import type { ObjectFunctionGroup } from '../types';
 import { getSunEci } from '../scene/dayNight';
 import { getState, isLiveMode, subscribe } from '../state/appState';
 import { onLangChange, t } from '../i18n/i18n';
@@ -61,6 +65,11 @@ let lastPhoto: PhotoAssessment | null = null;
 let skyHits: SkyScanHit[] = [];
 let lastSkyScanMs = 0;
 let lastSkyCountText = '';
+/** Current horizontal FOV for sky projection (pinch / buttons). */
+let skyFovDeg = DEFAULT_FOV_DEG;
+let pinchStartDist = 0;
+let pinchStartFov = DEFAULT_FOV_DEG;
+let zoomUnbind: (() => void) | null = null;
 
 type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 
@@ -129,6 +138,9 @@ export function openSpotterPanel(): void {
   skyHits = [];
   lastSkyScanMs = 0;
   lastSkyCountText = '';
+  skyFovDeg = DEFAULT_FOV_DEG;
+  pinchStartDist = 0;
+  pinchStartFov = DEFAULT_FOV_DEG;
 
   startObserverSensors();
   renderShell();
@@ -198,6 +210,8 @@ export function closeSpotterPanel(): void {
   cachedPass = null;
   cachedPassKey = '';
   skyHits = [];
+  zoomUnbind?.();
+  zoomUnbind = null;
 }
 
 function handleEsc(e: KeyboardEvent): void {
@@ -228,7 +242,16 @@ function renderShell(): void {
           <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
           <p class="spotter-cue spotter-cue--tilt" id="spotter-tilt">—</p>
         </div>
+        <div class="spotter-sky-zoom" role="group" aria-label="${t('spotter.sky_zoom')}">
+          <button type="button" class="spotter-zoom-btn" id="spotter-zoom-out" aria-label="${t('spotter.sky_zoom_out')}">−</button>
+          <button type="button" class="spotter-zoom-btn" id="spotter-zoom-in" aria-label="${t('spotter.sky_zoom_in')}">+</button>
+        </div>
         <p class="spotter-sky-meta" id="spotter-sky-meta"></p>
+      </div>
+      <div class="spotter-sky-legend" aria-hidden="true">
+        <span class="spotter-legend-item"><i class="spotter-legend-dot spotter-legend-dot--station"></i>${t('spotter.sky_legend_stations')}</span>
+        <span class="spotter-legend-item"><i class="spotter-legend-dot spotter-legend-dot--active"></i>${t('spotter.sky_legend_sats')}</span>
+        <span class="spotter-legend-item"><i class="spotter-legend-dot spotter-legend-dot--starlink"></i>${t('spotter.sky_legend_starlink')}</span>
       </div>
 
       <div class="spotter-chips" id="spotter-chips"></div>
@@ -274,6 +297,78 @@ function bindShellEvents(): void {
     if (!Number.isFinite(latitudeDeg) || !Number.isFinite(longitudeDeg)) return;
     setManualLocation({ latitudeDeg, longitudeDeg, altitudeKm: 0 });
   });
+  bindSkyZoomControls();
+}
+
+function clampSkyFov(fov: number): number {
+  return Math.min(MAX_FOV_DEG, Math.max(MIN_FOV_DEG, fov));
+}
+
+function setSkyFov(next: number): void {
+  const clamped = clampSkyFov(next);
+  if (Math.abs(clamped - skyFovDeg) < 0.05) return;
+  skyFovDeg = clamped;
+  lastSkyKey = '';
+  lastSkyScanMs = 0;
+  tick();
+}
+
+function touchDistance(a: Touch, b: Touch): number {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+}
+
+function bindSkyZoomControls(): void {
+  zoomUnbind?.();
+  zoomUnbind = null;
+  const canvas = panelEl?.querySelector<HTMLCanvasElement>('#spotter-sky');
+  const zoomIn = panelEl?.querySelector('#spotter-zoom-in');
+  const zoomOut = panelEl?.querySelector('#spotter-zoom-out');
+  if (!canvas) return;
+
+  const onZoomIn = () => setSkyFov(skyFovDeg * 0.82);
+  const onZoomOut = () => setSkyFov(skyFovDeg * 1.22);
+  zoomIn?.addEventListener('click', onZoomIn);
+  zoomOut?.addEventListener('click', onZoomOut);
+
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 1.08 : 0.92;
+    setSkyFov(skyFovDeg * factor);
+  };
+  canvas.addEventListener('wheel', onWheel, { passive: false });
+
+  const onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 2) {
+      pinchStartDist = touchDistance(e.touches[0], e.touches[1]);
+      pinchStartFov = skyFovDeg;
+    }
+  };
+  const onTouchMove = (e: TouchEvent) => {
+    if (e.touches.length !== 2 || pinchStartDist <= 0) return;
+    e.preventDefault();
+    const dist = touchDistance(e.touches[0], e.touches[1]);
+    // Pinch out → zoom in (narrower FOV)
+    setSkyFov(pinchStartFov * (pinchStartDist / dist));
+  };
+  const onTouchEnd = () => {
+    if (!canvas) return;
+    // Reset pinch baseline when fingers lift
+    pinchStartDist = 0;
+  };
+  canvas.addEventListener('touchstart', onTouchStart, { passive: true });
+  canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+  canvas.addEventListener('touchend', onTouchEnd);
+  canvas.addEventListener('touchcancel', onTouchEnd);
+
+  zoomUnbind = () => {
+    zoomIn?.removeEventListener('click', onZoomIn);
+    zoomOut?.removeEventListener('click', onZoomOut);
+    canvas.removeEventListener('wheel', onWheel);
+    canvas.removeEventListener('touchstart', onTouchStart);
+    canvas.removeEventListener('touchmove', onTouchMove);
+    canvas.removeEventListener('touchend', onTouchEnd);
+    canvas.removeEventListener('touchcancel', onTouchEnd);
+  };
 }
 
 function locationStatusText(sensors: SensorSnapshot): string {
@@ -365,6 +460,7 @@ function maybeRefreshSkyScan(
       name: o.name,
       satrec: o.satrec,
       category: o.category,
+      functionGroup: o.functionGroup,
     })),
     sensors.location,
     getSpotterTime(),
@@ -374,7 +470,7 @@ function maybeRefreshSkyScan(
       maxCount: 100,
       minElevationDeg: 0,
       includeDebris: false,
-      fovDeg: DEFAULT_FOV_DEG,
+      fovDeg: skyFovDeg,
     },
   );
 }
@@ -607,6 +703,7 @@ function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): 
   const key = [
     quantizeDeg(heading, 0.5),
     quantizeDeg(pitch, 0.5),
+    skyFovDeg.toFixed(1),
     selectedNoradId ?? 'n',
     aimLocked ? '1' : '0',
     skyHits.length,
@@ -622,6 +719,11 @@ function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): 
 function quantizeDeg(deg: number | null | undefined, step: number): string {
   if (deg == null || !Number.isFinite(deg)) return 'x';
   return (Math.round(deg / step) * step).toFixed(1);
+}
+
+function groupCssColor(group: ObjectFunctionGroup, alpha = 0.9): string {
+  const [r, g, b] = getFunctionGroupColor(group);
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha})`;
 }
 
 function drawSky(
@@ -669,7 +771,7 @@ function drawSky(
   }
 
   const view = { headingDeg, pitchDeg };
-  const fov = DEFAULT_FOV_DEG;
+  const fov = skyFovDeg;
 
   // Horizon
   const hy = horizonYForPitch(pitchDeg, cssH, fov);
@@ -703,19 +805,15 @@ function drawSky(
     ctx.fillText(c.key, p.x, Math.max(12, Math.min(cssH - 12, p.y)));
   }
 
-  // Crosshair (look center)
-  ctx.strokeStyle = 'rgba(248, 250, 252, 0.4)';
-  ctx.lineWidth = 1.25;
   const cx = cssW / 2;
   const cy = cssH / 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - 10, cy);
-  ctx.lineTo(cx + 10, cy);
-  ctx.moveTo(cx, cy - 10);
-  ctx.lineTo(cx, cy + 10);
-  ctx.stroke();
+  /** Angular radius under the crosshair that shows a name label. */
+  const aimLabelMaxDeg = Math.max(2.2, fov * 0.055);
 
   let drawn = 0;
+  let aimed: { hit: SkyScanHit; distDeg: number } | null = null;
+  let selectedLabel: { name: string; x: number; y: number } | null = null;
+
   for (const hit of skyHits) {
     const p = projectAzElToCanvas(
       view,
@@ -726,27 +824,64 @@ function drawSky(
     );
     if (!p.inView) continue;
     drawn++;
+    const distDeg = Math.hypot(p.dAzDeg, p.dElDeg);
+    if (distDeg <= aimLabelMaxDeg && (!aimed || distDeg < aimed.distDeg)) {
+      aimed = { hit, distDeg };
+    }
+
     const isSel = hit.noradId === selectedNoradId;
+    const isStation = hit.functionGroup === 'station';
+    const fill = groupCssColor(hit.functionGroup, isSel ? 0.98 : 0.88);
+    const radius = isSel ? 3.5 : isStation ? 3.1 : 2.2;
+
     if (isSel) {
       ctx.beginPath();
       ctx.strokeStyle = aimLocked ? 'rgba(74, 222, 128, 0.9)' : 'rgba(232, 164, 90, 0.95)';
       ctx.lineWidth = 2;
       ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.fillStyle = aimLocked ? 'rgba(74, 222, 128, 0.95)' : 'rgba(232, 164, 90, 0.95)';
-      ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(248, 250, 252, 0.9)';
-      ctx.font = '600 10px system-ui, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(hit.name.slice(0, 18), p.x + 12, p.y + 3);
-    } else {
-      ctx.beginPath();
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
-      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
-      ctx.fill();
+      selectedLabel = { name: hit.name, x: p.x, y: p.y };
     }
+
+    ctx.beginPath();
+    ctx.fillStyle = fill;
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Crosshair (look center)
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.45)';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, cy);
+  ctx.lineTo(cx + 10, cy);
+  ctx.moveTo(cx, cy - 10);
+  ctx.lineTo(cx, cy + 10);
+  ctx.stroke();
+
+  // Side label for selected target when it is not under the crosshair.
+  if (selectedLabel && aimed?.hit.noradId !== selectedNoradId) {
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.88)';
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(selectedLabel.name.slice(0, 18), selectedLabel.x + 12, selectedLabel.y);
+  }
+
+  // Name of object under the crosshair
+  if (aimed) {
+    const label = aimed.hit.name.slice(0, 22);
+    ctx.font = '600 11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    const ty = Math.max(18, cy - 14);
+    const tw = ctx.measureText(label).width;
+    const padX = 6;
+    const padY = 3;
+    ctx.fillStyle = 'rgba(7, 11, 24, 0.72)';
+    ctx.fillRect(cx - tw / 2 - padX, ty - 11 - padY, tw + padX * 2, 14 + padY * 2);
+    ctx.fillStyle = groupCssColor(aimed.hit.functionGroup, 1);
+    ctx.fillText(label, cx, ty);
   }
 
   setSkyMeta(
