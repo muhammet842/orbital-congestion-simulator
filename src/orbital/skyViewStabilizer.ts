@@ -50,6 +50,10 @@ export interface SkyViewStabilizer {
     headingDeg: number | null;
     pitchDeg: number;
   };
+  /** Snap display to a sky direction and optionally hold freeze (aim lock). */
+  snapTo(headingDeg: number, pitchDeg: number, hold?: boolean): void;
+  /** While true, ignore unlock motion — used when the Spotter target is locked. */
+  setHoldFrozen(hold: boolean): void;
   reset(): void;
 }
 
@@ -85,6 +89,7 @@ export function createSkyViewStabilizer(
   let displayHeading: number | null = null;
   let displayPitch: number | null = null;
   let frozen = true;
+  let holdFrozen = false;
   let unlockStreak = 0;
   let freezeStreak = 0;
   /** Recent sensor samples (not display) for net-motion detection. */
@@ -94,9 +99,27 @@ export function createSkyViewStabilizer(
     displayHeading = null;
     displayPitch = null;
     frozen = true;
+    holdFrozen = false;
     unlockStreak = 0;
     freezeStreak = 0;
     history.length = 0;
+  }
+
+  function snapTo(headingDeg: number, pitchDeg: number, hold = true): void {
+    displayHeading = wrap360(headingDeg);
+    displayPitch = pitchDeg;
+    frozen = true;
+    holdFrozen = hold;
+    unlockStreak = 0;
+    freezeStreak = 0;
+  }
+
+  function setHoldFrozen(hold: boolean): void {
+    holdFrozen = hold;
+    if (hold) {
+      frozen = true;
+      unlockStreak = 0;
+    }
   }
 
   function pushHistory(headingDeg: number, pitchDeg: number, timeMs: number): void {
@@ -162,6 +185,13 @@ export function createSkyViewStabilizer(
       displayHeading = headingDeg;
     }
 
+    // Aim-lock hold: never follow sensors — keeps the sky rock-steady on target.
+    if (holdFrozen) {
+      frozen = true;
+      unlockStreak = 0;
+      return { headingDeg: displayHeading, pitchDeg: displayPitch };
+    }
+
     const { dPitch, dHeading } = netMotion(timeMs);
     const unlockSignal =
       dPitch >= unlockNetPitchDeg || (headingDeg != null && dHeading >= unlockNetHeadingDeg);
@@ -210,7 +240,7 @@ export function createSkyViewStabilizer(
     return { headingDeg: displayHeading, pitchDeg: displayPitch };
   }
 
-  return { getCenter, isFrozen, update, reset };
+  return { getCenter, isFrozen, update, snapTo, setHoldFrozen, reset };
 }
 
 /** Horizon Y shift in pixels for a pitch delta (for tests / diagnostics). */

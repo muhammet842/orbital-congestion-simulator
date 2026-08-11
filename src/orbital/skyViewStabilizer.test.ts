@@ -85,8 +85,32 @@ describe('createSkyViewStabilizer', () => {
     }
   });
 
+  it('hold-freeze after snap ignores sensor motion (aim lock)', () => {
+    const stab = createSkyViewStabilizer();
+    let t = 0;
+    stab.update(10, 20, t);
+    stab.snapTo(100, 45, true);
+    expect(stab.isFrozen()).toBe(true);
+    expect(stab.getCenter()).toEqual({ headingDeg: 100, pitchDeg: 45 });
+
+    // Violent sensor motion must not move the display while hold is on.
+    for (let i = 1; i <= 20; i++) {
+      t += 50;
+      const out = stab.update(100 + i * 5, 45 + i * 3, t);
+      expect(out.headingDeg).toBe(100);
+      expect(out.pitchDeg).toBe(45);
+    }
+
+    stab.setHoldFrozen(false);
+    // After release, a real tip can unlock again.
+    for (let i = 1; i <= 12; i++) {
+      t += 50;
+      stab.update(100, 45 + i * 3, t);
+    }
+    expect(stab.isFrozen()).toBe(false);
+  });
+
   it('pitchDeltaToPixels matches sky projection scale', () => {
-    // 1° at 60° FOV on 280px canvas ≈ 4.67px — visible jitter if unlocked.
     expect(pitchDeltaToPixels(1, 280, 60)).toBeCloseTo(280 / 60, 5);
     expect(Math.abs(pitchDeltaToPixels(2, 280, 60))).toBeGreaterThan(8);
   });

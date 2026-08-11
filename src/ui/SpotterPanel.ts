@@ -108,7 +108,7 @@ const SKY_SCAN_PROGRESS_MS = 350;
 /** Cap dots drawn on the sky canvas. */
 const SKY_MAX_HITS = 50;
 const LOCK_ENTER_DEG = 8;
-const LOCK_EXIT_DEG = 14;
+const LOCK_EXIT_DEG = 20;
 const DEADBAND_DEG = 3;
 /** Warn in Spotter when catalog is older than this (LEO drifts fast). */
 const TLE_STALE_WARN_DAYS = 2;
@@ -477,7 +477,10 @@ function tick(): void {
   updateCues(lastLook, sensors, lastPhoto);
   updateChips(sensors, lastLook, lastPhoto);
   updateLightHint(lastLook, lastPhoto);
-  maybeRefreshSkyScan(state, sensors, now);
+  // Sky SGP4 scan is expensive — pause it while aimed so lock stays smooth.
+  if (!aimLocked) {
+    maybeRefreshSkyScan(state, sensors, now);
+  }
   maybeDrawSky(
     sensors,
     state.selectedIndex != null ? state.objects[state.selectedIndex]?.noradId ?? null : null,
@@ -521,8 +524,11 @@ function maybeRefreshSkyScan(
     // Progressive publish so the sky is not empty for seconds.
     if (chunk.done || now - lastSkyProgressMs >= SKY_SCAN_PROGRESS_MS) {
       lastSkyProgressMs = now;
-      skyHits = finalizeSkyScanHits(skyScanAccum, scanOpts);
-      lastSkyKey = '';
+      const nextHits = finalizeSkyScanHits(skyScanAccum, scanOpts);
+      if (!sameSkyHitSet(skyHits, nextHits)) {
+        skyHits = nextHits;
+        lastSkyKey = '';
+      }
     }
 
     if (chunk.done) {
@@ -647,16 +653,25 @@ function updateCues(
   }
 
   const turn = headingDelta(sensors.headingDeg, look.azimuthDeg);
+  // Lock / exit must use live sensors (display may be snapped to the target).
   const phoneEl = sensors.pitchDeg;
   const hasPitch = phoneEl != null;
   const sep = hasPitch
     ? skyAngularSeparationDeg(sensors.headingDeg, phoneEl, look.azimuthDeg, look.elevationDeg)
     : Math.abs(turn);
 
+  const wasLocked = aimLocked;
   if (aimLocked) {
-    if (sep > LOCK_EXIT_DEG) aimLocked = false;
+    if (sep > LOCK_EXIT_DEG) {
+      aimLocked = false;
+      skyViewStab.setHoldFrozen(false);
+      lastSkyScanMs = 0;
+    }
   } else if (sep < LOCK_ENTER_DEG && look.elevationDeg >= GOOD_ELEV_DEG) {
     aimLocked = true;
+    // Snap sky to the satellite and hard-freeze — stops chase jitter on lock.
+    skyViewStab.snapTo(look.azimuthDeg, look.elevationDeg, true);
+    lastSkyKey = '';
   }
 
   if (aimLocked) {
@@ -670,23 +685,33 @@ function updateCues(
             : 'spotter.cue_locked';
     setCue('spotter-turn', t(lockKey));
     setCue('spotter-tilt', '');
+    if (!wasLocked) {
+      // One redraw with green ring; then stay still.
+      lastSkyKey = '';
+    }
     return;
   }
 
-  if (Math.abs(turn) < DEADBAND_DEG) {
+  // Cue turn/tilt from the stabilized view when available (calmer numbers).
+  const stab = skyViewStab.getCenter();
+  const cueHeading = stab?.headingDeg ?? sensors.headingDeg;
+  const cuePitch = stab?.pitchDeg ?? phoneEl;
+  const cueTurn = headingDelta(cueHeading, look.azimuthDeg);
+
+  if (Math.abs(cueTurn) < DEADBAND_DEG) {
     setCue('spotter-turn', t('spotter.cue_turn_ok'));
-  } else if (turn > 0) {
-    setCue('spotter-turn', t('spotter.guide_right').replace('{deg}', Math.abs(turn).toFixed(0)));
+  } else if (cueTurn > 0) {
+    setCue('spotter-turn', t('spotter.guide_right').replace('{deg}', Math.abs(cueTurn).toFixed(0)));
   } else {
-    setCue('spotter-turn', t('spotter.guide_left').replace('{deg}', Math.abs(turn).toFixed(0)));
+    setCue('spotter-turn', t('spotter.guide_left').replace('{deg}', Math.abs(cueTurn).toFixed(0)));
   }
 
-  if (!hasPitch) {
+  if (cuePitch == null) {
     setCue('spotter-tilt', t('spotter.guide_look_up').replace('{el}', look.elevationDeg.toFixed(0)));
     return;
   }
 
-  const elevErr = look.elevationDeg - phoneEl;
+  const elevErr = look.elevationDeg - cuePitch;
   if (Math.abs(elevErr) < DEADBAND_DEG) {
     setCue('spotter-tilt', t('spotter.cue_tilt_ok'));
   } else if (elevErr > 0) {
@@ -694,6 +719,14 @@ function updateCues(
   } else {
     setCue('spotter-tilt', t('spotter.guide_tilt_down').replace('{deg}', Math.abs(elevErr).toFixed(0)));
   }
+}
+
+function sameSkyHitSet(a: SkyScanHit[], b: SkyScanHit[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].noradId !== b[i].noradId) return false;
+  }
+  return true;
 }
 
 function updateChips(
