@@ -17,8 +17,11 @@ import { trueHeadingAtLocationDeg } from '../orbital/magneticDeclination';
 
 const LS_LOCATION_KEY = 'orbital-spotter-location';
 
-/** Near ±90° beta the Euler frame hits gimbal lock — freeze last stable heading. */
-const GIMBAL_LOCK_BETA_DEG = 85;
+/**
+ * When the back-camera look vector is near zenith/nadir its azimuth is undefined —
+ * freeze the last stable camera heading.
+ */
+const GIMBAL_LOCK_ELEV_DEG = 85;
 /** Ignore heading/pitch micro-jitter below this (degrees). */
 const ORIENT_EPSILON_DEG = 0.15;
 /** EMA factor for heading/pitch smoothing (higher = snappier). */
@@ -46,8 +49,8 @@ export interface SensorSnapshot {
   /** Which trusted API produced the current heading. */
   headingSource: HeadingSource;
   /**
-   * Phone look elevation above the horizon (degrees): 0 = horizon, 90 = zenith.
-   * Derived from device beta/gamma (top-edge aim while screen faces the user).
+   * Back-camera look elevation above the horizon (degrees): 0 = horizon, 90 = zenith.
+   * Matches pointing the rear camera / looking “through” the screen into the sky.
    */
   pitchDeg: number | null;
   /** WMM declination applied at the current location (east-positive), or null. */
@@ -190,46 +193,95 @@ function smoothLinear(prev: number | null, next: number, alpha: number): number 
 }
 
 /**
- * Compass heading (degrees from magnetic north) that stays stable when the
- * phone is tilted to look at the sky — unlike raw `360 - alpha`, which flips
- * around β ≈ ±90° (gimbal lock).
+ * Compass heading of the back-camera / through-screen look vector (−Z), in
+ * degrees from magnetic north. Stable when the phone is held upright (unlike
+ * raw `360 - alpha`, which flips around β ≈ ±90°).
  *
- * Based on the W3C / Opera deviceorientation compass derivation.
+ * Based on the W3C / Opera deviceorientation compass derivation (horizontal
+ * projection of the device −Z axis after Rz(α)·Rx(β)·Ry(γ)).
  */
 export function compassHeadingFromEuler(alpha: number, beta: number, gamma: number): number {
-  const toRad = Math.PI / 180;
-  const x = beta * toRad;
-  const y = gamma * toRad;
-  const z = alpha * toRad;
-
-  const cY = Math.cos(y);
-  const cZ = Math.cos(z);
-  const sX = Math.sin(x);
-  const sY = Math.sin(y);
-  const sZ = Math.sin(z);
-
-  const Vx = -cZ * sY - sZ * sX * cY;
-  const Vy = -sZ * sY + cZ * sX * cY;
-
-  return wrap360(Math.atan2(Vx, Vy) * (180 / Math.PI));
+  return cameraLookFromEuler(alpha, beta, gamma).headingDeg;
 }
 
 /**
- * Phone aiming elevation above the horizon (degrees).
- * 0 = aimed at horizon, +90 = zenith, negative = below horizon.
- *
- * Spotter is held like a compass (screen toward the user). The look direction
- * is over the top edge of the phone — the complement of the screen-normal
- * elevation. Using the screen-normal alone inverted “tilt up/down” cues.
+ * Back-camera look direction in the W3C Earth frame (X east, Y north, Z up).
+ * Elevation: 0 = horizon, +90 = zenith, negative = below horizon.
+ * Upright portrait (β≈90): horizon ahead; tip camera up (β→180): toward zenith.
  */
-export function lookElevationFromEuler(beta: number, gamma: number): number {
+export function cameraLookFromEuler(
+  alpha: number,
+  beta: number,
+  gamma: number,
+): { headingDeg: number; elevationDeg: number } {
   const toRad = Math.PI / 180;
+  const a = alpha * toRad;
   const b = beta * toRad;
   const g = gamma * toRad;
-  // Screen-normal elevation (out of the screen): upright → 0, flat face-up → 90.
-  const screenNormalElev = Math.asin(clamp(Math.cos(b) * Math.cos(g), -1, 1)) * (180 / Math.PI);
-  // Aiming over the top bezel while reading the screen: upright → zenith (90).
-  return clamp(90 - screenNormalElev, -90, 90);
+
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const cb = Math.cos(b);
+  const sb = Math.sin(b);
+  const cg = Math.cos(g);
+  const sg = Math.sin(g);
+
+  // R * (0, 0, -1) with R = Rz(α) Rx(β) Ry(γ)
+  const x = -ca * sg - sa * sb * cg;
+  const y = -sa * sg + ca * sb * cg;
+  const z = -cb * cg;
+
+  return {
+    headingDeg: wrap360(Math.atan2(x, y) * (180 / Math.PI)),
+    elevationDeg: clamp(Math.asin(clamp(z, -1, 1)) * (180 / Math.PI), -90, 90),
+  };
+}
+
+/** Horizontal projection of the device +Y (top bezel) axis. */
+function topAxisFromEuler(
+  alpha: number,
+  beta: number,
+  gamma: number,
+): { headingDeg: number; elevationDeg: number } {
+  const toRad = Math.PI / 180;
+  const a = alpha * toRad;
+  const b = beta * toRad;
+  // Ry does not move +Y; R*(0,1,0) = (−sinα·cosβ, cosα·cosβ, sinβ)
+  void gamma;
+  const x = -Math.sin(a) * Math.cos(b);
+  const y = Math.cos(a) * Math.cos(b);
+  const z = Math.sin(b);
+  return {
+    headingDeg: wrap360(Math.atan2(x, y) * (180 / Math.PI)),
+    elevationDeg: clamp(Math.asin(clamp(z, -1, 1)) * (180 / Math.PI), -90, 90),
+  };
+}
+
+/**
+ * iOS `webkitCompassHeading` is the top-of-device bearing. Convert it to the
+ * back-camera bearing using the top↔camera azimuth offset from β/γ.
+ * When the top axis is near vertical (upright), iOS already reports facing ≈ camera.
+ */
+export function webkitCompassToCameraHeading(
+  webkitHeadingDeg: number,
+  beta: number,
+  gamma: number,
+): number {
+  const top = topAxisFromEuler(0, beta, gamma);
+  if (Math.abs(top.elevationDeg) >= GIMBAL_LOCK_ELEV_DEG) {
+    return wrap360(webkitHeadingDeg);
+  }
+  const cam = cameraLookFromEuler(0, beta, gamma);
+  const offset = signedDeltaDeg(top.headingDeg, cam.headingDeg);
+  return wrap360(webkitHeadingDeg + offset);
+}
+
+/**
+ * Back-camera elevation above the horizon (degrees).
+ * 0 = aimed at horizon, +90 = zenith, negative = below horizon.
+ */
+export function lookElevationFromEuler(beta: number, gamma: number): number {
+  return cameraLookFromEuler(0, beta, gamma).elevationDeg;
 }
 
 export function screenOrientationOffsetDeg(): number {
@@ -250,24 +302,30 @@ export interface ParsedOrientationHeading {
 /**
  * Extract a *trusted* compass heading from a DeviceOrientation event.
  * Returns null for untrusted relative-only Euler frames (arbitrary zero).
+ * Heading is the back-camera / through-screen look azimuth (not the top bezel).
  */
 export function headingFromOrientationEvent(
   event: DeviceOrientationEvent,
   opts: { treatAsAbsolute?: boolean } = {},
 ): ParsedOrientationHeading | null {
   const beta = typeof event.beta === 'number' && Number.isFinite(event.beta) ? event.beta : null;
+  const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
 
-  // Near zenith pointing, Euler angles are singular — keep last stable heading.
-  if (beta != null && Math.abs(beta) >= GIMBAL_LOCK_BETA_DEG) {
-    if (lastStableHeadingDeg == null || lastStableHeadingSource == null) return null;
-    return { heading: lastStableHeadingDeg, source: lastStableHeadingSource };
+  // Camera near zenith/nadir → azimuth undefined; keep last stable heading.
+  if (beta != null) {
+    const camElev = lookElevationFromEuler(beta, gamma);
+    if (Math.abs(camElev) >= GIMBAL_LOCK_ELEV_DEG) {
+      if (lastStableHeadingDeg == null || lastStableHeadingSource == null) return null;
+      return { heading: lastStableHeadingDeg, source: lastStableHeadingSource };
+    }
   }
 
   const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
   if (typeof webkit === 'number' && Number.isFinite(webkit)) {
-    // iOS heading is relative to the top of the device; compensate screen rotation
-    // so “top of the UI” matches the radar/turn cues.
-    const heading = wrap360(webkit - screenOrientationOffsetDeg());
+    const b = beta ?? 0;
+    const cameraHeading = webkitCompassToCameraHeading(webkit, b, gamma);
+    // Screen-rotation compensation so landscape UI still matches camera yaw.
+    const heading = wrap360(cameraHeading - screenOrientationOffsetDeg());
     lastStableHeadingDeg = heading;
     lastStableHeadingSource = 'webkit';
     return { heading, source: 'webkit' };
@@ -281,11 +339,10 @@ export function headingFromOrientationEvent(
 
   if (typeof event.alpha !== 'number' || !Number.isFinite(event.alpha)) return null;
 
-  const gamma = typeof event.gamma === 'number' && Number.isFinite(event.gamma) ? event.gamma : 0;
   const b = beta ?? 0;
   const raw =
     beta != null
-      ? compassHeadingFromEuler(event.alpha, b, gamma)
+      ? cameraLookFromEuler(event.alpha, b, gamma).headingDeg
       : wrap360(360 - event.alpha);
   // Same screen-angle compensation as the webkit path (landscape Android).
   const heading = wrap360(raw - screenOrientationOffsetDeg());

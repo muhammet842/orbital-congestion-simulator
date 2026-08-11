@@ -1,7 +1,8 @@
 /**
- * Live Satellite Spotter — minimal turn / tilt guide for the selected object.
+ * Live Satellite Spotter — sky map + turn / tilt guide for the selected object.
  *
- * Shows only: how far to rotate left/right, and how far to tilt the phone up/down.
+ * Look direction follows the back camera (through the screen into the sky),
+ * not the top bezel. Shows how far to rotate and tip until the target is centered.
  * Heavy globe rendering is paused while this panel is open.
  */
 
