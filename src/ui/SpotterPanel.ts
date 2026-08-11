@@ -15,6 +15,13 @@ import {
   type LookAngles,
   type PassEvent,
 } from '../orbital/lookAngles';
+import {
+  CARDINAL_AZIMUTHS,
+  DEFAULT_FOV_DEG,
+  horizonYForPitch,
+  projectAzElToCanvas,
+} from '../orbital/skyProjection';
+import { scanSkyCandidates, type SkyScanHit } from '../orbital/skyScan';
 import { getSunEci } from '../scene/dayNight';
 import { getState, isLiveMode, subscribe } from '../state/appState';
 import { onLangChange, t } from '../i18n/i18n';
@@ -41,22 +48,27 @@ let aimLocked = false;
 let lastTurnText = '';
 let lastTiltText = '';
 let lastSelectedIndex: number | null = null;
-let radarCanvas: HTMLCanvasElement | null = null;
-let radarCtx: CanvasRenderingContext2D | null = null;
-let lastRadarKey = '';
+let skyCanvas: HTMLCanvasElement | null = null;
+let skyCtx: CanvasRenderingContext2D | null = null;
+let lastSkyKey = '';
 let cachedPass: PassEvent | null = null;
 let cachedPassKey = '';
 let passComputeScheduled = false;
 let lastLightText = '';
 let lastChipsHtml = '';
 let lastPhoto: PhotoAssessment | null = null;
+let skyHits: SkyScanHit[] = [];
+let lastSkyScanMs = 0;
+let lastSkyCountText = '';
 
 type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 
 /** Poll sensors + refresh guide (no continuous rAF). */
 const TICK_MS = 100;
-/** Recompute satellite az/el at most this often. */
+/** Recompute selected satellite az/el at most this often. */
 const LOOK_INTERVAL_MS = 500;
+/** Full-catalog sky scan cadence. */
+const SKY_SCAN_INTERVAL_MS = 1_000;
 const LOCK_ENTER_DEG = 8;
 const LOCK_EXIT_DEG = 14;
 const DEADBAND_DEG = 3;
@@ -64,6 +76,8 @@ const DEADBAND_DEG = 3;
 const TLE_STALE_WARN_DAYS = 2;
 /** Photo-condition refresh cadence (sunlit / daytime). */
 const PHOTO_INTERVAL_MS = 2_000;
+const SKY_CSS_W = 320;
+const SKY_CSS_H = 280;
 let lastPhotoMs = 0;
 
 /** Spotter aims at the real sky — always wall-clock, never 10x/100x sim time. */
@@ -101,9 +115,9 @@ export function openSpotterPanel(): void {
   lastTurnText = '';
   lastTiltText = '';
   lastSelectedIndex = state.selectedIndex;
-  radarCanvas = null;
-  radarCtx = null;
-  lastRadarKey = '';
+  skyCanvas = null;
+  skyCtx = null;
+  lastSkyKey = '';
   cachedPass = null;
   cachedPassKey = '';
   passComputeScheduled = false;
@@ -111,6 +125,9 @@ export function openSpotterPanel(): void {
   lastChipsHtml = '';
   lastPhoto = null;
   lastPhotoMs = 0;
+  skyHits = [];
+  lastSkyScanMs = 0;
+  lastSkyCountText = '';
 
   startObserverSensors();
   renderShell();
@@ -119,6 +136,7 @@ export function openSpotterPanel(): void {
   unsubSensors = subscribeSensors(() => {
     cachedPass = null;
     cachedPassKey = '';
+    lastSkyScanMs = 0;
     tick();
   });
   unsubState = subscribe(() => {
@@ -134,6 +152,9 @@ export function openSpotterPanel(): void {
       aimLocked = false;
       cachedPass = null;
       cachedPassKey = '';
+      skyHits = [];
+      lastSkyScanMs = 0;
+      lastSkyKey = '';
       renderShell();
       bindShellEvents();
       tick();
@@ -170,11 +191,12 @@ export function closeSpotterPanel(): void {
   backdropEl?.remove();
   backdropEl = null;
   panelEl = null;
-  radarCanvas = null;
-  radarCtx = null;
+  skyCanvas = null;
+  skyCtx = null;
   lastLook = null;
   cachedPass = null;
   cachedPassKey = '';
+  skyHits = [];
 }
 
 function handleEsc(e: KeyboardEvent): void {
@@ -201,8 +223,9 @@ function renderShell(): void {
       <p class="spotter-hint">${t('spotter.compass_hint')}</p>
       <p class="spotter-hint spotter-hint--muted">${t('spotter.hold_hint')}</p>
 
-      <div class="spotter-radar-wrap">
-        <canvas id="spotter-radar" class="spotter-radar spotter-radar--sm" width="200" height="200"></canvas>
+      <div class="spotter-sky-wrap">
+        <canvas id="spotter-sky" class="spotter-sky" width="${SKY_CSS_W}" height="${SKY_CSS_H}" aria-label="${t('spotter.sky_label')}"></canvas>
+        <p class="spotter-sky-meta" id="spotter-sky-meta"></p>
       </div>
 
       <p class="spotter-cue spotter-cue--turn" id="spotter-turn">—</p>
@@ -226,12 +249,14 @@ function renderShell(): void {
       </details>
     </div>
   `;
-  radarCanvas = panelEl.querySelector('#spotter-radar');
-  radarCtx = radarCanvas?.getContext('2d') ?? null;
+  skyCanvas = panelEl.querySelector('#spotter-sky');
+  skyCtx = skyCanvas?.getContext('2d') ?? null;
   lastTurnText = '';
   lastTiltText = '';
   lastLightText = '';
   lastChipsHtml = '';
+  lastSkyCountText = '';
+  lastSkyKey = '';
 }
 
 function bindShellEvents(): void {
@@ -277,10 +302,13 @@ function tick(): void {
   if (state.selectedIndex == null || !sensors.location) {
     lastLook = null;
     lastPhoto = null;
+    skyHits = [];
     setCue('spotter-turn', t('spotter.need_location'));
     setCue('spotter-tilt', '');
     setLight('');
     setChipsHtml('');
+    setSkyMeta('');
+    maybeDrawSky(sensors, null);
     return;
   }
 
@@ -309,10 +337,44 @@ function tick(): void {
   updateCues(lastLook, sensors, lastPhoto);
   updateChips(sensors, lastLook, lastPhoto);
   updateLightHint(lastLook, lastPhoto);
-  maybeDrawRadar(
-    lastLook,
-    sensors.headingReliable ? sensors.headingDeg : null,
-    sensors.pitchDeg,
+  maybeRefreshSkyScan(state, sensors, now);
+  maybeDrawSky(
+    sensors,
+    state.selectedIndex != null ? state.objects[state.selectedIndex]?.noradId ?? null : null,
+  );
+}
+
+function maybeRefreshSkyScan(
+  state: ReturnType<typeof getState>,
+  sensors: SensorSnapshot,
+  now: number,
+): void {
+  if (!sensors.location || !sensors.headingReliable || sensors.headingDeg == null) {
+    skyHits = [];
+    return;
+  }
+  if (now - lastSkyScanMs < SKY_SCAN_INTERVAL_MS && skyHits.length > 0) return;
+  lastSkyScanMs = now;
+  const pitch = sensors.pitchDeg ?? 45;
+  const selected =
+    state.selectedIndex != null ? state.objects[state.selectedIndex] : null;
+  skyHits = scanSkyCandidates(
+    state.objects.map((o) => ({
+      noradId: o.noradId,
+      name: o.name,
+      satrec: o.satrec,
+      category: o.category,
+    })),
+    sensors.location,
+    getSpotterTime(),
+    { headingDeg: sensors.headingDeg, pitchDeg: pitch },
+    {
+      selectedNoradId: selected?.noradId ?? null,
+      maxCount: 100,
+      minElevationDeg: 0,
+      includeDebris: false,
+      fovDeg: DEFAULT_FOV_DEG,
+    },
   );
 }
 
@@ -537,111 +599,159 @@ function setCue(id: 'spotter-turn' | 'spotter-tilt', text: string): void {
   if (el && el.textContent !== text) el.textContent = text;
 }
 
-function maybeDrawRadar(
-  look: LookAngles | null,
-  headingDeg: number | null,
-  pitchDeg: number | null,
-): void {
+function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): void {
+  const heading = sensors.headingReliable ? sensors.headingDeg : null;
+  const pitch = sensors.pitchDeg;
   const key = [
-    look ? look.azimuthDeg.toFixed(1) : '',
-    look ? look.elevationDeg.toFixed(1) : '',
-    headingDeg?.toFixed(1) ?? 'x',
-    pitchDeg?.toFixed(1) ?? 'x',
+    heading?.toFixed(1) ?? 'x',
+    pitch?.toFixed(1) ?? 'x',
+    selectedNoradId ?? 'n',
     aimLocked ? '1' : '0',
+    skyHits.length,
+    skyHits[0]?.noradId ?? '',
   ].join('|');
-  if (key === lastRadarKey) return;
-  lastRadarKey = key;
-  drawRadar(look, headingDeg, pitchDeg);
+  if (key === lastSkyKey) return;
+  lastSkyKey = key;
+  drawSky(heading, pitch ?? 45, selectedNoradId, sensors.headingReliable);
 }
 
-function drawRadar(
-  look: LookAngles | null,
+function drawSky(
   headingDeg: number | null,
-  pitchDeg: number | null,
+  pitchDeg: number,
+  selectedNoradId: number | null,
+  compassOk: boolean,
 ): void {
-  const canvas = radarCanvas ?? panelEl?.querySelector<HTMLCanvasElement>('#spotter-radar');
+  const canvas = skyCanvas ?? panelEl?.querySelector<HTMLCanvasElement>('#spotter-sky');
   if (!canvas) return;
-  radarCanvas = canvas;
-  const ctx = radarCtx ?? canvas.getContext('2d');
+  skyCanvas = canvas;
+  const ctx = skyCtx ?? canvas.getContext('2d');
   if (!ctx) return;
-  radarCtx = ctx;
+  skyCtx = ctx;
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const css = 200;
-  const w = Math.round(css * dpr);
-  if (canvas.width !== w) {
-    canvas.width = w;
-    canvas.height = w;
-    canvas.style.width = `${css}px`;
-    canvas.style.height = `${css}px`;
+  const cssW = SKY_CSS_W;
+  const cssH = SKY_CSS_H;
+  const bw = Math.round(cssW * dpr);
+  const bh = Math.round(cssH * dpr);
+  if (canvas.width !== bw || canvas.height !== bh) {
+    canvas.width = bw;
+    canvas.height = bh;
+    canvas.style.width = `${cssW}px`;
+    canvas.style.height = `${cssH}px`;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, css, css);
+  ctx.clearRect(0, 0, cssW, cssH);
 
-  const cx = css / 2;
-  const cy = css / 2;
-  const r = css / 2 - 12;
+  // Night sky background
+  const grad = ctx.createLinearGradient(0, 0, 0, cssH);
+  grad.addColorStop(0, '#070b18');
+  grad.addColorStop(1, '#12182a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cssW, cssH);
 
-  ctx.beginPath();
-  ctx.fillStyle = 'rgba(8, 18, 36, 0.95)';
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(232, 164, 90, 0.3)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  if (!compassOk || headingDeg == null) {
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.75)';
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t('spotter.sky_no_compass'), cssW / 2, cssH / 2);
+    setSkyMeta('');
+    return;
+  }
 
-  const heading = headingDeg ?? 0;
+  const view = { headingDeg, pitchDeg };
+  const fov = DEFAULT_FOV_DEG;
 
-  // Center crosshair
-  ctx.strokeStyle = 'rgba(248, 250, 252, 0.55)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(cx - 8, cy);
-  ctx.lineTo(cx + 8, cy);
-  ctx.moveTo(cx, cy - 8);
-  ctx.lineTo(cx, cy + 8);
-  ctx.stroke();
-
-  // Facing tip
-  ctx.beginPath();
-  ctx.fillStyle = '#f8fafc';
-  ctx.moveTo(cx, cy - r + 2);
-  ctx.lineTo(cx - 6, cy - r + 12);
-  ctx.lineTo(cx + 6, cy - r + 12);
-  ctx.closePath();
-  ctx.fill();
-
-  if (pitchDeg != null) {
-    const pr = elevToRadius(Math.max(0, Math.min(90, pitchDeg)), r);
+  // Horizon
+  const hy = horizonYForPitch(pitchDeg, cssH, fov);
+  if (hy >= 0 && hy <= cssH) {
     ctx.beginPath();
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+    ctx.strokeStyle = 'rgba(201, 184, 150, 0.55)';
     ctx.lineWidth = 1.25;
-    ctx.setLineDash([3, 3]);
-    ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+    ctx.moveTo(0, hy);
+    ctx.lineTo(cssW, hy);
     ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(201, 184, 150, 0.7)';
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t('spotter.sky_horizon'), 8, Math.min(cssH - 6, hy - 4));
   }
 
-  if (look?.visible) {
-    const rr = elevToRadius(Math.max(0, Math.min(90, look.elevationDeg)), r);
-    const relAz = ((look.azimuthDeg - heading + 360) % 360) * (Math.PI / 180);
-    const tx = cx + Math.sin(relAz) * rr;
-    const ty = cy - Math.cos(relAz) * rr;
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(232, 164, 90, 0.35)';
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.fillStyle = 'rgba(232, 164, 90, 0.95)';
-    ctx.arc(tx, ty, 6, 0, Math.PI * 2);
-    ctx.fill();
+  // Cardinals
+  ctx.font = '700 11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const c of CARDINAL_AZIMUTHS) {
+    const p = projectAzElToCanvas(
+      view,
+      { azimuthDeg: c.az, elevationDeg: Math.max(2, pitchDeg) },
+      cssW,
+      cssH,
+      fov,
+    );
+    if (!p.inView) continue;
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.55)';
+    ctx.fillText(c.key, p.x, Math.max(12, Math.min(cssH - 12, p.y)));
   }
+
+  // Crosshair (look center)
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.4)';
+  ctx.lineWidth = 1.25;
+  const cx = cssW / 2;
+  const cy = cssH / 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 10, cy);
+  ctx.lineTo(cx + 10, cy);
+  ctx.moveTo(cx, cy - 10);
+  ctx.lineTo(cx, cy + 10);
+  ctx.stroke();
+
+  let drawn = 0;
+  for (const hit of skyHits) {
+    const p = projectAzElToCanvas(
+      view,
+      { azimuthDeg: hit.look.azimuthDeg, elevationDeg: hit.look.elevationDeg },
+      cssW,
+      cssH,
+      fov,
+    );
+    if (!p.inView) continue;
+    drawn++;
+    const isSel = hit.noradId === selectedNoradId;
+    if (isSel) {
+      ctx.beginPath();
+      ctx.strokeStyle = aimLocked ? 'rgba(74, 222, 128, 0.9)' : 'rgba(232, 164, 90, 0.95)';
+      ctx.lineWidth = 2;
+      ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = aimLocked ? 'rgba(74, 222, 128, 0.95)' : 'rgba(232, 164, 90, 0.95)';
+      ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.9)';
+      ctx.font = '600 10px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(hit.name.slice(0, 18), p.x + 12, p.y + 3);
+    } else {
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.85)';
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  setSkyMeta(
+    t('spotter.sky_count')
+      .replace('{n}', String(drawn))
+      .replace('{total}', String(skyHits.length)),
+  );
 }
 
-function elevToRadius(elevDeg: number, maxR: number): number {
-  if (elevDeg <= 0) return maxR * 0.96;
-  return maxR * (1 - Math.min(90, elevDeg) / 90) * 0.92;
+function setSkyMeta(text: string): void {
+  if (text === lastSkyCountText) return;
+  lastSkyCountText = text;
+  const el = panelEl?.querySelector('#spotter-sky-meta');
+  if (el && el.textContent !== text) el.textContent = text;
 }
 
 function formatLocalTime(date: Date): string {

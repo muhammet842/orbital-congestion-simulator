@@ -62,11 +62,11 @@ describe('SpotterPanel', () => {
     expect(isSpotterOpen()).toBe(false);
   });
 
-  it('opens a dialog with radar and turn/tilt cues', () => {
+  it('opens a dialog with sky map and turn/tilt cues', () => {
     openSpotterPanel();
     expect(isSpotterOpen()).toBe(true);
     expect(document.getElementById('spotter-panel')).not.toBeNull();
-    expect(document.getElementById('spotter-radar')).not.toBeNull();
+    expect(document.getElementById('spotter-sky')).not.toBeNull();
     expect(document.getElementById('spotter-lat')).not.toBeNull();
     expect(document.getElementById('spotter-turn')?.textContent?.length).toBeGreaterThan(0);
   });
