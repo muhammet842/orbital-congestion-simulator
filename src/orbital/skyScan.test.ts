@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { twoline2satrec } from 'satellite.js';
 import {
-  finalizeSkyScanHits,
+  buildSkyScanPool,
   scanSkyCandidates,
-  scanSkyCandidatesChunk,
-  type SkyScanHit,
 } from './skyScan';
 
 /** ISS TLE near a known epoch — used only for elev filter shape, not absolute sky. */
@@ -61,27 +59,20 @@ describe('scanSkyCandidates', () => {
     }
   });
 
-  it('chunk scan matches full scan results', () => {
-    const objects = [issObject()];
-    const full = scanSkyCandidates(objects, observer, date, view, { maxCount: 20 });
-    const accum: SkyScanHit[] = [];
-    let idx = 0;
-    let done = false;
-    while (!done) {
-      const step = scanSkyCandidatesChunk(
-        objects,
-        observer,
-        date,
-        view,
-        { maxCount: 20 },
-        idx,
-        1,
-        accum,
-      );
-      idx = step.nextIndex;
-      done = step.done;
+  it('buildSkyScanPool prioritizes stations and caps size', () => {
+    const objects = [];
+    for (let i = 0; i < 500; i++) {
+      objects.push({
+        ...issObject(),
+        noradId: i,
+        name: i < 5 ? `STATION-${i}` : `SAT-${i}`,
+        category: i < 5 ? ('stations' as const) : ('active' as const),
+        functionGroup: i < 5 ? ('station' as const) : ('active' as const),
+      });
     }
-    const chunked = finalizeSkyScanHits(accum, { maxCount: 20 });
-    expect(chunked.map((h) => h.noradId)).toEqual(full.map((h) => h.noradId));
+    const pool = buildSkyScanPool(objects, 42, 50);
+    expect(pool.length).toBeLessThanOrEqual(50);
+    expect(pool.some((o) => o.noradId === 42)).toBe(true);
+    expect(pool.filter((o) => o.category === 'stations').length).toBe(5);
   });
 });

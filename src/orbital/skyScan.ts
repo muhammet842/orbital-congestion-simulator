@@ -48,7 +48,46 @@ export interface SkyScanOptions {
   selectedNoradId?: number | null;
 }
 
-const DEFAULT_MAX = 100;
+const DEFAULT_MAX = 60;
+/** Soft cap on how many catalog objects a Spotter scan will SGP4. */
+export const DEFAULT_SKY_SCAN_POOL = 1_200;
+
+/**
+ * Build a priority-ordered, size-capped scan pool so mobile never SGP4s the
+ * entire 10k catalog in one Spotter session.
+ * Order: selected → stations → stratified sample of the rest (no debris).
+ */
+export function buildSkyScanPool(
+  objects: SkyScanObject[],
+  selectedNoradId: number | null,
+  maxPool = DEFAULT_SKY_SCAN_POOL,
+): SkyScanObject[] {
+  const selected: SkyScanObject[] = [];
+  const stations: SkyScanObject[] = [];
+  const rest: SkyScanObject[] = [];
+
+  for (const obj of objects) {
+    if (obj.category === 'debris' && obj.noradId !== selectedNoradId) continue;
+    if (selectedNoradId != null && obj.noradId === selectedNoradId) {
+      selected.push(obj);
+    } else if (obj.category === 'stations' || obj.functionGroup === 'station') {
+      stations.push(obj);
+    } else {
+      rest.push(obj);
+    }
+  }
+
+  const head = [...selected, ...stations];
+  const budget = Math.max(0, maxPool - head.length);
+  if (budget <= 0 || rest.length === 0) return head.slice(0, maxPool);
+
+  const step = Math.max(1, Math.ceil(rest.length / budget));
+  const sampled: SkyScanObject[] = [];
+  for (let i = 0; i < rest.length && sampled.length < budget; i += step) {
+    sampled.push(rest[i]);
+  }
+  return head.concat(sampled);
+}
 
 function pushHitIfVisible(
   obj: SkyScanObject,
@@ -115,6 +154,7 @@ export function finalizeSkyScanHits(
 /**
  * Scan a slice of the catalog (for cooperative multitasking — avoids main-thread stalls).
  * Appends above-horizon hits into `into`. Returns the next index to resume from.
+ * When `budgetMs` is set, stops early once the time budget is exhausted.
  */
 export function scanSkyCandidatesChunk(
   objects: SkyScanObject[],
@@ -125,17 +165,25 @@ export function scanSkyCandidatesChunk(
   fromIndex: number,
   chunkSize: number,
   into: SkyScanHit[],
+  budgetMs?: number,
 ): { nextIndex: number; done: boolean } {
   const minEl = opts.minElevationDeg ?? 0;
   const includeDebris = opts.includeDebris ?? false;
   const selectedId = opts.selectedNoradId ?? null;
-  const end = Math.min(objects.length, Math.max(0, fromIndex) + Math.max(1, chunkSize));
+  const start = Math.max(0, fromIndex);
+  const hardEnd = Math.min(objects.length, start + Math.max(1, chunkSize));
+  const t0 = typeof budgetMs === 'number' && typeof performance !== 'undefined' ? performance.now() : null;
 
-  for (let i = Math.max(0, fromIndex); i < end; i++) {
+  let i = start;
+  for (; i < hardEnd; i++) {
     pushHitIfVisible(objects[i], observer, date, view, minEl, includeDebris, selectedId, into);
+    if (t0 != null && typeof budgetMs === 'number' && performance.now() - t0 >= budgetMs) {
+      i += 1;
+      break;
+    }
   }
 
-  return { nextIndex: end, done: end >= objects.length };
+  return { nextIndex: i, done: i >= objects.length };
 }
 
 /**

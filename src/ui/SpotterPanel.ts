@@ -25,6 +25,7 @@ import {
   projectAzElToCanvas,
 } from '../orbital/skyProjection';
 import {
+  buildSkyScanPool,
   finalizeSkyScanHits,
   scanSkyCandidatesChunk,
   type SkyScanHit,
@@ -70,6 +71,7 @@ let lastChipsHtml = '';
 let lastPhoto: PhotoAssessment | null = null;
 let skyHits: SkyScanHit[] = [];
 let lastSkyScanMs = 0;
+let lastSkyProgressMs = 0;
 let lastSkyCountText = '';
 /** Current horizontal FOV for sky projection (pinch / buttons). */
 let skyFovDeg = DEFAULT_FOV_DEG;
@@ -95,10 +97,16 @@ type PhotoAssessment = NonNullable<ReturnType<typeof assessPhotoConditions>>;
 const TICK_MS = 100;
 /** Recompute selected satellite az/el at most this often. */
 const LOOK_INTERVAL_MS = 500;
-/** Start a new full-catalog sky scan at most this often. */
-const SKY_SCAN_INTERVAL_MS = 2_000;
-/** SGP4 objects processed per tick while a scan is in flight. */
-const SKY_SCAN_CHUNK = 280;
+/** Start a new sky scan at most this often (after one completes). */
+const SKY_SCAN_INTERVAL_MS = 5_000;
+/** Max objects to SGP4 per tick (also capped by time budget). */
+const SKY_SCAN_CHUNK = 120;
+/** Soft wall-clock budget for one scan chunk (ms) — keeps the UI responsive. */
+const SKY_SCAN_BUDGET_MS = 6;
+/** Publish interim dots this often while a scan is still running. */
+const SKY_SCAN_PROGRESS_MS = 350;
+/** Cap dots drawn on the sky canvas. */
+const SKY_MAX_HITS = 50;
 const LOCK_ENTER_DEG = 8;
 const LOCK_EXIT_DEG = 14;
 const DEADBAND_DEG = 3;
@@ -157,6 +165,7 @@ export function openSpotterPanel(): void {
   lastPhotoMs = 0;
   skyHits = [];
   lastSkyScanMs = 0;
+  lastSkyProgressMs = 0;
   lastSkyCountText = '';
   skyFovDeg = DEFAULT_FOV_DEG;
   pinchStartDist = 0;
@@ -169,9 +178,9 @@ export function openSpotterPanel(): void {
   bindShellEvents();
 
   unsubSensors = subscribeSensors(() => {
+    // Location/permission only — do not nuke an in-flight sky scan on every GPS tick.
     cachedPass = null;
     cachedPassKey = '';
-    lastSkyScanMs = 0;
     tick();
   });
   unsubState = subscribe(() => {
@@ -486,33 +495,38 @@ function maybeRefreshSkyScan(
     return;
   }
 
-  // Continue an in-flight chunked scan (keeps frames responsive).
+  const scanOpts = {
+    selectedNoradId: skyScanSelectedId,
+    maxCount: SKY_MAX_HITS,
+    minElevationDeg: 0,
+    includeDebris: false,
+    fovDeg: skyFovDeg,
+  };
+
+  // Continue an in-flight chunked scan (time-budgeted for mobile).
   if (skyScanActive && skyScanObserver) {
     const chunk = scanSkyCandidatesChunk(
       skyScanObjects,
       skyScanObserver,
       new Date(skyScanDateMs),
       skyScanView,
-      {
-        selectedNoradId: skyScanSelectedId,
-        maxCount: 100,
-        minElevationDeg: 0,
-        includeDebris: false,
-        fovDeg: skyFovDeg,
-      },
+      scanOpts,
       skyScanIndex,
       SKY_SCAN_CHUNK,
       skyScanAccum,
+      SKY_SCAN_BUDGET_MS,
     );
     skyScanIndex = chunk.nextIndex;
-    if (chunk.done) {
-      skyHits = finalizeSkyScanHits(skyScanAccum, {
-        selectedNoradId: skyScanSelectedId,
-        maxCount: 100,
-        fovDeg: skyFovDeg,
-      });
-      lastSkyScanMs = now;
+
+    // Progressive publish so the sky is not empty for seconds.
+    if (chunk.done || now - lastSkyProgressMs >= SKY_SCAN_PROGRESS_MS) {
+      lastSkyProgressMs = now;
+      skyHits = finalizeSkyScanHits(skyScanAccum, scanOpts);
       lastSkyKey = '';
+    }
+
+    if (chunk.done) {
+      lastSkyScanMs = now;
       resetSkyScanState();
     }
     return;
@@ -523,16 +537,18 @@ function maybeRefreshSkyScan(
   const center = skyViewStab.getCenter();
   const pitch = center?.pitchDeg ?? sensors.pitchDeg ?? 45;
   const heading = center?.headingDeg ?? sensors.headingDeg;
+  if (heading == null) return;
   const selected =
     state.selectedIndex != null ? state.objects[state.selectedIndex] : null;
 
-  skyScanObjects = state.objects.map((o) => ({
+  const rawPool: SkyScanObject[] = state.objects.map((o) => ({
     noradId: o.noradId,
     name: o.name,
     satrec: o.satrec,
     category: o.category,
     functionGroup: o.functionGroup,
   }));
+  skyScanObjects = buildSkyScanPool(rawPool, selected?.noradId ?? null);
   skyScanObserver = {
     latitudeDeg: sensors.location.latitudeDeg,
     longitudeDeg: sensors.location.longitudeDeg,
@@ -544,6 +560,7 @@ function maybeRefreshSkyScan(
   skyScanAccum = [];
   skyScanIndex = 0;
   skyScanActive = true;
+  lastSkyProgressMs = now;
 }
 
 function schedulePassCompute(
