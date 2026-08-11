@@ -25,19 +25,19 @@ const GIMBAL_LOCK_ELEV_DEG = 85;
 /** Ignore heading micro-jitter below this before updating the snapshot (degrees). */
 const ORIENT_EPSILON_HEADING_DEG = 0.45;
 /** Ignore pitch micro-jitter below this — pitch noise causes sky “bounce”. */
-const ORIENT_EPSILON_PITCH_DEG = 0.85;
+const ORIENT_EPSILON_PITCH_DEG = 1.25;
 /** EMA when nearly still (lower = calmer sky). */
 const HEADING_SMOOTH_SLOW = 0.1;
-const PITCH_SMOOTH_SLOW = 0.045;
+const PITCH_SMOOTH_SLOW = 0.03;
 /** EMA when the user makes a clear intentional move. */
 const HEADING_SMOOTH_FAST = 0.35;
-const PITCH_SMOOTH_FAST = 0.22;
+const PITCH_SMOOTH_FAST = 0.18;
 /** Delta (deg) at which smoothing reaches the fast rate — keep high so noise ≠ “move”. */
-const ORIENT_FAST_DELTA_DEG = 14;
+const ORIENT_FAST_DELTA_DEG = 16;
 /** Drop single-sample pitch spikes farther than this from the median (degrees). */
-const PITCH_SPIKE_REJECT_DEG = 8;
+const PITCH_SPIKE_REJECT_DEG = 6;
 /** Rolling window for pitch median pre-filter. */
-const PITCH_MEDIAN_WINDOW = 5;
+const PITCH_MEDIAN_WINDOW = 7;
 /** Horizontal GPS accuracy above this (meters) is treated as “poor”. */
 export const GPS_ACCURACY_WARN_M = 80;
 /**

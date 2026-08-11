@@ -79,6 +79,10 @@ let zoomUnbind: (() => void) | null = null;
 /** Latched view center for sky drawing — freezes while the phone is nearly still. */
 let skyViewHeading: number | null = null;
 let skyViewPitch: number | null = null;
+/** When true, sky canvas ignores sensor noise until a sustained intentional move. */
+let skyViewFrozen = true;
+let skyUnlockStreak = 0;
+let skyRefreezeStreak = 0;
 /** Chunked catalog scan state (avoids multi-thousand SGP4 stalls). */
 let skyScanActive = false;
 let skyScanIndex = 0;
@@ -103,12 +107,17 @@ const SKY_SCAN_CHUNK = 280;
 const LOCK_ENTER_DEG = 8;
 const LOCK_EXIT_DEG = 14;
 const DEADBAND_DEG = 3;
-/** Hold sky view still until the phone moves more than this (degrees). */
-const SKY_HOLD_EXIT_DEG = 2.6;
-/** Below this delta, treat orientation as still (no sky view update). */
-const SKY_HOLD_ENTER_DEG = 0.9;
-/** Blend toward sensors once past the hold-exit threshold. */
-const SKY_VIEW_FOLLOW = 0.22;
+/** Hold sky view frozen until pitch moves this far for several ticks (noise is smaller). */
+const SKY_UNLOCK_PITCH_DEG = 5.5;
+/** Hold sky view frozen until heading moves this far for several ticks. */
+const SKY_UNLOCK_HEADING_DEG = 4.5;
+/** Consecutive ticks past unlock threshold required before the sky follows again. */
+const SKY_UNLOCK_TICKS = 5;
+/** After unlocking, re-freeze when motion stays below this for several ticks. */
+const SKY_REFREEZE_DEG = 1.6;
+const SKY_REFREEZE_TICKS = 4;
+/** Blend toward sensors only while unlocked (intentional aiming). */
+const SKY_VIEW_FOLLOW = 0.28;
 /** Warn in Spotter when catalog is older than this (LEO drifts fast). */
 const TLE_STALE_WARN_DAYS = 2;
 /** Photo-condition refresh cadence (sunlit / daytime). */
@@ -170,6 +179,9 @@ export function openSpotterPanel(): void {
   pinchStartFov = DEFAULT_FOV_DEG;
   skyViewHeading = null;
   skyViewPitch = null;
+  skyViewFrozen = true;
+  skyUnlockStreak = 0;
+  skyRefreezeStreak = 0;
   resetSkyScanState();
 
   startObserverSensors();
@@ -244,6 +256,9 @@ export function closeSpotterPanel(): void {
   resetSkyScanState();
   skyViewHeading = null;
   skyViewPitch = null;
+  skyViewFrozen = true;
+  skyUnlockStreak = 0;
+  skyRefreezeStreak = 0;
   zoomUnbind?.();
   zoomUnbind = null;
 }
@@ -551,8 +566,8 @@ function maybeRefreshSkyScan(
 }
 
 /**
- * Latch sky-map look direction while the phone is nearly still so sensor noise
- * does not bounce the canvas. Follow again after a clear intentional move.
+ * Hard-freeze the sky-map look direction until the phone makes a sustained,
+ * intentional move. Single-sample noise (even a few degrees) must not unlock.
  */
 function updateSkyViewCenter(
   headingDeg: number | null,
@@ -560,32 +575,58 @@ function updateSkyViewCenter(
 ): { headingDeg: number | null; pitchDeg: number } {
   const pitch = pitchDeg ?? 45;
   if (headingDeg == null) {
-    return { headingDeg: null, pitchDeg: pitch };
+    return { headingDeg: null, pitchDeg: skyViewPitch ?? pitch };
   }
   if (skyViewHeading == null || skyViewPitch == null) {
     skyViewHeading = headingDeg;
     skyViewPitch = pitch;
+    skyViewFrozen = true;
+    skyUnlockStreak = 0;
+    skyRefreezeStreak = 0;
     return { headingDeg, pitchDeg: pitch };
   }
 
   const dH = Math.abs(signedAzimuthDeltaDeg(skyViewHeading, headingDeg));
   const dP = Math.abs(skyViewPitch - pitch);
 
-  if (dH <= SKY_HOLD_ENTER_DEG && dP <= SKY_HOLD_ENTER_DEG) {
+  if (skyViewFrozen) {
+    const unlockCandidate = dP >= SKY_UNLOCK_PITCH_DEG || dH >= SKY_UNLOCK_HEADING_DEG;
+    if (unlockCandidate) {
+      skyUnlockStreak += 1;
+      if (skyUnlockStreak >= SKY_UNLOCK_TICKS) {
+        skyViewFrozen = false;
+        skyUnlockStreak = 0;
+        skyRefreezeStreak = 0;
+        // Catch up immediately so the first unlocked frame isn't laggy.
+        skyViewHeading = headingDeg;
+        skyViewPitch = pitch;
+        return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
+      }
+    } else {
+      skyUnlockStreak = 0;
+    }
+    // Frozen: never let sensor chatter move the canvas.
     return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
   }
 
-  if (dH >= SKY_HOLD_EXIT_DEG || dP >= SKY_HOLD_EXIT_DEG) {
-    skyViewHeading =
-      ((skyViewHeading + signedAzimuthDeltaDeg(skyViewHeading, headingDeg) * SKY_VIEW_FOLLOW) %
-        360 +
-        360) %
-      360;
-    skyViewPitch = skyViewPitch + (pitch - skyViewPitch) * SKY_VIEW_FOLLOW;
-    return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
+  // Unlocked — follow intentional aiming.
+  skyViewHeading =
+    ((skyViewHeading + signedAzimuthDeltaDeg(skyViewHeading, headingDeg) * SKY_VIEW_FOLLOW) % 360 +
+      360) %
+    360;
+  skyViewPitch = skyViewPitch + (pitch - skyViewPitch) * SKY_VIEW_FOLLOW;
+
+  if (dH < SKY_REFREEZE_DEG && dP < SKY_REFREEZE_DEG) {
+    skyRefreezeStreak += 1;
+    if (skyRefreezeStreak >= SKY_REFREEZE_TICKS) {
+      skyViewFrozen = true;
+      skyUnlockStreak = 0;
+      skyRefreezeStreak = 0;
+    }
+  } else {
+    skyRefreezeStreak = 0;
   }
 
-  // Micro-motion band: hold steady (kills the up/down bounce).
   return { headingDeg: skyViewHeading, pitchDeg: skyViewPitch };
 }
 
