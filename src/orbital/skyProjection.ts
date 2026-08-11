@@ -1,8 +1,10 @@
 /**
- * Flat sky-map projection: phone heading/pitch as FOV center,
- * satellite az/el → canvas pixel offsets (equal-angle / “plate carrée” FOV).
+ * Sky-map projection for Spotter: phone heading/pitch as camera look direction,
+ * satellite az/el → canvas pixels.
  *
- * No stars — only used to place catalog satellites in a camera-less sky view.
+ * Uses a camera-basis / local-tangent projection (not raw Δaz×Δel). Plate-carrée
+ * Δaz breaks near the zenith — azimuth is singular and distances explode, which
+ * made “point phone straight up” show zero satellites.
  */
 
 export const DEFAULT_FOV_DEG = 60;
@@ -26,17 +28,27 @@ export interface SkyProjectResult {
   x: number;
   /** Pixel Y from top (0…height). */
   y: number;
-  /** True when inside the rectangular FOV (±fov/2 in both axes). */
+  /** True when inside the rectangular FOV (±fov/2 in both axes) and in front. */
   inView: boolean;
-  /** Signed azimuth offset from view center, degrees (−180…180]. */
+  /** Signed horizontal offset in the camera plane, degrees (−180…180]. */
   dAzDeg: number;
-  /** Elevation minus phone pitch, degrees. */
+  /** Signed vertical offset in the camera plane, degrees. */
   dElDeg: number;
+}
+
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
 }
 
 function wrap360(deg: number): number {
   const x = deg % 360;
   return x < 0 ? x + 360 : x;
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, v));
 }
 
 /** Shortest signed azimuth delta in (−180, 180]. */
@@ -45,6 +57,69 @@ export function signedAzimuthDeltaDeg(fromDeg: number, toDeg: number): number {
   if (d > 180) d -= 360;
   if (d <= -180) d += 360;
   return d;
+}
+
+/** Az/el (degrees) → ENU unit vector (x=east, y=north, z=up). */
+export function azElToEnu(azimuthDeg: number, elevationDeg: number): Vec3 {
+  const a = (wrap360(azimuthDeg) * Math.PI) / 180;
+  const e = (clamp(elevationDeg, -90, 90) * Math.PI) / 180;
+  const c = Math.cos(e);
+  return {
+    x: Math.sin(a) * c,
+    y: Math.cos(a) * c,
+    z: Math.sin(e),
+  };
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  };
+}
+
+function len(v: Vec3): number {
+  return Math.hypot(v.x, v.y, v.z);
+}
+
+function normalize(v: Vec3): Vec3 {
+  const L = len(v);
+  if (L < 1e-12) return { x: 0, y: 0, z: 0 };
+  return { x: v.x / L, y: v.y / L, z: v.z / L };
+}
+
+/**
+ * Camera orthonormal basis for a look direction (heading = az, pitch = el).
+ * Handles zenith/nadir by falling back to a heading-defined “right” axis.
+ */
+export function lookBasis(headingDeg: number, pitchDeg: number): {
+  forward: Vec3;
+  right: Vec3;
+  up: Vec3;
+} {
+  const forward = azElToEnu(headingDeg, pitchDeg);
+  const worldUp: Vec3 = { x: 0, y: 0, z: 1 };
+  let right = cross(forward, worldUp);
+  if (len(right) < 1e-4) {
+    // Looking nearly straight up/down — pick right from heading.
+    right = azElToEnu(headingDeg + 90, 0);
+  } else {
+    right = normalize(right);
+  }
+  const up = normalize(cross(right, forward));
+  return { forward, right, up };
+}
+
+/** Great-circle angle between two az/el directions (degrees). */
+export function skyAngularDistanceDeg(a: SkyAzEl, b: SkyAzEl): number {
+  const u = azElToEnu(a.azimuthDeg, a.elevationDeg);
+  const v = azElToEnu(b.azimuthDeg, b.elevationDeg);
+  return (Math.acos(clamp(dot(u, v), -1, 1)) * 180) / Math.PI;
 }
 
 /**
@@ -58,8 +133,15 @@ export function projectAzElToCanvas(
   height: number,
   fovDeg = DEFAULT_FOV_DEG,
 ): SkyProjectResult {
-  const dAzDeg = signedAzimuthDeltaDeg(view.headingDeg, target.azimuthDeg);
-  const dElDeg = target.elevationDeg - view.pitchDeg;
+  const basis = lookBasis(view.headingDeg, view.pitchDeg);
+  const t = azElToEnu(target.azimuthDeg, target.elevationDeg);
+  const forward = dot(t, basis.forward);
+  const right = dot(t, basis.right);
+  const up = dot(t, basis.up);
+
+  // Angle offsets in the camera plane (equal-angle, stable at zenith).
+  const dAzDeg = (Math.atan2(right, forward) * 180) / Math.PI;
+  const dElDeg = (Math.atan2(up, forward) * 180) / Math.PI;
   const halfFov = fovDeg / 2;
   const pxPerDegX = width / fovDeg;
   const pxPerDegY = height / fovDeg;
@@ -67,6 +149,7 @@ export function projectAzElToCanvas(
   const x = width / 2 + dAzDeg * pxPerDegX;
   const y = height / 2 - dElDeg * pxPerDegY;
   const inView =
+    forward > 0.02 &&
     Math.abs(dAzDeg) <= halfFov &&
     Math.abs(dElDeg) <= halfFov &&
     x >= 0 &&
@@ -79,19 +162,19 @@ export function projectAzElToCanvas(
 
 /** Angular distance from FOV center used for ranking candidates (degrees). */
 export function skyFovCenterDistanceDeg(view: SkyViewCenter, target: SkyAzEl): number {
-  const dAz = signedAzimuthDeltaDeg(view.headingDeg, target.azimuthDeg);
-  const dEl = target.elevationDeg - view.pitchDeg;
-  // Small-angle chord; good enough for ranking within ~60° FOV.
-  return Math.hypot(dAz, dEl);
+  return skyAngularDistanceDeg(
+    { azimuthDeg: view.headingDeg, elevationDeg: view.pitchDeg },
+    target,
+  );
 }
 
 /**
  * Horizon line Y in canvas pixels for the current pitch
- * (elevation 0 relative to phone pitch).
+ * (elevation 0 along the look azimuth).
  */
 export function horizonYForPitch(pitchDeg: number, height: number, fovDeg = DEFAULT_FOV_DEG): number {
-  const dEl = 0 - pitchDeg;
-  return height / 2 - dEl * (height / fovDeg);
+  // Along look heading, horizon is el=0 → vertical camera angle = -pitch.
+  return height / 2 - (0 - pitchDeg) * (height / fovDeg);
 }
 
 /** Cardinal label azimuths (true north = 0). */

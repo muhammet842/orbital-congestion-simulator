@@ -23,6 +23,7 @@ import {
   MIN_FOV_DEG,
   horizonYForPitch,
   projectAzElToCanvas,
+  skyAngularDistanceDeg,
 } from '../orbital/skyProjection';
 import {
   buildSkyScanPool,
@@ -56,7 +57,6 @@ let unsubSensors: (() => void) | null = null;
 let unsubLang: (() => void) | null = null;
 let lastLook: LookAngles | null = null;
 let lastLookMs = 0;
-let aimLocked = false;
 let lastTurnText = '';
 let lastTiltText = '';
 let lastSelectedIndex: number | null = null;
@@ -79,7 +79,15 @@ let pinchStartDist = 0;
 let pinchStartFov = DEFAULT_FOV_DEG;
 let zoomUnbind: (() => void) | null = null;
 /** Net-motion sky stabilizer — freezes display against sensor drift/noise. */
-const skyViewStab = createSkyViewStabilizer();
+const skyViewStab = createSkyViewStabilizer({
+  unlockNetPitchDeg: 2.2,
+  unlockNetHeadingDeg: 2.5,
+  motionWindowMs: 280,
+  unlockStreak: 2,
+  freezeNetDeg: 1.4,
+  freezeStreak: 6,
+  followAlpha: 0.35,
+});
 /** Chunked catalog scan state (avoids multi-thousand SGP4 stalls). */
 let skyScanActive = false;
 let skyScanIndex = 0;
@@ -99,6 +107,8 @@ const TICK_MS = 100;
 const LOOK_INTERVAL_MS = 500;
 /** Start a new sky scan at most this often (after one completes). */
 const SKY_SCAN_INTERVAL_MS = 5_000;
+/** Force a new scan when look moves this far from last scan view. */
+const SKY_RESCAN_VIEW_DEG = 18;
 /** Max objects to SGP4 per tick (also capped by time budget). */
 const SKY_SCAN_CHUNK = 120;
 /** Soft wall-clock budget for one scan chunk (ms) — keeps the UI responsive. */
@@ -107,8 +117,6 @@ const SKY_SCAN_BUDGET_MS = 6;
 const SKY_SCAN_PROGRESS_MS = 350;
 /** Cap dots drawn on the sky canvas. */
 const SKY_MAX_HITS = 50;
-const LOCK_ENTER_DEG = 8;
-const LOCK_EXIT_DEG = 20;
 const DEADBAND_DEG = 3;
 /** Warn in Spotter when catalog is older than this (LEO drifts fast). */
 const TLE_STALE_WARN_DAYS = 2;
@@ -149,7 +157,6 @@ export function openSpotterPanel(): void {
 
   lastLook = null;
   lastLookMs = 0;
-  aimLocked = false;
   lastTurnText = '';
   lastTiltText = '';
   lastSelectedIndex = state.selectedIndex;
@@ -193,7 +200,6 @@ export function openSpotterPanel(): void {
     if (s.selectedIndex !== lastSelectedIndex) {
       lastSelectedIndex = s.selectedIndex;
       lastLook = null;
-      aimLocked = false;
       cachedPass = null;
       cachedPassKey = '';
       skyHits = [];
@@ -477,10 +483,7 @@ function tick(): void {
   updateCues(lastLook, sensors, lastPhoto);
   updateChips(sensors, lastLook, lastPhoto);
   updateLightHint(lastLook, lastPhoto);
-  // Sky SGP4 scan is expensive — pause it while aimed so lock stays smooth.
-  if (!aimLocked) {
-    maybeRefreshSkyScan(state, sensors, now);
-  }
+  maybeRefreshSkyScan(state, sensors, now);
   maybeDrawSky(
     sensors,
     state.selectedIndex != null ? state.objects[state.selectedIndex]?.noradId ?? null : null,
@@ -508,42 +511,65 @@ function maybeRefreshSkyScan(
 
   // Continue an in-flight chunked scan (time-budgeted for mobile).
   if (skyScanActive && skyScanObserver) {
-    const chunk = scanSkyCandidatesChunk(
-      skyScanObjects,
-      skyScanObserver,
-      new Date(skyScanDateMs),
-      skyScanView,
-      scanOpts,
-      skyScanIndex,
-      SKY_SCAN_CHUNK,
-      skyScanAccum,
-      SKY_SCAN_BUDGET_MS,
-    );
-    skyScanIndex = chunk.nextIndex;
-
-    // Progressive publish so the sky is not empty for seconds.
-    if (chunk.done || now - lastSkyProgressMs >= SKY_SCAN_PROGRESS_MS) {
-      lastSkyProgressMs = now;
-      const nextHits = finalizeSkyScanHits(skyScanAccum, scanOpts);
-      if (!sameSkyHitSet(skyHits, nextHits)) {
-        skyHits = nextHits;
-        lastSkyKey = '';
-      }
-    }
-
-    if (chunk.done) {
-      lastSkyScanMs = now;
+    const liveCenter = skyViewStab.getCenter();
+    const livePitch = liveCenter?.pitchDeg ?? sensors.pitchDeg ?? skyScanView.pitchDeg;
+    const liveHeading = liveCenter?.headingDeg ?? sensors.headingDeg;
+    if (
+      liveHeading != null &&
+      skyAngularDistanceDeg(
+        { azimuthDeg: skyScanView.headingDeg, elevationDeg: skyScanView.pitchDeg },
+        { azimuthDeg: liveHeading, elevationDeg: livePitch },
+      ) >= SKY_RESCAN_VIEW_DEG
+    ) {
       resetSkyScanState();
-    }
-    return;
-  }
+      lastSkyScanMs = 0;
+    } else {
+      const chunk = scanSkyCandidatesChunk(
+        skyScanObjects,
+        skyScanObserver,
+        new Date(skyScanDateMs),
+        skyScanView,
+        scanOpts,
+        skyScanIndex,
+        SKY_SCAN_CHUNK,
+        skyScanAccum,
+        SKY_SCAN_BUDGET_MS,
+      );
+      skyScanIndex = chunk.nextIndex;
 
-  if (now - lastSkyScanMs < SKY_SCAN_INTERVAL_MS && skyHits.length > 0) return;
+      // Progressive publish so the sky is not empty for seconds.
+      if (chunk.done || now - lastSkyProgressMs >= SKY_SCAN_PROGRESS_MS) {
+        lastSkyProgressMs = now;
+        const nextHits = finalizeSkyScanHits(skyScanAccum, scanOpts);
+        if (!sameSkyHitSet(skyHits, nextHits)) {
+          skyHits = nextHits;
+          lastSkyKey = '';
+        }
+      }
+
+      if (chunk.done) {
+        lastSkyScanMs = now;
+        resetSkyScanState();
+      }
+      return;
+    }
+  }
 
   const center = skyViewStab.getCenter();
   const pitch = center?.pitchDeg ?? sensors.pitchDeg ?? 45;
   const heading = center?.headingDeg ?? sensors.headingDeg;
   if (heading == null) return;
+
+  // Re-rank when the look direction moves a lot (zenith vs horizon need different pools).
+  const viewMoved =
+    skyAngularDistanceDeg(
+      { azimuthDeg: skyScanView.headingDeg, elevationDeg: skyScanView.pitchDeg },
+      { azimuthDeg: heading, elevationDeg: pitch },
+    ) >= SKY_RESCAN_VIEW_DEG;
+  if (now - lastSkyScanMs < SKY_SCAN_INTERVAL_MS && skyHits.length > 0 && !viewMoved) {
+    return;
+  }
+
   const selected =
     state.selectedIndex != null ? state.objects[state.selectedIndex] : null;
 
@@ -608,7 +634,6 @@ function updateCues(
   }
 
   if (!look.visible) {
-    aimLocked = false;
     const rise = cachedPass?.rise;
     const max = cachedPass?.max;
     if (rise) {
@@ -652,29 +677,17 @@ function updateCues(
     return;
   }
 
-  const turn = headingDelta(sensors.headingDeg, look.azimuthDeg);
-  // Lock / exit must use live sensors (display may be snapped to the target).
-  const phoneEl = sensors.pitchDeg;
-  const hasPitch = phoneEl != null;
-  const sep = hasPitch
-    ? skyAngularSeparationDeg(sensors.headingDeg, phoneEl, look.azimuthDeg, look.elevationDeg)
-    : Math.abs(turn);
+  const stab = skyViewStab.getCenter();
+  const cueHeading = stab?.headingDeg ?? sensors.headingDeg;
+  const cuePitch = stab?.pitchDeg ?? sensors.pitchDeg;
+  const cueTurn = headingDelta(cueHeading, look.azimuthDeg);
+  const sep =
+    cuePitch != null
+      ? skyAngularSeparationDeg(cueHeading, cuePitch, look.azimuthDeg, look.elevationDeg)
+      : Math.abs(cueTurn);
 
-  const wasLocked = aimLocked;
-  if (aimLocked) {
-    if (sep > LOCK_EXIT_DEG) {
-      aimLocked = false;
-      skyViewStab.setHoldFrozen(false);
-      lastSkyScanMs = 0;
-    }
-  } else if (sep < LOCK_ENTER_DEG && look.elevationDeg >= GOOD_ELEV_DEG) {
-    aimLocked = true;
-    // Snap sky to the satellite and hard-freeze — stops chase jitter on lock.
-    skyViewStab.snapTo(look.azimuthDeg, look.elevationDeg, true);
-    lastSkyKey = '';
-  }
-
-  if (aimLocked) {
+  // Soft on-target cue without freezing the sky view.
+  if (sep < DEADBAND_DEG && look.elevationDeg >= GOOD_ELEV_DEG) {
     const lockKey =
       photo?.favorable
         ? 'spotter.cue_locked_visible'
@@ -685,18 +698,8 @@ function updateCues(
             : 'spotter.cue_locked';
     setCue('spotter-turn', t(lockKey));
     setCue('spotter-tilt', '');
-    if (!wasLocked) {
-      // One redraw with green ring; then stay still.
-      lastSkyKey = '';
-    }
     return;
   }
-
-  // Cue turn/tilt from the stabilized view when available (calmer numbers).
-  const stab = skyViewStab.getCenter();
-  const cueHeading = stab?.headingDeg ?? sensors.headingDeg;
-  const cuePitch = stab?.pitchDeg ?? phoneEl;
-  const cueTurn = headingDelta(cueHeading, look.azimuthDeg);
 
   if (Math.abs(cueTurn) < DEADBAND_DEG) {
     setCue('spotter-turn', t('spotter.cue_turn_ok'));
@@ -827,7 +830,6 @@ function maybeDrawSky(sensors: SensorSnapshot, selectedNoradId: number | null): 
     quantizeDeg(view.pitchDeg, step),
     skyFovDeg.toFixed(1),
     selectedNoradId ?? 'n',
-    aimLocked ? '1' : '0',
     skyHits.length,
     skyHits[0]?.noradId ?? '',
   ].join('|');
@@ -959,7 +961,7 @@ function drawSky(
 
     if (isSel) {
       ctx.beginPath();
-      ctx.strokeStyle = aimLocked ? 'rgba(74, 222, 128, 0.9)' : 'rgba(232, 164, 90, 0.95)';
+      ctx.strokeStyle = 'rgba(232, 164, 90, 0.95)';
       ctx.lineWidth = 2;
       ctx.arc(p.x, p.y, 9, 0, Math.PI * 2);
       ctx.stroke();

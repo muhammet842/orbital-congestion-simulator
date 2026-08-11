@@ -4,6 +4,7 @@ import {
   horizonYForPitch,
   projectAzElToCanvas,
   signedAzimuthDeltaDeg,
+  skyAngularDistanceDeg,
   skyFovCenterDistanceDeg,
 } from './skyProjection';
 
@@ -25,8 +26,7 @@ describe('projectAzElToCanvas', () => {
     expect(p.inView).toBe(true);
   });
 
-  it('places a target 30° to the right near the right edge for 60° FOV', () => {
-    // half FOV = 30° → right edge
+  it('places a target to the right of center for positive azimuth offset', () => {
     const p = projectAzElToCanvas(
       view,
       { azimuthDeg: 30, elevationDeg: 45 },
@@ -34,8 +34,24 @@ describe('projectAzElToCanvas', () => {
       size,
       DEFAULT_FOV_DEG,
     );
-    expect(p.x).toBeCloseTo(size, 5);
-    expect(p.y).toBeCloseTo(size / 2, 5);
+    expect(p.x).toBeGreaterThan(size / 2);
+    expect(p.inView).toBe(true);
+    // Camera-plane angle is smaller than raw Δaz at high elevation (not plate-carrée).
+    expect(p.dAzDeg).toBeGreaterThan(0);
+    expect(p.dAzDeg).toBeLessThan(30);
+  });
+
+  it('maps horizon-level Δaz≈half-FOV near the right edge', () => {
+    const horizonView = { headingDeg: 0, pitchDeg: 0 };
+    const p = projectAzElToCanvas(
+      horizonView,
+      { azimuthDeg: 30, elevationDeg: 0 },
+      size,
+      size,
+      DEFAULT_FOV_DEG,
+    );
+    expect(p.x).toBeCloseTo(size, 0);
+    expect(p.y).toBeCloseTo(size / 2, 0);
     expect(p.inView).toBe(true);
   });
 
@@ -48,6 +64,32 @@ describe('projectAzElToCanvas', () => {
     const p = projectAzElToCanvas(view, { azimuthDeg: 0, elevationDeg: 60 }, size, size);
     expect(p.y).toBeLessThan(size / 2);
   });
+
+  it('keeps near-zenith satellites in view when looking straight up', () => {
+    const zenithView = { headingDeg: 0, pitchDeg: 90 };
+    // Same azimuth family near zenith — old Δaz math wrongly marked these out of view.
+    const a = projectAzElToCanvas(
+      zenithView,
+      { azimuthDeg: 0, elevationDeg: 80 },
+      size,
+      size,
+      DEFAULT_FOV_DEG,
+    );
+    const b = projectAzElToCanvas(
+      zenithView,
+      { azimuthDeg: 180, elevationDeg: 80 },
+      size,
+      size,
+      DEFAULT_FOV_DEG,
+    );
+    expect(a.inView).toBe(true);
+    expect(b.inView).toBe(true);
+    // Both are ~10° from zenith; angular distance between them is small.
+    expect(skyAngularDistanceDeg(
+      { azimuthDeg: 0, elevationDeg: 80 },
+      { azimuthDeg: 180, elevationDeg: 80 },
+    )).toBeLessThan(25);
+  });
 });
 
 describe('skyFovCenterDistanceDeg', () => {
@@ -58,6 +100,14 @@ describe('skyFovCenterDistanceDeg', () => {
         { azimuthDeg: 100, elevationDeg: 20 },
       ),
     ).toBeCloseTo(0, 5);
+  });
+
+  it('does not explode for opposite azimuths near zenith', () => {
+    const d = skyFovCenterDistanceDeg(
+      { headingDeg: 0, pitchDeg: 90 },
+      { azimuthDeg: 180, elevationDeg: 85 },
+    );
+    expect(d).toBeLessThan(15);
   });
 });
 

@@ -50,9 +50,9 @@ export interface SkyViewStabilizer {
     headingDeg: number | null;
     pitchDeg: number;
   };
-  /** Snap display to a sky direction and optionally hold freeze (aim lock). */
+  /** Snap display to a sky direction (tests / diagnostics). */
   snapTo(headingDeg: number, pitchDeg: number, hold?: boolean): void;
-  /** While true, ignore unlock motion — used when the Spotter target is locked. */
+  /** While true, ignore unlock motion (tests / diagnostics). */
   setHoldFrozen(hold: boolean): void;
   reset(): void;
 }
@@ -185,7 +185,7 @@ export function createSkyViewStabilizer(
       displayHeading = headingDeg;
     }
 
-    // Aim-lock hold: never follow sensors — keeps the sky rock-steady on target.
+    // Hard hold: never follow sensors (tests / diagnostics).
     if (holdFrozen) {
       frozen = true;
       unlockStreak = 0;

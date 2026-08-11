@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { twoline2satrec } from 'satellite.js';
 import {
   buildSkyScanPool,
+  finalizeSkyScanHits,
   scanSkyCandidates,
+  type SkyScanHit,
 } from './skyScan';
+import { skyFovCenterDistanceDeg } from './skyProjection';
 
 /** ISS TLE near a known epoch — used only for elev filter shape, not absolute sky. */
 function issObject() {
@@ -74,5 +77,47 @@ describe('scanSkyCandidates', () => {
     expect(pool.length).toBeLessThanOrEqual(50);
     expect(pool.some((o) => o.noradId === 42)).toBe(true);
     expect(pool.filter((o) => o.category === 'stations').length).toBe(5);
+  });
+});
+
+describe('finalizeSkyScanHits near zenith', () => {
+  it('prefers near-zenith sats over opposite-azimuth horizon ones', () => {
+    const zenithView = { headingDeg: 0, pitchDeg: 90 };
+    const near: SkyScanHit = {
+      noradId: 1,
+      name: 'NEAR',
+      look: {
+        azimuthDeg: 180,
+        elevationDeg: 85,
+        rangeKm: 500,
+        visible: true,
+      },
+      centerDistDeg: skyFovCenterDistanceDeg(zenithView, {
+        azimuthDeg: 180,
+        elevationDeg: 85,
+      }),
+      functionGroup: 'active',
+      category: 'active',
+    };
+    const far: SkyScanHit = {
+      noradId: 2,
+      name: 'FAR',
+      look: {
+        azimuthDeg: 0,
+        elevationDeg: 10,
+        rangeKm: 800,
+        visible: true,
+      },
+      centerDistDeg: skyFovCenterDistanceDeg(zenithView, {
+        azimuthDeg: 0,
+        elevationDeg: 10,
+      }),
+      functionGroup: 'active',
+      category: 'active',
+    };
+    expect(near.centerDistDeg).toBeLessThan(15);
+    expect(far.centerDistDeg).toBeGreaterThan(60);
+    const ranked = finalizeSkyScanHits([far, near], { maxCount: 1, fovDeg: 60 });
+    expect(ranked[0].noradId).toBe(1);
   });
 });
