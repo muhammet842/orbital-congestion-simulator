@@ -148,6 +148,8 @@ export class OrbitalMeshes {
   }
 
   pickObjectIndex(raycaster: Raycaster): number | null {
+    if (!this.group.visible) return null;
+
     if (this.visiblePickRoots.length > 0) {
       const hits = raycaster.intersectObjects(this.visiblePickRoots, true);
       for (const hit of hits) {

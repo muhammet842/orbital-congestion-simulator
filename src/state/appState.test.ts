@@ -16,6 +16,7 @@ import {
   startEventReplay,
   stopEventReplay,
   setEventReplayPartial,
+  enterLiveMode,
   setColorByFunction,
   setShowOnlyRecentLaunches,
   setCategoryFilter,
@@ -150,6 +151,17 @@ describe('stopEventReplay', () => {
     stopEventReplay();
     expect(getState().eventReplay).toBeNull();
     expect(getState().selectedEventId).toBeNull();
+  });
+});
+
+describe('enterLiveMode', () => {
+  it('resumes historical replay at 1× instead of swapping the global clock to live', () => {
+    startEventReplay('iridium-cosmos', 1_000_000);
+    setEventReplayPartial({ playing: false, speed: 100 });
+    enterLiveMode();
+    expect(getState().eventReplay?.playing).toBe(true);
+    expect(getState().eventReplay?.speed).toBe(1);
+    expect(getState().eventReplay?.eventId).toBe('iridium-cosmos');
   });
 });
 

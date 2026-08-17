@@ -29,7 +29,7 @@ Explore orbit layers (LEO, MEO, GEO, HEO), filter by congestion type, click any 
 
 ## Why it matters
 
-Earth orbit is increasingly crowded. More than 27,000 tracked objects share near-Earth space, and collisions like Iridium 33–Cosmos 2251 demonstrated the Kessler Syndrome risk — where one collision creates debris that triggers more collisions. Operators like SpaceX perform hundreds of collision-avoidance maneuvers each year. This simulator makes that invisible traffic visible.
+Earth orbit is increasingly crowded. About **40,000** objects larger than 10 cm are tracked in near-Earth space (this globe shows a 12,000-object sample). Collisions like Iridium 33–Cosmos 2251 demonstrated the Kessler Syndrome risk — where one collision creates debris that triggers more collisions. Operators like SpaceX perform hundreds of collision-avoidance maneuvers each year. This simulator makes that invisible traffic visible.
 
 ## Tech stack
 
@@ -55,7 +55,7 @@ Open `http://localhost:5173` in your browser.
 
 ## How to use
 
-On first visit the app asks you to **choose a language**, then walks through the UI step by step with on-screen highlights (globe, search/filters, details, close approaches, historical events, time bar, Future Projection). Use **Skip** anytime; reopen the tour with the **?** button in the header.
+On first visit the app asks you to **choose a language**, then shows a short thesis card (play the 2009 collision, open the 25-year projection, or start the UI tour). The tour then walks through the UI step by step with on-screen highlights (globe, search/filters, details, close approaches, historical events, time bar, Future Projection). Use **Skip** anytime; reopen the tour with the **?** button in the header.
 
 Deep links: `?object=<NORAD>` and `?event=<id>`.
 

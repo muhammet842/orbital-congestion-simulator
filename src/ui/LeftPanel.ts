@@ -13,6 +13,8 @@ import {
   getGlobalSimulationTime,
   getSimulationTime,
   getState,
+  isConjunctionVerificationActive,
+  isEventReplayActive,
   toggleConjunctionFromAlert,
   selectObject,
   setSearchQuery,
@@ -456,7 +458,10 @@ function renderDisplayOptions(container: HTMLElement): void {
 function renderStats(container: HTMLElement): void {
   const state = getState();
   const { stats, time } = state;
-  const isLive = time.mode === 'live';
+  const isLive =
+    time.mode === 'live' &&
+    !isEventReplayActive() &&
+    !isConjunctionVerificationActive();
   const simTime = getSimulationTime();
 
   const categoryEl = container.querySelector('#category-stats')!;

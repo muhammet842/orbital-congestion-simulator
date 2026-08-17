@@ -21,6 +21,7 @@ import {
   setVerificationPartial,
   subscribe,
 } from '../state/appState';
+import { onLangChange, t } from '../i18n/i18n';
 
 const SPEEDS = [1, 10, 100];
 const SLIDER_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -30,20 +31,20 @@ export function initTimeControls(container: HTMLElement): void {
     <div class="time-controls">
       <div class="time-row time-row--transport">
         <div class="time-buttons">
-          <button type="button" id="btn-rewind" title="Back 1 hour">⏮</button>
-          <button type="button" id="btn-play" title="Play/Pause">⏸</button>
-          <button type="button" id="btn-forward" title="Forward 1 hour">⏭</button>
+          <button type="button" id="btn-rewind" title="${t('time.back_1h')}">⏮</button>
+          <button type="button" id="btn-play" title="${t('time.play_title')}">⏸</button>
+          <button type="button" id="btn-forward" title="${t('time.fwd_1h')}">⏭</button>
         </div>
         <input type="range" id="time-slider" class="time-slider" min="-100" max="100" step="1" value="0" />
       </div>
       <div class="time-row time-row--meta">
         <div class="time-display" id="time-display"></div>
         <div class="time-mode-btns">
-          <button type="button" id="btn-now" class="btn-now" title="Jump to current UTC time">Now</button>
-          <button type="button" id="btn-live" class="btn-live active" title="Live real-time tracking">● LIVE</button>
+          <button type="button" id="btn-now" class="btn-now" title="${t('time.now_title')}">${t('time.now')}</button>
+          <button type="button" id="btn-live" class="btn-live active" title="${t('time.live_title')}">${t('time.live_on')}</button>
         </div>
         <div class="speed-controls">
-          <span class="speed-label">Speed:</span>
+          <span class="speed-label">${t('time.speed')}</span>
           <div id="speed-buttons" class="speed-buttons"></div>
         </div>
       </div>
@@ -57,10 +58,21 @@ export function initTimeControls(container: HTMLElement): void {
   const liveBtn = container.querySelector('#btn-live') as HTMLButtonElement;
   const slider = container.querySelector('#time-slider') as HTMLInputElement;
   const speedButtons = container.querySelector('#speed-buttons')!;
+  const speedLabel = container.querySelector('.speed-label');
 
   speedButtons.innerHTML = SPEEDS.map(
     (s) => `<button type="button" class="speed-btn" data-speed="${s}">${s}x</button>`,
   ).join('');
+
+  const applyChromeLabels = (): void => {
+    nowBtn.textContent = t('time.now');
+    nowBtn.title = t('time.now_title');
+    liveBtn.title = t('time.live_title');
+    playBtn.title = t('time.play_title');
+    if (speedLabel) speedLabel.textContent = t('time.speed');
+  };
+  applyChromeLabels();
+  onLangChange(applyChromeLabels);
 
   let anchorTime = Date.now();
   /** True while the user is dragging the scrubber — don't fight their input. */
@@ -154,6 +166,7 @@ export function initTimeControls(container: HTMLElement): void {
   });
 
   nowBtn.addEventListener('click', () => {
+    if (isConjunctionVerificationActive() || isEventReplayActive()) return;
     jumpToNow();
     anchorTime = Date.now();
     slider.value = '0';
@@ -272,15 +285,15 @@ export function initTimeControls(container: HTMLElement): void {
 
     liveBtn.classList.toggle('active', isLive);
     liveBtn.textContent = verifying
-      ? '● VERIFY'
+      ? t('time.verify')
       : replaying
-        ? '● REPLAY'
+        ? t('time.replay')
         : isLive
-          ? '● LIVE'
-          : 'LIVE';
+          ? t('time.live_on')
+          : t('time.live');
 
-    rewindBtn.title = focused ? 'Back 5 seconds' : 'Back 1 hour';
-    forwardBtn.title = focused ? 'Forward 5 seconds' : 'Forward 1 hour';
+    rewindBtn.title = focused ? t('time.back_5s') : t('time.back_1h');
+    forwardBtn.title = focused ? t('time.fwd_5s') : t('time.fwd_1h');
     slider.title = verifying
       ? 'Scrub within the close-approach window (T−60s → T+15s)'
       : replaying

@@ -165,6 +165,12 @@ export function enterLiveMode(): void {
     setVerificationPartial({ playing: true, speed: 1 });
     return;
   }
+  if (state.eventReplay) {
+    // Keep the replay clock — flipping `time.mode` to live while 3D stays in
+    // 2009 desyncs the time bar from the globe.
+    setEventReplayPartial({ playing: true, speed: 1 });
+    return;
+  }
 
   setState({
     time: {

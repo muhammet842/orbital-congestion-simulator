@@ -4,7 +4,7 @@ test.use({ ...devices['Pixel 7'] });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('orbital-help-seen-v2', '1');
+    localStorage.setItem('orbital-help-seen-v3', '1');
   });
 });
 

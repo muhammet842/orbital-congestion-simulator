@@ -340,31 +340,6 @@ function fillDebrisFromFallback(seen, fallbackObjects) {
     added++;
   }
 
-  if (debrisCount(seen) >= MAX_DEBRIS) return added;
-
-  const padCandidates = fallbackObjects
-    .filter(
-      (obj) =>
-        obj.category === 'active' &&
-        !/STARLINK|ONEWEB|KUIPER|GPS|GALILEO|BEIDOU|GOES|NOAA|ISS|CSS|TIANGONG|TURKSAT|GOKTURK|GÖKTÜRK|IMECE/i.test(
-          obj.name,
-        ),
-    )
-    .sort((a, b) => a.noradId - b.noradId);
-
-  for (const obj of padCandidates) {
-    if (debrisCount(seen) >= MAX_DEBRIS) break;
-    if (seen.has(obj.noradId)) continue;
-    seen.set(obj.noradId, {
-      noradId: obj.noradId,
-      name: obj.name,
-      line1: obj.line1,
-      line2: obj.line2,
-      category: 'debris',
-    });
-    added++;
-  }
-
   return added;
 }
 

@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 // Suppress the first-visit walkthrough so it does not cover the UI under test.
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('orbital-help-seen-v2', '1');
+    localStorage.setItem('orbital-help-seen-v3', '1');
   });
 });
 
@@ -100,6 +100,8 @@ test.describe('How-to guide', () => {
     await page.locator('#help-guide-btn').click();
     await expect(page.getByText('Choose a language to continue')).toBeVisible();
     await page.locator('.tour-lang-btn[data-lang="en"]').click();
+    await expect(page.locator('#thesis-tour')).toBeVisible();
+    await page.locator('#thesis-tour').click();
     await expect(page.locator('.tour-progress')).toHaveText('1 / 7');
     await expect(page.locator('#tour-highlight')).toBeVisible();
     await expect(page.locator('#tour-skip')).toBeVisible();

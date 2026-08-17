@@ -704,6 +704,19 @@ export class SceneManager {
 
     this.clickAnchor = null;
 
+    const focusState = getState();
+    if (
+      focusState.eventReplay ||
+      focusState.selectedEventId ||
+      focusState.selectedConjunction ||
+      focusState.verificationTime
+    ) {
+      // Catalog points stay raycastable even when the group is hidden for
+      // historical replay. Picking one would call selectObject() and abort
+      // the story (2009 collision, close-approach verify, …).
+      return;
+    }
+
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;

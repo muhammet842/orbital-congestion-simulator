@@ -164,4 +164,12 @@ describe('event replay scrubbing', () => {
     expect(getState().eventReplay!.currentMs).toBe(IMPACT - REWIND + 5_000);
     expect(getState().eventReplay!.playing).toBe(false);
   });
+
+  it('does not swap the global clock to live when LIVE is clicked mid-replay', () => {
+    const container = mount();
+    container.querySelector<HTMLButtonElement>('#btn-live')!.click();
+    expect(getState().eventReplay?.eventId).toBe('fengyun-asat');
+    expect(getState().eventReplay?.playing).toBe(true);
+    expect(getState().eventReplay?.speed).toBe(1);
+  });
 });

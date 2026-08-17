@@ -371,8 +371,8 @@ function render(container: HTMLElement): void {
 
   if (state.selectedIndex == null) {
     detailEl.innerHTML = `
-      <h2 class="panel-heading">Select an object</h2>
-      <p class="muted">Click a list item, a close approach alert, or any point in the 3D view.</p>
+      <h2 class="panel-heading">${t('sat.empty_title')}</h2>
+      <p class="muted">${t('sat.empty_body')}</p>
     `;
     return;
   }
@@ -384,7 +384,7 @@ function render(container: HTMLElement): void {
   if (!propagation) {
     detailEl.innerHTML = `
       <h2 class="panel-heading">${escapeHtml(obj.name)}</h2>
-      <p class="muted">Position unavailable at current simulation time.</p>
+      <p class="muted">${t('sat.unavailable')}</p>
     `;
     return;
   }
@@ -409,25 +409,25 @@ function render(container: HTMLElement): void {
     </div>
     <div class="object-photo-wrap" data-object-photo hidden></div>
     <dl class="detail-list detail-list--meta">
-      <div class="detail-row"><dt>Country</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
-      <div class="detail-row"><dt>Operator/Owner</dt><dd>${escapeHtml(snapshot.owner)}</dd></div>
+      <div class="detail-row"><dt>${t('sat.country')}</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
+      <div class="detail-row"><dt>${t('sat.operator_owner')}</dt><dd>${escapeHtml(snapshot.owner)}</dd></div>
     </dl>
     <hr class="detail-divider" />
     <dl class="detail-list">
-      <div class="detail-row"><dt>Altitude</dt><dd data-field="altitude">${snapshot.altitudeKm.toFixed(0)} km</dd></div>
-      <div class="detail-row"><dt>Velocity</dt><dd data-field="velocity">${snapshot.velocityKmS.toFixed(2)} km/s</dd></div>
-      <div class="detail-row"><dt>Layer</dt><dd>${snapshot.layer}</dd></div>
-      <div class="detail-row"><dt>Category</dt><dd>${snapshot.category}</dd></div>
-      <div class="detail-row"><dt>Inclination</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
+      <div class="detail-row"><dt>${t('sat.altitude')}</dt><dd data-field="altitude">${snapshot.altitudeKm.toFixed(0)} km</dd></div>
+      <div class="detail-row"><dt>${t('sat.velocity')}</dt><dd data-field="velocity">${snapshot.velocityKmS.toFixed(2)} km/s</dd></div>
+      <div class="detail-row"><dt>${t('sat.layer')}</dt><dd>${snapshot.layer}</dd></div>
+      <div class="detail-row"><dt>${t('sat.category')}</dt><dd>${t(`cat.${snapshot.category}`)}</dd></div>
+      <div class="detail-row"><dt>${t('sat.inclination')}</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
     </dl>
     <button type="button" id="btn-spotter" class="btn-orbit-trail btn-spotter">
       ${t('spotter.open')}
     </button>
     <button type="button" id="btn-orbit-trail" class="btn-orbit-trail${state.showOrbitTrail ? ' active' : ''}">
-      ${state.showOrbitTrail ? 'Hide orbit trail' : 'Show orbit trail'}
+      ${state.showOrbitTrail ? t('sat.hide_trail') : t('sat.show_trail')}
     </button>
     <button type="button" id="btn-ground-track" class="btn-orbit-trail${state.showGroundTrack ? ' active' : ''}">
-      ${state.showGroundTrack ? 'Hide ground track' : 'Show ground track'}
+      ${state.showGroundTrack ? t('sat.hide_ground') : t('sat.show_ground')}
     </button>
   `;
 

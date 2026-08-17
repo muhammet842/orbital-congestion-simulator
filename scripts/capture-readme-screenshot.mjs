@@ -44,7 +44,10 @@ if (!ready) {
 try {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.addInitScript(() => localStorage.setItem('orbital-lang', 'en'));
+  await page.addInitScript(() => {
+    localStorage.setItem('orbital-lang', 'en');
+    localStorage.setItem('orbital-help-seen-v3', '1');
+  });
   await page.goto('http://127.0.0.1:4179/', { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.locator('canvas').waitFor({ state: 'visible', timeout: 45_000 });
   const select = page.locator('#lang-select');
