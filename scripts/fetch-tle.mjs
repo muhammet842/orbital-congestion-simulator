@@ -65,11 +65,18 @@ const DEBRIS_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-2251-debris&FORMAT=tle', category: 'debris' },
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=fengyun-1c-debris&FORMAT=tle', category: 'debris' },
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-33-debris&FORMAT=tle', category: 'debris' },
+  { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=cosmos-1408-debris&FORMAT=tle', category: 'debris' },
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=analyst&FORMAT=tle', category: 'debris' },
 ];
 
+/** Trackable fragments whose name contains DEB — fills leftover debris budget after named clouds. */
+const DEBRIS_NAME_FILL = {
+  url: 'https://celestrak.org/NORAD/elements/gp.php?NAME=DEB&FORMAT=tle',
+  category: 'debris',
+};
+
 const MAX_SATELLITES = 7_000;
-const MAX_DEBRIS = 3_000;
+const MAX_DEBRIS = 5_000;
 const FETCH_DELAY_MS = 450;
 const OUTPUT_PATH = new URL('../public/data/tle.json', import.meta.url);
 const FALLBACK_PATHS = [
@@ -454,6 +461,29 @@ async function main() {
     await sleep(FETCH_DELAY_MS);
   }
 
+  if (debrisCount(seen) < MAX_DEBRIS) {
+    try {
+      const objects = await fetchSource(DEBRIS_NAME_FILL);
+      // Same newest-first rule as Starlink: CelesTrak returns oldest catalog
+      // numbers first, so taking that order would fill the cap with 1960s
+      // fragments and hide recent LEO breakups.
+      const newestFirst = [...objects].sort((a, b) => b.noradId - a.noradId);
+      let added = 0;
+      for (const obj of newestFirst) {
+        if (debrisCount(seen) >= MAX_DEBRIS) break;
+        if (seen.has(obj.noradId)) continue;
+        seen.set(obj.noradId, obj);
+        added++;
+      }
+      console.log(
+        `  debris (NAME=DEB fill): ${objects.length} fetched, ${added} kept (${debrisCount(seen)}/${MAX_DEBRIS})`,
+      );
+    } catch (err) {
+      console.warn(`  debris NAME=DEB fill failed — ${err.message}`);
+    }
+    await sleep(FETCH_DELAY_MS);
+  }
+
   const fallbackObjects = await loadFallbackDataset();
   if (fallbackObjects) {
     if (spacecraftCount(seen) < MAX_SATELLITES) {
@@ -530,7 +560,7 @@ async function main() {
   const outPath = fileURLToPath(OUTPUT_PATH);
   await mkdir(dirname(outPath), { recursive: true });
   // Compact (no indentation): this file is fetched by the browser, not
-  // hand-edited, and pretty-printing ~10k objects adds ~500 KB of pure
+  // hand-edited, and pretty-printing ~12k objects adds ~500 KB of pure
   // whitespace for zero benefit.
   await writeFile(outPath, JSON.stringify(dataset));
 

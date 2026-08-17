@@ -63,10 +63,10 @@ Deep links: `?object=<NORAD>` and `?event=<id>`.
 
 Orbital elements and catalog metadata come from [CelesTrak](https://celestrak.org/):
 
-- **TLE / GP** — active satellites (capped at 7,000 — Starlink/OneWeb sub-capped), debris (capped at 3,000 — Cosmos 2251, Fengyun-1C, Iridium 33, analyst objects), and stations (ISS, Tiangong, etc.)
+- **TLE / GP** — active satellites (capped at 7,000 — Starlink/OneWeb sub-capped), debris (capped at 5,000 — Cosmos 2251, Fengyun-1C, Iridium 33, Cosmos 1408, analyst objects, then other trackable `DEB` fragments), and stations (ISS, Tiangong, etc.)
 - **SATCAT** — one download of [`satcat.csv`](https://celestrak.org/pub/satcat.csv) joined by NORAD ID so each object can carry a **country** (and organization **owner** when SATCAT’s `OWNER` is an agency/consortium code). Name-based heuristics in `objectMetadata.ts` remain the fallback when SATCAT has no match or only supplies a country code (so operators like SpaceX can still come from the name).
 
-Output: `public/data/tle.json` — up to **10,000 objects**, deduplicated by NORAD ID.
+Output: `public/data/tle.json` — up to **12,000 objects**, deduplicated by NORAD ID.
 
 A [GitHub Actions workflow](.github/workflows/tle-refresh.yml) runs `npm run fetch-tle` twice a week (Monday & Thursday), which refreshes TLEs **and** re-joins SATCAT, then commits `public/data/tle.json` so the deployed app stays under the in-app 3-day staleness warning. Manual refresh:
 

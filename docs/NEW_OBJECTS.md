@@ -17,7 +17,7 @@ Analyst / `UNKNOWN` objects (e.g. CelesTrak analyst satellites) often appear her
 
 `scripts/fetch-tle.mjs` loads the previous `public/data/tle.json`, then `applyFirstSeenAt`:
 
-- seeds silently when there is no previous catalog (avoids marking ~10k objects NEW),
+- seeds silently when there is no previous catalog (avoids marking ~12k objects NEW),
 - stamps only IDs absent from the previous `known` set,
 - refuses bulk false positives (`MAX_NEW_LAUNCHES_PER_FETCH`),
 - rejects decades-old international designators even if they reappear after catalog churn.
