@@ -1,55 +1,114 @@
 /**
- * Translucent LEO volume around Earth so the "thin shell" congestion story
- * is visible without opening a panel. Educational marker, not a hard cutoff.
+ * Marks the LEO band as a thin rim around Earth — not a wireframe cage.
+ *
+ * Educational marker: faint limb glow at the conventional 2,000 km ceiling,
+ * plus a quiet equatorial tick so altitude has a scale.
  */
 
-import { BackSide, Group, Mesh, MeshBasicMaterial, SphereGeometry } from 'three';
+import {
+  AdditiveBlending,
+  BackSide,
+  BufferGeometry,
+  Color,
+  Float32BufferAttribute,
+  Group,
+  LineBasicMaterial,
+  LineLoop,
+  Mesh,
+  ShaderMaterial,
+  SphereGeometry,
+} from 'three';
 import { EARTH_RADIUS_KM } from '../types';
 
 /** Conventional LEO ceiling used in this app (~2,000 km altitude). */
 export const LEO_SHELL_ALTITUDE_KM = 2000;
+/** Inner tick near the densest traffic (ISS-class), not a hard LEO floor. */
+export const LEO_SHELL_INNER_ALTITUDE_KM = 400;
 
-export function leoShellRadius(): number {
-  return 1 + LEO_SHELL_ALTITUDE_KM / EARTH_RADIUS_KM;
+export function leoShellRadius(altitudeKm = LEO_SHELL_ALTITUDE_KM): number {
+  return 1 + altitudeKm / EARTH_RADIUS_KM;
+}
+
+function equatorRing(radius: number, opacity: number): LineLoop {
+  const segments = 160;
+  const positions = new Float32Array(segments * 3);
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    positions[i * 3] = Math.cos(a) * radius;
+    positions[i * 3 + 1] = 0;
+    positions[i * 3 + 2] = Math.sin(a) * radius;
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  const line = new LineLoop(
+    geometry,
+    new LineBasicMaterial({
+      color: 0x67e8f9,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+    }),
+  );
+  line.renderOrder = 2;
+  return line;
+}
+
+function rimHalo(radius: number): Mesh {
+  const material = new ShaderMaterial({
+    uniforms: {
+      uColor: { value: new Color(0x67e8f9) },
+      uOpacity: { value: 0.42 },
+    },
+    vertexShader: `
+      varying vec3 vViewNormal;
+      varying vec3 vViewPosition;
+      void main() {
+        vViewNormal = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vViewPosition = mv.xyz;
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying vec3 vViewNormal;
+      varying vec3 vViewPosition;
+      void main() {
+        vec3 n = normalize(vViewNormal);
+        vec3 v = normalize(-vViewPosition);
+        float rim = pow(1.0 - abs(dot(n, v)), 3.2);
+        float alpha = uOpacity * rim;
+        if (alpha < 0.01) discard;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    depthTest: true,
+    side: BackSide,
+    blending: AdditiveBlending,
+  });
+  material.customProgramCacheKey = () => 'leo-shell-rim-v1';
+
+  const mesh = new Mesh(new SphereGeometry(radius, 64, 48), material);
+  mesh.renderOrder = 1;
+  return mesh;
 }
 
 export class LeoShell {
   readonly group: Group;
-  private readonly fill: Mesh;
-  private readonly wire: Mesh;
 
   constructor() {
     this.group = new Group();
     this.group.name = 'leo-shell';
-    const radius = leoShellRadius();
-    const geometry = new SphereGeometry(radius, 48, 32);
 
-    this.fill = new Mesh(
-      geometry,
-      new MeshBasicMaterial({
-        color: 0x22d3ee,
-        transparent: true,
-        opacity: 0.055,
-        depthWrite: false,
-        side: BackSide,
-      }),
-    );
-    this.fill.renderOrder = 1;
+    const outer = leoShellRadius(LEO_SHELL_ALTITUDE_KM);
+    const inner = leoShellRadius(LEO_SHELL_INNER_ALTITUDE_KM);
 
-    this.wire = new Mesh(
-      geometry,
-      new MeshBasicMaterial({
-        color: 0x67e8f9,
-        transparent: true,
-        opacity: 0.18,
-        depthWrite: false,
-        wireframe: true,
-      }),
-    );
-    this.wire.renderOrder = 1;
-
-    this.group.add(this.fill);
-    this.group.add(this.wire);
+    this.group.add(rimHalo(outer));
+    this.group.add(equatorRing(outer, 0.28));
+    this.group.add(equatorRing(inner, 0.14));
   }
 
   setVisible(visible: boolean): void {
