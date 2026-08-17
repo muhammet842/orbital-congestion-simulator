@@ -98,8 +98,8 @@ const en: Translations = {
   'event.usa-193-burnt-frost.description': 'US SM-3 interceptor destroyed the failed USA-193 spy satellite on 2008-02-21 to mitigate the risk of toxic hydrazine reaching the ground; most debris reentered quickly due to the low intercept altitude.',
   'event.cerise-ariane-debris.title': 'Cerise ↔ Ariane 3 Debris',
   'event.cerise-ariane-debris.description': 'First confirmed collision between a tracked satellite and catalogued debris. French microsatellite Cerise was struck by an Ariane 3 H-10 fragment on 1996-07-24, severing its gravity-gradient boom.',
-  'event.mev1-intelsat901.title': 'MEV-1 ↔ Intelsat 901 Docking',
-  'event.mev1-intelsat901.description': 'First commercial in-space docking: Northrop Grumman MEV-1 docked with Intelsat 901 in GEO on 2020-02-25, extending the satellite’s service life through life-extension servicing.',
+  'event.yunhai-1-02.title': 'Yunhai 1-02 ↔ SL-16 Debris',
+  'event.yunhai-1-02.description': 'First accidental catalogued collision since Iridium–Cosmos. China’s Yunhai 1-02 weather satellite (SSO, 780 km, 98.5°) was struck by 1996 Zenit-2 (SL-16) debris (1996-051Q) on 2021-03-18 at 07:41 UTC over northern Norway (~37 fragments).',
   'event.kosmos-2499-breakup.title': 'Kosmos 2499 — Mysterious Breakup',
   'event.kosmos-2499-breakup.description': 'Russian Kosmos 2499 fragmented in orbit under unclear circumstances, adding another unexplained breakup event to the LEO debris environment.',
   'ui.advanced_filters':  'Advanced Filters',
@@ -288,12 +288,12 @@ const en: Translations = {
   'event.cerise-ariane-debris.info.outcome':
     "The first officially confirmed collision between an operational satellite and a catalogued piece of man-made space debris. The impact severed Cerise's gravity-gradient stabilisation boom. The event became a landmark case in raising international awareness of the orbital debris hazard.",
 
-  'event.mev1-intelsat901.info.title':
-    'First Commercial In-Space Docking',
-  'event.mev1-intelsat901.info.reason':
-    'A commercial servicing vehicle (MEV-1) was deliberately sent to slowly approach and dock with Intelsat 901 — a communications satellite that had nearly exhausted its propellant but whose electronics remained fully functional — in order to extend its operational life.',
-  'event.mev1-intelsat901.info.outcome':
-    "The first successful commercial on-orbit servicing and life-extension mission in spaceflight history. Zero explosions, zero debris. After docking, the combined stack was repositioned to a new GEO slot, adding five years to Intelsat 901's operational lifetime.",
+  'event.yunhai-1-02.info.title':
+    'The First Accidental Collision Since 2009',
+  'event.yunhai-1-02.info.reason':
+    'Accidental. A small piece of debris from a 1996 Russian Zenit-2 (SL-16) launch that deployed Cosmos 2333 struck the active Chinese meteorological satellite Yunhai 1-02 at about 13 km/s in a crowded sun-synchronous shell near 780 km.',
+  'event.yunhai-1-02.info.outcome':
+    'The first confirmed accidental collision of two catalogued objects since Iridium 33–Cosmos 2251. 18 SPCS catalogued about 37 fragments. Yunhai 1-02 survived the hit, but the event showed that 1990s rocket debris is still striking working satellites.',
 
   'event.kosmos-2499-breakup.info.title':
     'Mysterious Orbital Fragmentation',
@@ -607,8 +607,8 @@ const tr: Translations = {
   'event.usa-193-burnt-frost.description': 'ABD SM-3 önleyicisi, başarısız USA-193 casus uydusunu 21 Şubat 2008’de imha etti; düşük irtifa sayesinde enkazın çoğu hızla atmosfere girdi.',
   'event.cerise-ariane-debris.title': 'Cerise ↔ Ariane 3 Enkazı',
   'event.cerise-ariane-debris.description': 'İzlenen bir uydu ile kataloglanmış enkaz arasında doğrulanan ilk çarpışma. Fransız Cerise uydusu 24 Temmuz 1996’da Ariane 3 parçasıyla çarpıştı.',
-  'event.mev1-intelsat901.title': 'MEV-1 ↔ Intelsat 901 Kenetlenmesi',
-  'event.mev1-intelsat901.description': 'İlk ticari uzayda kenetlenme: Northrop Grumman MEV-1, 25 Şubat 2020’de GEO’da Intelsat 901’e kenetlenerek ömrünü uzattı.',
+  'event.yunhai-1-02.title': 'Yunhai 1-02 ↔ SL-16 Enkazı',
+  'event.yunhai-1-02.description': 'Iridium–Cosmos’tan bu yana kataloglanmış ilk kazara çarpışma. Çin’in Yunhai 1-02 meteoroloji uydusu (Güneş-eşzamanlı, 780 km, 98,5°) 18 Mart 2021’de 07:41 UTC’de kuzey Norveç üzerinde 1996 Zenit-2 (SL-16) parçasıyla (1996-051Q) çarpıştı (~37 parça).',
   'event.kosmos-2499-breakup.title': 'Kosmos 2499 — Gizemli Parçalanma',
   'event.kosmos-2499-breakup.description': 'Rus Kosmos 2499 belirsiz koşullarda parçalandı; AYY enkaz ortamına bir başka açıklanamayan parçalanma ekledi.',
   'ui.advanced_filters':  'Gelişmiş Filtreler',
@@ -784,12 +784,12 @@ const tr: Translations = {
   'event.cerise-ariane-debris.info.outcome':
     'Uzay tarihinde bir uydunun kataloglanmış uzay çöpüyle çarpışmasının resmi olarak tescillendiği ilk olaydır. Cerise\'in stabilizasyon anteni koptu. Bu olay uzay çöpü tehlikesini kamuoyunun gündemine taşıdı.',
 
-  'event.mev1-intelsat901.info.title':
-    'Yörüngede İlk Ticari Kenetlenme',
-  'event.mev1-intelsat901.info.reason':
-    'Yakıtı biten ancak elektroniği çalışır durumdaki Intelsat 901\'in servis ömrünü uzatmak için ticari servis aracı MEV-1 tarafından yavaşça yaklaşıp kenetlendi.',
-  'event.mev1-intelsat901.info.outcome':
-    'Uzay tarihindeki ilk başarılı ticari yörüngede servis operasyonudur. Sıfır patlama, sıfır enkaz. Kenetlenen ikili yeni bir GEO slotuna taşındı ve Intelsat 901\'in ömrü 5 yıl uzatıldı.',
+  'event.yunhai-1-02.info.title':
+    '2009’dan Bu Yana İlk Kazara Çarpışma',
+  'event.yunhai-1-02.info.reason':
+    'Tamamen kazara. Cosmos 2333’ü yörüngeye oturtan 1996 tarihli bir Rus Zenit-2 (SL-16) görevinin küçük bir enkaz parçası, aktif Çin meteoroloji uydusu Yunhai 1-02’ye yaklaşık 13 km/s hızla, kalabalık 780 km Güneş-eşzamanlı kabukta çarptı.',
+  'event.yunhai-1-02.info.outcome':
+    'Iridium 33–Cosmos 2251’den bu yana iki kataloglanmış nesnenin doğrulanan ilk kazara çarpışması. 18 SPCS yaklaşık 37 parça katalogladı. Yunhai 1-02 çarpışmayı atlattı; olay 1990’ların roket enkazının hâlâ çalışan uyduları vurduğunu gösterdi.',
 
   'event.kosmos-2499-breakup.info.title':
     'Gizemli Yörünge Dağılması',
@@ -1102,8 +1102,8 @@ const de: Translations = {
   'event.usa-193-burnt-frost.description': 'US-SM-3-Abfangrakete zerstörte den ausgefallenen Spionagesatelliten USA-193 am 21.02.2008; die meisten Trümmer verglühten schnell.',
   'event.cerise-ariane-debris.title': 'Cerise ↔ Ariane-3-Trümmer',
   'event.cerise-ariane-debris.description': 'Erster bestätigter Zusammenstoß zwischen einem Satelliten und katalogisierten Trümmern. Cerise wurde am 24.07.1996 von einem Ariane-3-Fragment getroffen.',
-  'event.mev1-intelsat901.title': 'MEV-1 ↔ Intelsat-901-Docking',
-  'event.mev1-intelsat901.description': 'Erstes kommerzielles Docking im Orbit: MEV-1 koppelte am 25.02.2020 an Intelsat 901 in GEO an und verlängerte dessen Betriebsdauer.',
+  'event.yunhai-1-02.title': 'Yunhai 1-02 ↔ SL-16-Trümmer',
+  'event.yunhai-1-02.description': 'Erste versehentliche katalogisierte Kollision seit Iridium–Cosmos. Chinas Wettersatellit Yunhai 1-02 (SSO, 780 km, 98,5°) wurde am 18.03.2021 um 07:41 UTC über Nordnorwegen von einem Zenit-2-(SL-16-)Fragment von 1996 (1996-051Q) getroffen (~37 Stücke).',
   'event.kosmos-2499-breakup.title': 'Kosmos 2499 — Mysteriöser Zerfall',
   'event.kosmos-2499-breakup.description': 'Der russische Satellit Kosmos 2499 zerbrach unter unklaren Umständen und fügte dem LEO-Trümmermilieu ein weiteres unerklärtes Ereignis hinzu.',
   'ui.advanced_filters':  'Erweiterte Filter',
@@ -1279,12 +1279,12 @@ const de: Translations = {
   'event.cerise-ariane-debris.info.outcome':
     'Die erste offiziell bestätigte Kollision zwischen einem operativen Satelliten und einem katalogisierten Weltraumtrümmerstück. Der Aufprall trennte Cerise\'s Schweregradient-Stabilisierungsausleger. Das Ereignis sensibilisierte die Öffentlichkeit für die Weltraumtrümmergefahr.',
 
-  'event.mev1-intelsat901.info.title':
-    'Erstes kommerzielles Andocken im Weltraum',
-  'event.mev1-intelsat901.info.reason':
-    'Ein kommerzielles Serviceraumschiff (MEV-1) wurde gezielt ausgesandt, um langsam an Intelsat 901 — einen Kommunikationssatelliten mit fast leerem Treibstofftank — anzudocken und dessen Betriebsdauer zu verlängern.',
-  'event.mev1-intelsat901.info.outcome':
-    'Die erste erfolgreiche kommerzielle On-Orbit-Service- und Lebensverlängerungsmission in der Raumfahrtgeschichte. Keine Explosionen, keine Trümmer. Nach dem Andocken wurde das verbundene System in einen neuen GEO-Slot verlagert und verlängerte Intelsat 901\'s Lebensdauer um fünf Jahre.',
+  'event.yunhai-1-02.info.title':
+    'Erste versehentliche Kollision seit 2009',
+  'event.yunhai-1-02.info.reason':
+    'Unbeabsichtigt. Ein kleines Trümmerstück eines russischen Zenit-2-(SL-16-)Starts von 1996 (Kosmos 2333) traf den aktiven chinesischen Wettersatelliten Yunhai 1-02 mit etwa 13 km/s in einer dichten sonnensynchronen Hülle bei 780 km.',
+  'event.yunhai-1-02.info.outcome':
+    'Erste bestätigte versehentliche Kollision zweier katalogisierter Objekte seit Iridium 33–Kosmos 2251. 18 SPCS katalogisierte etwa 37 Fragmente. Yunhai 1-02 überstand den Treffer; das Ereignis zeigte, dass Raketentrümmer der 1990er noch operative Satelliten treffen.',
 
   'event.kosmos-2499-breakup.info.title':
     'Mysteriöser Orbital-Zerfall',
@@ -1597,8 +1597,8 @@ const ru: Translations = {
   'event.usa-193-burnt-frost.description': 'Перехватчик SM-3 США уничтожил неисправный разведспутник USA-193 21 февраля 2008 года; большая часть обломков быстро вошла в атмосферу.',
   'event.cerise-ariane-debris.title': 'Cerise ↔ обломок Ariane 3',
   'event.cerise-ariane-debris.description': 'Первое подтверждённое столкновение спутника с каталогизированным обломком. Cerise был поражён фрагментом Ariane 3 24 июля 1996 года.',
-  'event.mev1-intelsat901.title': 'Стыковка MEV-1 ↔ Intelsat 901',
-  'event.mev1-intelsat901.description': 'Первая коммерческая стыковка в космосе: MEV-1 состыковался с Intelsat 901 на ГСО 25 февраля 2020 года, продлив срок службы спутника.',
+  'event.yunhai-1-02.title': 'Yunhai 1-02 ↔ обломок SL-16',
+  'event.yunhai-1-02.description': 'Первое случайное столкновение каталогизированных объектов после Iridium–Cosmos. Китайский метеоспутник Yunhai 1-02 (ССО, 780 км, 98,5°) 18 марта 2021 в 07:41 UTC над северной Норвегией столкнулся с фрагментом «Зенит-2» (SL-16) 1996 года (1996-051Q); ~37 обломков.',
   'event.kosmos-2499-breakup.title': 'Космос-2499 — загадочное разрушение',
   'event.kosmos-2499-breakup.description': 'Российский «Космос-2499» разрушился при неясных обстоятельствах, добавив ещё одно необъяснённое событие в среду обломков на НОО.',
   'ui.advanced_filters':  'Расширенные фильтры',
@@ -1774,12 +1774,12 @@ const ru: Translations = {
   'event.cerise-ariane-debris.info.outcome':
     'Первое официально подтверждённое столкновение действующего спутника с каталогизированным космическим мусором. Удар оторвал гравитационный стабилизатор Cerise. Событие стало поворотным в осознании проблемы космического мусора.',
 
-  'event.mev1-intelsat901.info.title':
-    'Первая коммерческая орбитальная стыковка',
-  'event.mev1-intelsat901.info.reason':
-    'Коммерческое сервисное судно (MEV-1) было специально отправлено для медленного сближения и стыковки со спутником Intelsat 901 — аппаратом с почти исчерпанным запасом топлива, но полностью рабочей электроникой — с целью продления его срока службы.',
-  'event.mev1-intelsat901.info.outcome':
-    'Первая успешная коммерческая миссия по орбитальному обслуживанию в истории космонавтики. Ноль взрывов, ноль обломков. После стыковки совместный аппарат был переведён на новую геостационарную позицию, добавив пять лет к сроку службы Intelsat 901.',
+  'event.yunhai-1-02.info.title':
+    'Первое случайное столкновение с 2009 года',
+  'event.yunhai-1-02.info.reason':
+    'Случайное. Небольшой обломок запуска «Зенит-2» (SL-16) 1996 года, выведшего «Космос-2333», ударил действующий китайский метеоспутник Yunhai 1-02 со скоростью около 13 км/с в плотной солнечно-синхронной оболочке около 780 км.',
+  'event.yunhai-1-02.info.outcome':
+    'Первое подтверждённое случайное столкновение двух каталогизированных объектов после Iridium 33–Космос-2251. 18 SPCS каталогизировала около 37 фрагментов. Yunhai 1-02 пережил удар; событие показало, что обломки ракет 1990-х всё ещё поражают рабочие спутники.',
 
   'event.kosmos-2499-breakup.info.title':
     'Таинственное орбитальное разрушение',
@@ -2092,8 +2092,8 @@ const zh: Translations = {
   'event.usa-193-burnt-frost.description': '美国 SM-3 拦截弹于 2008 年 2 月 21 日摧毁失效侦察卫星 USA-193；因拦截高度较低，大部分碎片很快再入大气层。',
   'event.cerise-ariane-debris.title': 'Cerise ↔ 阿丽亚娜3号碎片',
   'event.cerise-ariane-debris.description': '首次确认的卫星与编目碎片碰撞。法国微卫星 Cerise 于 1996 年 7 月 24 日被阿丽亚娜3号碎片击中。',
-  'event.mev1-intelsat901.title': 'MEV-1 ↔ Intelsat 901 对接',
-  'event.mev1-intelsat901.description': '首次商业在轨对接：诺斯罗普·格鲁曼 MEV-1 于 2020 年 2 月 25 日在地球静止轨道与 Intelsat 901 对接，延长其寿命。',
+  'event.yunhai-1-02.title': 'Yunhai 1-02 ↔ SL-16 碎片',
+  'event.yunhai-1-02.description': '自 Iridium–Cosmos 以来首次编目物体意外碰撞。中国气象卫星 Yunhai 1-02（太阳同步、780 km、98.5°）于 2021 年 3 月 18 日 07:41 UTC 在挪威北部上空被 1996 年天顶-2（SL-16）任务碎片（1996-051Q）撞击（约 37 块）。',
   'event.kosmos-2499-breakup.title': 'Kosmos 2499 — 神秘解体',
   'event.kosmos-2499-breakup.description': '俄罗斯 Kosmos 2499 在不明情况下解体，为低地球轨道碎片环境又增加一次未解释事件。',
   'ui.advanced_filters':  '高级筛选',
@@ -2269,12 +2269,12 @@ const zh: Translations = {
   'event.cerise-ariane-debris.info.outcome':
     '首次官方确认的在轨卫星与编目人造太空碎片之间的碰撞。撞击切断了"谷神星"的重力梯度稳定杆。该事件成为提升国际社会对太空碎片危害认识的标志性案例。',
 
-  'event.mev1-intelsat901.info.title':
-    '首次商业在轨对接',
-  'event.mev1-intelsat901.info.reason':
-    '一艘商业服务飞船（MEV-1）被专门派遣，缓慢接近并对接燃料将尽但电子设备完好的国际卫星901号，以延长其使用寿命。',
-  'event.mev1-intelsat901.info.outcome':
-    '航天史上首次成功的商业在轨服务和延寿任务。零爆炸，零碎片。对接后，组合体被移至新的地球静止轨道位置，使国际卫星901号服务寿命延长了五年。',
+  'event.yunhai-1-02.info.title':
+    '2009 年以来首次意外碰撞',
+  'event.yunhai-1-02.info.reason':
+    '完全意外。1996 年俄罗斯天顶-2（SL-16）发射（部署 Cosmos 2333）留下的一小块碎片，在约 780 km 拥挤的太阳同步壳层中以约 13 km/s 撞击正在工作的中国气象卫星 Yunhai 1-02。',
+  'event.yunhai-1-02.info.outcome':
+    '自 Iridium 33–Cosmos 2251 以来首次确认的两颗编目物体意外碰撞。美国第 18 太空控制中队编目约 37 块碎片。Yunhai 1-02 在撞击后仍运行；该事件表明 1990 年代火箭残骸仍在击中在轨卫星。',
 
   'event.kosmos-2499-breakup.info.title':
     '神秘的轨道解体事件',

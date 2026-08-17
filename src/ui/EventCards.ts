@@ -229,38 +229,39 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     },
   },
 
-  // ── MEV-1 & Intelsat 901 docking ──────────────────────────────────────
+  // ── Yunhai 1-02 & SL-16 / Zenit-2 debris ──────────────────────────────
   {
-    id: 'mev1-intelsat901',
-    title: 'MEV-1 ↔ Intelsat 901 Docking',
-    date: '2020-02-25',
-    eventType: 'docking' as EventType,
+    id: 'yunhai-1-02',
+    title: 'Yunhai 1-02 ↔ SL-16 Debris',
+    date: '2021-03-18',
+    eventType: 'collision' as EventType,
     description:
-      'Northrop Grumman\'s Mission Extension Vehicle 1 (MEV-1) successfully docked with Intelsat 901 in GEO on 25 Feb 2020 at 07:15 UTC — the first commercial in-space servicing mission. Zero debris was generated; the combined stack was later moved to a new GEO slot, extending Intelsat 901\'s life by five years.',
-    debrisCount: '0 — zero debris (successful docking)',
-    collisionTimeUtc: '2020-02-25T07:15:00Z',
-    altitudeKm: 35786,
-    // GEO docking at equatorial longitude 322.5°E (≈ 37.5°W)
-    collisionGeo: { latDeg: 0.0, lonDeg: -37.5, altKm: 35786 },
-    // Both spacecraft in near-equatorial GEO, MEV-1 approaching from slightly different longitude
-    approachA: { inclinationDeg: 0.2, ascending: true },
-    approachB: { inclinationDeg: 0.1, ascending: false },
+      'First accidental catalogued collision since Iridium–Cosmos. China’s Yunhai 1-02 meteorological satellite (SSO, 780 km, 98.5°) was struck by a 1996 Zenit-2 (SL-16) mission fragment (1996-051Q) on 18 Mar 2021 at 07:41 UTC over northern Norway, producing ~37 trackable pieces.',
+    debrisCount: '~37',
+    collisionTimeUtc: '2021-03-18T07:41:00Z',
+    altitudeKm: 780,
+    // KeepTrack / NASA ODQN: ~780 km above Tromsø, Norway
+    collisionGeo: { latDeg: 69.65, lonDeg: 18.96, altKm: 780 },
+    // Yunhai in retrograde SSO, descending over northern Norway
+    approachA: { inclinationDeg: 98.54, ascending: false },
+    // Zenit-2 / Cosmos 2333 family debris at ~71°, opposite heading for a high-speed crossing
+    approachB: { inclinationDeg: 71.0, ascending: true },
     info: {
-      title: 'First Commercial In-Space Docking',
-      reason: 'A commercial servicing vehicle (MEV-1) was deliberately sent to slowly approach and dock with Intelsat 901 — a communications satellite that had nearly exhausted its propellant but whose electronics remained fully functional — in order to extend its operational life.',
-      outcome: 'The first successful commercial on-orbit servicing and life-extension mission in spaceflight history. Zero explosions, zero debris. After docking, the combined stack was repositioned to a new GEO slot, adding five years to Intelsat 901\'s operational lifetime.',
+      title: 'The First Accidental Collision Since 2009',
+      reason: 'Accidental. A small piece of debris from a 1996 Russian Zenit-2 (SL-16) launch that deployed Cosmos 2333 struck the active Chinese meteorological satellite Yunhai 1-02 at about 13 km/s in a crowded sun-synchronous shell near 780 km.',
+      outcome: 'The first confirmed accidental collision of two catalogued objects since Iridium 33–Cosmos 2251. 18 SPCS catalogued about 37 fragments. Yunhai 1-02 survived the hit, but the event showed that 1990s rocket debris is still striking working satellites.',
     },
     objectA: {
-      name: 'MEV-1',
-      noradId: 44343,
-      line1: '1 44343U 19069A   20056.30208333  .00000000  00000-0  00000-0 0  9994',
-      line2: '2 44343   0.0550 322.5000 0002500  15.0000 345.0000  1.00274380  2450',
+      name: 'YUNHAI 1-02',
+      noradId: 44547,
+      line1: '1 44547U 19063A   21077.32013889  .00000050  00000-0  20000-4 0  9995',
+      line2: '2 44547  98.5400  18.9600 0010000  90.0000 270.2000 14.34000000059803',
     },
     objectB: {
-      name: 'INTELSAT 901',
-      noradId: 26824,
-      line1: '1 26824U 01024A   20056.30208333  .00000000  00000-0  00000-0 0  9995',
-      line2: '2 26824   0.0450 322.5000 0003000  25.0000 335.0000  1.00274220  8924',
+      name: 'SL-16 DEB',
+      noradId: 48078,
+      line1: '1 48078U 96051Q   21077.32013889  .00000100  00000-0  25000-4 0  9991',
+      line2: '2 48078  71.0000 198.0000 0015000  85.0000 275.0000 14.35000000089716',
     },
   },
 

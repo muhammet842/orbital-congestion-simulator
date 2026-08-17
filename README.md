@@ -18,7 +18,7 @@ Explore orbit layers (LEO, MEO, GEO, HEO), filter by congestion type, click any 
 - **Orbit layers & filters** — LEO / MEO / GEO / HEO, satellites / stations / debris, search
 - **Object details** — altitude, velocity, country/owner, orbit trail, ground track, footprint
 - **Close-approach alerts** — next-24h scanning with verification UI
-- **Historical event replays** — seven landmark collisions, ASAT tests, docking, and breakups
+- **Historical event replays** — seven landmark collisions, ASAT tests, and breakups
 - **Kessler “Future Projection”** — interactive what-if debris growth panel
 - **Satellite Spotter** — mobile sky guide using device sensors
 - **Interactive how-to tour** — language gate + spotlight walkthrough (header `?`)

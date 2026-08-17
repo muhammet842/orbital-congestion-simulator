@@ -151,11 +151,11 @@ describe('EventReplayVisuals — impact flash + debris timing', () => {
   });
 });
 
-describe('EventReplayVisuals — docking event (no debris)', () => {
-  it('still converges both objects to the same point at T=0', () => {
+describe('EventReplayVisuals — Yunhai 1-02 two-body collision', () => {
+  it('converges both objects to the same point at T=0', () => {
     const visuals = new EventReplayVisuals();
-    const event = getHistoricalEvent('mev1-intelsat901')!;
-    const collisionMs = collisionMsFor('mev1-intelsat901');
+    const event = getHistoricalEvent('yunhai-1-02')!;
+    const collisionMs = collisionMsFor('yunhai-1-02');
     visuals.setup(event, collisionMs);
 
     const result = visuals.tick(new Date(collisionMs), collisionMs)!;
