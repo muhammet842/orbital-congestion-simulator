@@ -74,4 +74,12 @@ describe('initGlobeMessageHud', () => {
     setState({ selectedEventId: 'iridium-cosmos' });
     expect(document.getElementById('globe-message-hud')?.hidden).toBe(true);
   });
+
+  it('starts compact and expands the extra copy on demand', () => {
+    initGlobeMessageHud(document.getElementById('scene-container')!);
+    const hud = document.getElementById('globe-message-hud');
+    expect(hud?.classList.contains('globe-hud--collapsed')).toBe(true);
+    document.getElementById('globe-hud-toggle')?.click();
+    expect(hud?.classList.contains('globe-hud--collapsed')).toBe(false);
+  });
 });

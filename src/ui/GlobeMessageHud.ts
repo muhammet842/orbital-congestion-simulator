@@ -84,6 +84,8 @@ function renderHud(): void {
   const outlookEl = rootEl.querySelector('#globe-hud-outlook');
   const openBtn = rootEl.querySelector('#globe-hud-open');
   const shell = rootEl.querySelector('#globe-hud-shell');
+  const toggle = rootEl.querySelector('#globe-hud-toggle');
+  const collapsed = rootEl.classList.contains('globe-hud--collapsed');
 
   if (lede) lede.textContent = t('hud.lede');
   if (catalog) catalog.textContent = formatHudCount(stats.total);
@@ -103,6 +105,11 @@ function renderHud(): void {
       km: String(LEO_SHELL_ALTITUDE_KM),
     });
   }
+  if (toggle instanceof HTMLButtonElement) {
+    toggle.textContent = collapsed ? t('hud.more') : t('hud.less');
+    toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    toggle.setAttribute('aria-label', collapsed ? t('hud.more') : t('hud.less'));
+  }
 }
 
 export function initGlobeMessageHud(container: HTMLElement): void {
@@ -110,10 +117,13 @@ export function initGlobeMessageHud(container: HTMLElement): void {
 
   const hud = document.createElement('aside');
   hud.id = 'globe-message-hud';
-  hud.className = 'globe-hud';
+  hud.className = 'globe-hud globe-hud--collapsed';
   hud.setAttribute('aria-label', t('hud.aria'));
   hud.innerHTML = `
-    <p class="globe-hud__lede" id="globe-hud-lede"></p>
+    <div class="globe-hud__top">
+      <p class="globe-hud__lede" id="globe-hud-lede"></p>
+      <button type="button" class="globe-hud__toggle" id="globe-hud-toggle" aria-controls="globe-hud-more"></button>
+    </div>
     <dl class="globe-hud__stats">
       <div class="globe-hud__stat">
         <dt data-i18n="hud.stat_globe">${escapeHtml(t('hud.stat_globe'))}</dt>
@@ -132,15 +142,21 @@ export function initGlobeMessageHud(container: HTMLElement): void {
         <dd id="globe-hud-approaches">—</dd>
       </div>
     </dl>
-    <p class="globe-hud__outlook" id="globe-hud-outlook"></p>
     <button type="button" class="globe-hud__btn" id="globe-hud-open"></button>
-    <p class="globe-hud__shell" id="globe-hud-shell"></p>
+    <div class="globe-hud__more" id="globe-hud-more">
+      <p class="globe-hud__outlook" id="globe-hud-outlook"></p>
+      <p class="globe-hud__shell" id="globe-hud-shell"></p>
+    </div>
   `;
   container.appendChild(hud);
   rootEl = hud;
 
   hud.querySelector('#globe-hud-open')?.addEventListener('click', () => {
     openKesslerPanel();
+  });
+  hud.querySelector('#globe-hud-toggle')?.addEventListener('click', () => {
+    hud.classList.toggle('globe-hud--collapsed');
+    renderHud();
   });
 
   unsubState = subscribe(renderHud);
