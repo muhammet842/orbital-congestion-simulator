@@ -4,8 +4,6 @@ import {
   conjunctionSessionKey,
   getVerificationWindowMs,
   hasUpcomingConjunctionScanCompleted,
-  invalidateConjunctionCache,
-  invalidateUpcomingConjunctionCache,
   normalizeConjunctionAlert,
   VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
@@ -74,11 +72,6 @@ type Listener = () => void;
 
 /** One-shot wake after an empty predictive sweep so the UI leaves "Scanning…". */
 let emptyConjunctionScanAcked = false;
-
-function resetUpcomingConjunctionUi(): void {
-  invalidateUpcomingConjunctionCache();
-  emptyConjunctionScanAcked = false;
-}
 
 const defaultLayerFilters: Record<OrbitLayer, boolean> = {
   LEO: true,
@@ -304,10 +297,6 @@ function restoreGlobalLiveTime(): TimeState {
 
 export function selectObject(index: number): void {
   const wasVerifying = state.verificationTime != null;
-  if (wasVerifying) {
-    invalidateConjunctionCache();
-    resetUpcomingConjunctionUi();
-  }
   setState({
     selectedIndex: index,
     selectedEventId: null,
@@ -326,10 +315,6 @@ export function clearObjectSelection(): void {
 
 export function selectHistoricalEvent(eventId: string): void {
   const wasVerifying = state.verificationTime != null;
-  if (wasVerifying) {
-    invalidateConjunctionCache();
-    resetUpcomingConjunctionUi();
-  }
   setState({
     selectedEventId: eventId,
     selectedIndex: null,
@@ -409,11 +394,6 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
   const frozen = normalizeConjunctionAlert(alert, state.objects);
   if (!frozen) return;
 
-  if (state.verificationTime) {
-    invalidateConjunctionCache();
-    resetUpcomingConjunctionUi();
-  }
-
   const cpaTimeMs = frozen.time.getTime();
   const sessionKey = conjunctionSessionKey(frozen);
 
@@ -450,8 +430,6 @@ export function toggleConjunctionFromAlert(alert: ConjunctionEvent): void {
 
 export function clearSelectedConjunction(): void {
   if (!state.selectedConjunction && !state.verificationTime) return;
-  invalidateConjunctionCache();
-  resetUpcomingConjunctionUi();
   setState({
     selectedConjunction: null,
     selectedConjunctionSessionKey: null,

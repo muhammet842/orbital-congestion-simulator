@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLang, setLang } from '../i18n/i18n';
-import { getState } from '../state/appState';
-import { closeKesslerPanel, isKesslerPanelOpen } from './KesslerPanel';
+import { closeKesslerPanel } from './KesslerPanel';
 import {
   closeHowToGuide,
   initHowToGuide,
@@ -94,35 +93,34 @@ describe('initHowToGuide', () => {
 });
 
 describe('interactive tour', () => {
-  it('starts with a language gate and Skip', () => {
+  it('starts with a language gate and Skip on first visit', () => {
+    localStorage.removeItem(LS_HELP_SEEN);
     openHowToGuide();
     expect(document.getElementById('tour-title')?.textContent).toBe('Choose a language to continue');
     expect(document.querySelectorAll('.tour-lang-btn').length).toBe(5);
     expect(document.getElementById('tour-skip')).not.toBeNull();
   });
 
-  it('continues with the thesis card after picking Türkçe', () => {
+  it('starts the UI tour immediately from ? after the guide has been seen', () => {
+    openHowToGuide();
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
+    expect(document.getElementById('thesis-collision')).toBeNull();
+    expect(document.getElementById('thesis-projection')).toBeNull();
+  });
+
+  it('starts the UI tour after picking Türkçe on first visit', () => {
+    localStorage.removeItem(LS_HELP_SEEN);
     openHowToGuide();
     document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="tr"]')?.click();
     expect(getLang()).toBe('tr');
     expect(document.querySelector<HTMLSelectElement>('#lang-select')?.value).toBe('tr');
-    expect(document.getElementById('tour-title')?.textContent).toMatch(/kabuk/i);
-    expect(document.getElementById('thesis-collision')).not.toBeNull();
-    expect(document.querySelector('.tour-progress')?.textContent).toMatch(/Mesaj/i);
-  });
-
-  it('starts the UI tour only after choosing How the controls work', () => {
-    openHowToGuide();
-    document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="en"]')?.click();
-    expect(document.getElementById('thesis-tour')).not.toBeNull();
-    document.getElementById('thesis-tour')?.click();
     expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
+    expect(document.getElementById('thesis-collision')).toBeNull();
   });
 
   it('advances with Next and can be skipped', () => {
     openHowToGuide();
-    document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="en"]')?.click();
-    document.getElementById('thesis-tour')?.click();
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
     document.getElementById('tour-next')?.click();
     expect(document.querySelector('.tour-progress')?.textContent).toBe('2 / 7');
     document.getElementById('tour-skip')?.click();
@@ -134,21 +132,5 @@ describe('interactive tour', () => {
     openHowToGuide();
     openHowToGuide();
     expect(document.querySelectorAll('#help-tour-root').length).toBe(1);
-  });
-
-  it('plays the 2009 collision from the thesis card', () => {
-    openHowToGuide();
-    document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="en"]')?.click();
-    document.getElementById('thesis-collision')?.click();
-    expect(isHowToGuideOpen()).toBe(false);
-    expect(getState().selectedEventId).toBe('iridium-cosmos');
-  });
-
-  it('opens the 25-year projection from the thesis card', () => {
-    openHowToGuide();
-    document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="en"]')?.click();
-    document.getElementById('thesis-projection')?.click();
-    expect(isHowToGuideOpen()).toBe(false);
-    expect(isKesslerPanelOpen()).toBe(true);
   });
 });

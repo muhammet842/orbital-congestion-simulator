@@ -254,27 +254,38 @@ export class SceneManager {
         const collisionTimeMs = new Date(event.collisionTimeUtc).getTime();
 
         if (this.lastEventReplayId !== selectedEventId) {
+          const comingFromReplay = this.lastEventReplayId != null;
           this.lastEventReplayId = selectedEventId;
           startEventReplay(selectedEventId, collisionTimeMs);
           this.eventReplayVisuals.setup(event, collisionTimeMs);
-          this.cameraFly.captureGlobalView(this.camera, this.controls);
-          // Same close-pair orbit limits as conjunction verification so the
-          // fly-in can lock onto the colliding objects instead of the globe.
-          this.applyOrbitDistanceLimits(true);
-          this.canvasContainer.classList.add('scene-container--conjunction-focus');
+          this._eventReplayStarted = comingFromReplay;
 
-          // Clear any satellite selection visuals immediately so the footprint
-          // cone and orbit trail don't linger while the replay loads.
-          this.satelliteFootprint.update(null, objects, new Date());
-          this.selectionMarker.update(null, objects, new Date());
-          this.orbitTrail.update(false, null, objects, new Date());
-          this.groundTrack.clear();
+          if (!comingFromReplay) {
+            this.cameraFly.captureGlobalView(this.camera, this.controls);
+            // Same close-pair orbit limits as conjunction verification so the
+            // fly-in can lock onto the colliding objects instead of the globe.
+            this.applyOrbitDistanceLimits(true);
+            this.canvasContainer.classList.add('scene-container--conjunction-focus');
 
-          // Hide all catalog satellite dots so only the 2 historical objects
-          // are visible. Modern TLEs extrapolated 15+ years backwards produce
-          // garbage positions that scatter across the scene.
-          if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
-          this.leoShell.setVisible(false);
+            // Clear any satellite selection visuals immediately so the footprint
+            // cone and orbit trail don't linger while the replay loads.
+            this.satelliteFootprint.update(null, objects, new Date());
+            this.selectionMarker.update(null, objects, new Date());
+            this.orbitTrail.update(false, null, objects, new Date());
+            this.groundTrack.clear();
+
+            // Hide all catalog satellite dots so only the 2 historical objects
+            // are visible. Modern TLEs extrapolated 15+ years backwards produce
+            // garbage positions that scatter across the scene.
+            if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
+            this.leoShell.setVisible(false);
+          }
+        } else if (!getState().eventReplay) {
+          // Same card clicked again: selectHistoricalEvent cleared eventReplay
+          // while lastEventReplayId still matched, which used to freeze the
+          // scene with no clock. Rewind and play without tearing down the view.
+          this._eventReplayStarted = true;
+          startEventReplay(selectedEventId, collisionTimeMs);
         }
 
         this.applyOrbitDistanceLimits(true);

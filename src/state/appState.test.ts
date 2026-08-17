@@ -23,6 +23,7 @@ import {
   computeFilteredIndices,
   getListIndices,
   selectConjunctionFromAlert,
+  clearSelectedConjunction,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
 import { VERIFY_REWIND_MS } from '../orbital/conjunction';
@@ -555,5 +556,33 @@ describe('selectConjunctionFromAlert', () => {
     expect(vt!.playing).toBe(true);
     expect(vt!.speed).toBe(1);
     expect(vt!.currentMs).toBe(cpa.getTime() - VERIFY_REWIND_MS);
+  });
+
+  it('keeps the existing 24h alert list when the card is cancelled', () => {
+    const a = makeObj({ noradId: 1, name: 'A' });
+    const b = makeObj({ noradId: 2, name: 'B' });
+    const cpa = new Date('2026-07-25T02:12:25.000Z');
+    const alert: ConjunctionEvent = {
+      objectA: 'A',
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      distanceKm: 0.34,
+      relativeVelocityKmS: 0.4,
+      time: cpa,
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+    setState({
+      objects: [a, b],
+      conjunctions: [alert],
+      conjunctionHiddenCount: 3,
+    });
+    selectConjunctionFromAlert(alert);
+    clearSelectedConjunction();
+    expect(getState().conjunctions).toEqual([alert]);
+    expect(getState().conjunctionHiddenCount).toBe(3);
+    expect(getState().selectedConjunction).toBeNull();
   });
 });

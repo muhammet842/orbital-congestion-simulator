@@ -96,15 +96,12 @@ test.describe('How-to guide', () => {
     await page.locator('#help-guide-btn').waitFor({ timeout: 10_000 });
   });
 
-  test('opens with language choice, then a spotlight step', async ({ page }) => {
+  test('opens the UI tour spotlight from the help button', async ({ page }) => {
     await page.locator('#help-guide-btn').click();
-    await expect(page.getByText('Choose a language to continue')).toBeVisible();
-    await page.locator('.tour-lang-btn[data-lang="en"]').click();
-    await expect(page.locator('#thesis-tour')).toBeVisible();
-    await page.locator('#thesis-tour').click();
     await expect(page.locator('.tour-progress')).toHaveText('1 / 7');
     await expect(page.locator('#tour-highlight')).toBeVisible();
     await expect(page.locator('#tour-skip')).toBeVisible();
+    await expect(page.locator('#thesis-collision')).toHaveCount(0);
   });
 
   test('Skip dismisses the tour', async ({ page }) => {

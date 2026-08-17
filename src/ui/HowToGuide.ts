@@ -1,6 +1,4 @@
 import { applyTranslations, onLangChange, setLang, SUPPORTED_LANGS, t, type Lang } from '../i18n/i18n';
-import { selectHistoricalEvent } from '../state/appState';
-import { FEATURED_HISTORICAL_EVENT_ID } from './EventCards';
 import { closeKesslerPanel, openKesslerPanel } from './KesslerPanel';
 import { setTourPanel } from './Layout';
 
@@ -25,7 +23,7 @@ const STEPS = [
 ] as const;
 
 type StepId = (typeof STEPS)[number];
-type Phase = 'lang' | 'thesis' | 'tour';
+type Phase = 'lang' | 'tour';
 
 interface StepConfig {
   id: StepId;
@@ -486,9 +484,7 @@ function renderLangCard(card: HTMLElement): void {
       setLang(lang);
       syncLangSelect(lang);
       applyTranslations(document);
-      phase = 'thesis';
-      stepIndex = 0;
-      renderTour();
+      startUiTour();
     });
   });
 }
@@ -499,52 +495,11 @@ function startUiTour(): void {
   renderTour();
 }
 
-function finishWithCollision(): void {
-  markGuideSeen();
-  closeHowToGuide();
-  selectHistoricalEvent(FEATURED_HISTORICAL_EVENT_ID);
-}
-
-function finishWithProjection(): void {
-  markGuideSeen();
-  closeHowToGuide();
-  openKesslerPanel();
-}
-
-function renderThesisCard(card: HTMLElement): void {
-  card.classList.add('tour-card--center', 'tour-card--thesis');
-  card.setAttribute('aria-label', t('help.thesis.title'));
-  card.innerHTML = `
-    <div class="tour-card-top">
-      <span class="tour-progress">${escapeHtml(t('help.thesis.kicker'))}</span>
-      <button type="button" class="tour-skip" id="tour-skip">${escapeHtml(t('help.skip'))}</button>
-    </div>
-    <h2 class="tour-title" id="tour-title">${escapeHtml(t('help.thesis.title'))}</h2>
-    <p class="tour-body">${escapeHtml(t('help.thesis.body'))}</p>
-    <div class="tour-thesis-actions">
-      <button type="button" class="tour-primary-btn" id="thesis-collision">
-        ${escapeHtml(t('help.thesis.collision'))}
-      </button>
-      <button type="button" class="tour-secondary-btn" id="thesis-projection">
-        ${escapeHtml(t('help.thesis.projection'))}
-      </button>
-      <button type="button" class="tour-secondary-btn" id="thesis-tour">
-        ${escapeHtml(t('help.thesis.tour'))}
-      </button>
-    </div>
-  `;
-
-  card.querySelector('#tour-skip')?.addEventListener('click', dismissHowToGuide);
-  card.querySelector('#thesis-collision')?.addEventListener('click', finishWithCollision);
-  card.querySelector('#thesis-projection')?.addEventListener('click', finishWithProjection);
-  card.querySelector('#thesis-tour')?.addEventListener('click', startUiTour);
-}
-
 function renderStepCard(card: HTMLElement): void {
   const config = STEP_CONFIG[stepIndex]!;
   const total = STEPS.length;
   const isLast = stepIndex >= total - 1;
-  card.classList.remove('tour-card--thesis');
+  card.classList.remove('tour-card--thesis', 'tour-card--center');
   card.setAttribute('aria-label', t(`help.step.${config.id}.title`));
   card.innerHTML = `
     <div class="tour-card-top">
@@ -601,19 +556,6 @@ function renderTour(): void {
     return;
   }
 
-  if (phase === 'thesis') {
-    cleanupStepSideEffects();
-    unbindScrollParents();
-    highlight.hidden = true;
-    setPadsHidden(true);
-    dim.classList.add('tour-dim--full');
-    renderThesisCard(card);
-    requestAnimationFrame(() => {
-      card.querySelector<HTMLButtonElement>('#thesis-collision')?.focus();
-    });
-    return;
-  }
-
   dim.classList.remove('tour-dim--full');
   const config = STEP_CONFIG[stepIndex]!;
   const target = prepareStep(config);
@@ -632,19 +574,15 @@ function renderTour(): void {
   });
 }
 
-/** Start guided tour. First-visit and reopen both begin with language choice. */
+/** First visit: language then UI tour. Header ? reopens the tour only. */
 export function openHowToGuide(): void {
   if (rootEl) return;
-  phase = 'lang';
+  phase = hasSeenGuide() ? 'tour' : 'lang';
   stepIndex = 0;
   renderTour();
 
   langUnsub = onLangChange(() => {
     if (!rootEl) return;
-    if (phase === 'thesis') {
-      renderThesisCard(rootEl.querySelector<HTMLElement>('#tour-card')!);
-      return;
-    }
     if (phase !== 'tour') return;
     renderStepCard(rootEl.querySelector<HTMLElement>('#tour-card')!);
     scheduleReposition();

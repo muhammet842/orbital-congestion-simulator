@@ -55,7 +55,7 @@ Open `http://localhost:5173` in your browser.
 
 ## How to use
 
-On first visit the app asks you to **choose a language**, then shows a short thesis card (play the 2009 collision, open the 25-year projection, or start the UI tour). The tour then walks through the UI step by step with on-screen highlights (globe, search/filters, details, close approaches, historical events, time bar, Future Projection). Use **Skip** anytime; reopen the tour with the **?** button in the header.
+On first visit the app asks you to **choose a language**, then walks through the UI step by step with on-screen highlights (globe, search/filters, details, close approaches, historical events, time bar, Future Projection). Use **Skip** anytime; reopen the tour with the **?** button in the header.
 
 Deep links: `?object=<NORAD>` and `?event=<id>`.
 
