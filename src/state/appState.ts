@@ -121,7 +121,7 @@ let state: AppState = {
   conjunctionSortMode: 'time',
   showOrbitTrail: false,
   showGroundTrack: true,
-  colorByFunction: false,
+  colorByFunction: true,
 };
 
 const listeners = new Set<Listener>();
@@ -582,7 +582,7 @@ export function initState(
     conjunctionSortMode: 'time',
     showOrbitTrail: false,
     showGroundTrack: true,
-    colorByFunction: false,
+    colorByFunction: true,
     time: {
       mode: 'live',
       current: new Date(),

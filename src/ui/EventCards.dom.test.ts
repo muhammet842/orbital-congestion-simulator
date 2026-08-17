@@ -68,4 +68,13 @@ describe('initEventCards – DOM smoke', () => {
       expect(badge!.classList.contains(`event-type-badge--${event.eventType}`)).toBe(true);
     }
   });
+
+  it('marks Iridium–Cosmos as the featured story', () => {
+    const container = document.createElement('div');
+    initEventCards(container);
+    const featured = container.querySelector('[data-event-id="iridium-cosmos"]');
+    expect(featured?.classList.contains('event-card--featured')).toBe(true);
+    expect(container.querySelector('.event-card-kicker')).not.toBeNull();
+    expect(container.querySelector('.panel-lede')).not.toBeNull();
+  });
 });

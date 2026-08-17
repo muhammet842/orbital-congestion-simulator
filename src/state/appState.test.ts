@@ -51,7 +51,7 @@ function resetState(): void {
     categoryFilter: 'all',
     showOrbitTrail: false,
     showGroundTrack: true,
-    colorByFunction: false,
+    colorByFunction: true,
     conjunctions: [],
     conjunctionHiddenCount: 0,
     conjunctionSortMode: 'time',
@@ -180,15 +180,15 @@ describe('setShowGroundTrack', () => {
 });
 
 describe('setColorByFunction', () => {
-  it('defaults to false', () => {
-    expect(getState().colorByFunction).toBe(false);
+  it('defaults to true so debris and satellites stay distinct', () => {
+    expect(getState().colorByFunction).toBe(true);
   });
 
   it('can be toggled on and off', () => {
-    setColorByFunction(true);
-    expect(getState().colorByFunction).toBe(true);
     setColorByFunction(false);
     expect(getState().colorByFunction).toBe(false);
+    setColorByFunction(true);
+    expect(getState().colorByFunction).toBe(true);
   });
 });
 

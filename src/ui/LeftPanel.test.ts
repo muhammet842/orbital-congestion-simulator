@@ -78,6 +78,17 @@ describe('initLeftPanel – DOM smoke', () => {
     document.body.removeChild(container);
   });
 
+  it('explains debris vs satellites and why close approaches matter', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    initLeftPanel(container);
+    const ledes = container.querySelectorAll('.panel-lede');
+    expect(ledes.length).toBeGreaterThanOrEqual(2);
+    expect([...ledes].some((el) => /debris|junk/i.test(el.textContent ?? ''))).toBe(true);
+    expect([...ledes].some((el) => /maneuver|Iridium/i.test(el.textContent ?? ''))).toBe(true);
+    document.body.removeChild(container);
+  });
+
   it('creates the conjunction-list section', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

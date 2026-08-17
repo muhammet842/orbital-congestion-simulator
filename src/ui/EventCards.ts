@@ -62,6 +62,8 @@ export interface HistoricalEvent {
   info: { title: string; reason: string; outcome: string };
 }
 
+export const FEATURED_HISTORICAL_EVENT_ID = 'iridium-cosmos';
+
 export const HISTORICAL_EVENTS: HistoricalEvent[] = [
   {
     id: 'iridium-cosmos',
@@ -324,6 +326,7 @@ export function initEventCards(container: HTMLElement): void {
   section.className = 'event-cards';
   section.innerHTML = `
     <h2 class="panel-heading" data-i18n="ui.historical_events">Historical Events</h2>
+    <p class="panel-lede" data-i18n="ui.events_lead">${escapeHtml(t('ui.events_lead'))}</p>
     <div class="event-accordion" id="event-accordion"></div>
   `;
   container.appendChild(section);
@@ -336,7 +339,7 @@ export function initEventCards(container: HTMLElement): void {
       (event) => `
         <button
           type="button"
-          class="event-card${event.id === selectedEventId ? ' event-card--active' : ''}"
+          class="event-card${event.id === selectedEventId ? ' event-card--active' : ''}${event.id === FEATURED_HISTORICAL_EVENT_ID ? ' event-card--featured' : ''}"
           data-event-id="${event.id}"
           aria-expanded="${String(event.id === selectedEventId)}"
         >
@@ -344,6 +347,11 @@ export function initEventCards(container: HTMLElement): void {
             <span class="event-card-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</span>
             <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
           </div>
+          ${
+            event.id === FEATURED_HISTORICAL_EVENT_ID
+              ? `<span class="event-card-kicker">${escapeHtml(t('event.iridium-cosmos.featured'))}</span>`
+              : ''
+          }
           <span class="event-card-date">${formatEventDate(event.date)}</span>
         </button>
       `,

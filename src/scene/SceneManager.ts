@@ -21,6 +21,7 @@ import { ConjunctionVerification } from './ConjunctionVerification';
 import { ConjunctionLabels } from './ConjunctionLabels';
 import { getDayNightState } from './dayNight';
 import { Earth } from './Earth';
+import { LeoShell } from './LeoShell';
 import { OrbitalMeshes } from './OrbitalMeshes';
 import { OrbitTrail } from './OrbitTrail';
 import { SatelliteFootprint } from './SatelliteFootprint';
@@ -55,6 +56,7 @@ export class SceneManager {
   readonly controls: OrbitControls;
   readonly earth: Earth;
   readonly sunLight: DirectionalLight;
+  private leoShell: LeoShell;
   private orbitalMeshes: OrbitalMeshes | null = null;
   private propWorker: PropagationWorkerBridge;
   private selectionMarker: SelectionMarker;
@@ -153,6 +155,9 @@ export class SceneManager {
     this.earth = new Earth();
     this.earth.mesh.renderOrder = 0;
     this.scene.add(this.earth.mesh);
+
+    this.leoShell = new LeoShell();
+    this.scene.add(this.leoShell.group);
 
     this.selectionMarker = new SelectionMarker();
     this.scene.add(this.selectionMarker.group);
@@ -269,6 +274,7 @@ export class SceneManager {
           // are visible. Modern TLEs extrapolated 15+ years backwards produce
           // garbage positions that scatter across the scene.
           if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
+          this.leoShell.setVisible(false);
         }
 
         this.applyOrbitDistanceLimits(true);
@@ -291,6 +297,7 @@ export class SceneManager {
       if (eventReplay) stopEventReplay();
       // Restore catalog satellites visibility
       if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
+      this.leoShell.setVisible(true);
       this.applyOrbitDistanceLimits(false);
       this.canvasContainer.classList.remove('scene-container--conjunction-focus');
       this.cameraFly.flyToGlobalView(this.camera, this.controls);
@@ -345,6 +352,7 @@ export class SceneManager {
 
       this.applyOrbitDistanceLimits(true);
       this.canvasContainer.classList.add('scene-container--conjunction-focus');
+      this.leoShell.setVisible(false);
       this.earth.mesh.visible = true;
       return;
     }
@@ -361,6 +369,7 @@ export class SceneManager {
     this.lastConjunctionSessionKey = null;
     this.lastConjunctionRevision = -1;
     this.canvasContainer.classList.remove('scene-container--conjunction-focus');
+    this.leoShell.setVisible(true);
 
     if (
       selectedIndex != null &&
