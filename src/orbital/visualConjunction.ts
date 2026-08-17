@@ -3,6 +3,84 @@ import { ORBIT_DISPLAY_SCALE } from '../types';
 
 const MIN_VIEW_DISTANCE = 0.035;
 
+/** Closest inspect distance to a close-approach midpoint (≈ 320 km). */
+export const PAIR_INSPECT_MIN_DISTANCE = 0.05;
+/** Hard cap when looking away from Earth in pair-focus. */
+export const PAIR_FOCUS_MAX_DISTANCE = 6;
+/**
+ * Keep the camera outside the unit Earth mesh. 1.08 ≈ 510 km above the
+ * surface — below typical LEO, so a pair at ~780 km can still be framed.
+ */
+export const EARTH_CAMERA_CLEARANCE = 1.08;
+
+/**
+ * OrbitControls dolly range that keeps the camera outside Earth while still
+ * orbiting a close-approach / collision midpoint (not Earth origin).
+ *
+ * minDistance / maxDistance are isotropic, so this uses the current
+ * camera-target direction: looking out to space keeps a wide zoom-out;
+ * looking toward the globe stops before the near-clip tunnels into Earth.
+ */
+export function getEarthSafeDollyRange(
+  target: { x: number; y: number; z: number },
+  camera: { x: number; y: number; z: number },
+  earthClearance = EARTH_CAMERA_CLEARANCE,
+): { minDistance: number; maxDistance: number } {
+  const tx = target.x;
+  const ty = target.y;
+  const tz = target.z;
+  const ox = camera.x - tx;
+  const oy = camera.y - ty;
+  const oz = camera.z - tz;
+  const tLenSq = tx * tx + ty * ty + tz * tz;
+  const C2 = earthClearance * earthClearance;
+  const tNow = Math.hypot(ox, oy, oz);
+
+  if (tLenSq <= C2 + 1e-8) {
+    if (tNow < 1e-8) {
+      return { minDistance: earthClearance, maxDistance: 10 };
+    }
+    const hx = ox / tNow;
+    const hy = oy / tNow;
+    const hz = oz / tNow;
+    const tDot = tx * hx + ty * hy + tz * hz;
+    const disc = Math.max(0, tDot * tDot - tLenSq + C2);
+    const tExit = -tDot + Math.sqrt(disc);
+    return {
+      minDistance: Math.max(earthClearance, tExit),
+      maxDistance: 10,
+    };
+  }
+
+  const minDistance = PAIR_INSPECT_MIN_DISTANCE;
+  let maxDistance = PAIR_FOCUS_MAX_DISTANCE;
+
+  if (tNow < 1e-8) {
+    return { minDistance, maxDistance };
+  }
+
+  const hx = ox / tNow;
+  const hy = oy / tNow;
+  const hz = oz / tNow;
+  const tDot = tx * hx + ty * hy + tz * hz;
+  const disc = tDot * tDot - tLenSq + C2;
+
+  if (disc > 1e-12) {
+    const s = Math.sqrt(disc);
+    const tEnter = Math.min(-tDot - s, -tDot + s);
+    if (tEnter > 0.03) {
+      maxDistance = Math.min(maxDistance, tEnter - 0.02);
+    } else if (tEnter > 0) {
+      maxDistance = Math.min(maxDistance, tEnter * 0.85);
+    }
+  }
+
+  if (maxDistance < minDistance) {
+    return { minDistance: maxDistance, maxDistance };
+  }
+  return { minDistance, maxDistance };
+}
+
 /**
  * True-space layout for a conjunction pair. No on-screen exaggeration —
  * verification is for precise observation, so the gap must match live km.

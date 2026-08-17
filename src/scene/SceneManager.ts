@@ -15,7 +15,7 @@ import { getDebrisUpdateStride, getPropagationResults } from '../orbital/propaga
 import { PropagationWorkerBridge } from '../orbital/PropagationWorkerBridge';
 import { eciToScene } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
-import { getVisualConjunctionLayout } from '../orbital/visualConjunction';
+import { getEarthSafeDollyRange, getVisualConjunctionLayout } from '../orbital/visualConjunction';
 import { CameraFly } from './CameraFly';
 import { ConjunctionVerification } from './ConjunctionVerification';
 import { ConjunctionLabels } from './ConjunctionLabels';
@@ -230,18 +230,23 @@ export class SceneManager {
 
   /**
    * Globe view clamps the camera outside Earth (radius ≈ 1). Close-pair
-   * focus (conjunction verification / collision replay) orbits the midpoint
-   * at ~0.1 scene units — the globe minDistance would otherwise block all
-   * zoom-in (and yank the fly-in pose).
+   * focus orbits the midpoint, so globe minDistance would block inspect zoom —
+   * but pair dolly still has to stay outside the globe mesh.
    */
   private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
     if (conjunctionFocus) {
-      this.controls.minDistance = 0.02;
-      this.controls.maxDistance = 6;
+      this.syncPairFocusDistanceLimits();
       return;
     }
     this.controls.minDistance = 1.35;
     this.controls.maxDistance = 10;
+  }
+
+  /** Recompute pair-focus min/max dolly from the current camera-target ray. */
+  private syncPairFocusDistanceLimits(): void {
+    const range = getEarthSafeDollyRange(this.controls.target, this.camera.position);
+    this.controls.minDistance = range.minDistance;
+    this.controls.maxDistance = range.maxDistance;
   }
 
   private onStateChange(): void {
@@ -519,6 +524,7 @@ export class SceneManager {
       }
 
       if (!flying && !this.cameraFly.isActive()) {
+        this.syncPairFocusDistanceLimits();
         this.controls.update();
       }
       this.camera.updateMatrixWorld();
@@ -672,6 +678,9 @@ export class SceneManager {
     }
 
     if (!flying) {
+      if (currentState.selectedConjunction) {
+        this.syncPairFocusDistanceLimits();
+      }
       this.controls.update();
       this.keepEarthCenteredOrbit();
     }
