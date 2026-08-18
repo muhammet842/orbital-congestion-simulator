@@ -1,10 +1,13 @@
 import {
   Color,
   Group,
+  InstancedMesh,
   Matrix4,
   Mesh,
   Object3D,
+  PerspectiveCamera,
   Raycaster,
+  Vector2,
   Vector3,
 } from 'three';
 import { eciToScene, eciVectorToScene } from '../orbital/coordinates';
@@ -22,6 +25,7 @@ import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
 import { resolveModelKey } from './modelResolver';
 import { satelliteModelLoader } from './SatelliteModelLoader';
 import { conjunctionModelScale } from './conjunctionScale';
+import { pickClosestScreenIndex, type ScreenPickCandidate } from './screenPick';
 
 export { conjunctionModelScale };
 
@@ -30,6 +34,7 @@ const scratchVel = new Vector3();
 const scratchDir = new Vector3();
 const scratchUp = new Vector3();
 const scratchMatrix = new Matrix4();
+const scratchPick = new Vector3();
 const tintColor = new Color();
 
 function matchesSearch(obj: TrackedObject, searchQuery: string): boolean {
@@ -143,7 +148,13 @@ export class OrbitalMeshes {
     this.visiblePickRoots = nextVisible;
   }
 
-  pickObjectIndex(raycaster: Raycaster): number | null {
+  pickObjectIndex(
+    raycaster: Raycaster,
+    camera: PerspectiveCamera,
+    pointerNdc: Vector2,
+    canvasWidth: number,
+    canvasHeight: number,
+  ): number | null {
     if (!this.group.visible) return null;
 
     if (this.visiblePickRoots.length > 0) {
@@ -159,14 +170,50 @@ export class OrbitalMeshes {
       }
     }
 
-    for (const points of [this.spacecraftPoints.mesh, this.debrisPoints.mesh]) {
-      const hits = raycaster.intersectObject(points);
-      if (hits.length > 0 && hits[0].instanceId != null) {
-        return hits[0].instanceId;
-      }
+    const candidates: ScreenPickCandidate[] = [];
+    this.collectScreenPickCandidates(this.spacecraftPoints.mesh, camera, candidates);
+    this.collectScreenPickCandidates(this.debrisPoints.mesh, camera, candidates);
+    for (const wrapper of this.visiblePickRoots) {
+      if (!wrapper.visible) continue;
+      const index = wrapper.userData.objectIndex;
+      if (typeof index !== 'number') continue;
+      wrapper.getWorldPosition(scratchPick);
+      scratchPick.project(camera);
+      candidates.push({
+        index,
+        ndcX: scratchPick.x,
+        ndcY: scratchPick.y,
+        ndcZ: scratchPick.z,
+      });
     }
 
-    return null;
+    return pickClosestScreenIndex(
+      candidates,
+      pointerNdc.x,
+      pointerNdc.y,
+      canvasWidth,
+      canvasHeight,
+    );
+  }
+
+  private collectScreenPickCandidates(
+    mesh: InstancedMesh,
+    camera: PerspectiveCamera,
+    out: ScreenPickCandidate[],
+  ): void {
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, scratchMatrix);
+      if (Math.abs(scratchMatrix.elements[0]) < 1e-12) continue;
+      scratchPick.setFromMatrixPosition(scratchMatrix);
+      mesh.localToWorld(scratchPick);
+      scratchPick.project(camera);
+      out.push({
+        index: i,
+        ndcX: scratchPick.x,
+        ndcY: scratchPick.y,
+        ndcZ: scratchPick.z,
+      });
+    }
   }
 
   private resolveGltfDetailIndices(

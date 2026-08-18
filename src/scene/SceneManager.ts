@@ -185,8 +185,6 @@ export class SceneManager {
 
     this.propWorker = new PropagationWorkerBridge();
 
-    this.raycaster.params.Points = { threshold: 0.015 };
-
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.renderer.domElement.addEventListener('click', (e) => this.onClick(e));
     window.addEventListener('resize', () => this.onResize());
@@ -735,7 +733,14 @@ export class SceneManager {
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const objectIndex = this.orbitalMeshes.pickObjectIndex(this.raycaster);
+    this.camera.updateMatrixWorld();
+    const objectIndex = this.orbitalMeshes.pickObjectIndex(
+      this.raycaster,
+      this.camera,
+      this.pointer,
+      rect.width,
+      rect.height,
+    );
 
     if (objectIndex != null) {
       const state = getState();
