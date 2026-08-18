@@ -3,8 +3,12 @@ import { ORBIT_DISPLAY_SCALE } from '../types';
 
 const MIN_VIEW_DISTANCE = 0.035;
 
-/** Closest inspect distance to a close-approach midpoint (≈ 320 km). */
-export const PAIR_INSPECT_MIN_DISTANCE = 0.05;
+/**
+ * Closest inspect distance to a close-approach midpoint.
+ * 0.002 ≈ 13 km — tight enough to read a few-km gap, still above the
+ * 0.001 camera near plane. 0.05 (≈ 320 km) left both objects as specks.
+ */
+export const PAIR_INSPECT_MIN_DISTANCE = 0.002;
 /** Hard cap when looking away from Earth in pair-focus. */
 export const PAIR_FOCUS_MAX_DISTANCE = 6;
 /**

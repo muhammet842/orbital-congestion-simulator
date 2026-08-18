@@ -31,6 +31,12 @@ describe('getEarthSafeDollyRange', () => {
     expect(range.maxDistance).toBe(PAIR_FOCUS_MAX_DISTANCE);
   });
 
+  it('lets a space-side camera dolly in close enough to inspect a tens-of-km gap', () => {
+    const range = getEarthSafeDollyRange({ x: 1.12, y: 0, z: 0 }, { x: 1.32, y: 0, z: 0 });
+    // 0.01 scene ≈ 64 km; a 50 km pair is unreadable farther than that.
+    expect(range.minDistance).toBeLessThanOrEqual(0.003);
+  });
+
   it('stops an Earthward dolly before the camera enters the globe', () => {
     const target = { x: 1.12, y: 0, z: 0 };
     const camera = { x: 1.12 - 0.03, y: 0, z: 0 };
