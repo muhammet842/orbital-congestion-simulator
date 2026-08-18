@@ -17,20 +17,15 @@ import {
 } from '../orbital/classify';
 import { propagateObject, type PropagationResult } from '../orbital/propagator';
 import type { TrackedObject, OrbitLayer, ObjectCategory } from '../types';
-import { ORBIT_DISPLAY_SCALE } from '../types';
 import { matchesSearchQuery } from '../state/appState';
 import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
 import { resolveModelKey } from './modelResolver';
-import { satelliteModelLoader, TARGET_MODEL_SIZE } from './SatelliteModelLoader';
+import { satelliteModelLoader } from './SatelliteModelLoader';
+import { conjunctionModelScale } from './conjunctionScale';
+
+export { conjunctionModelScale };
 
 const SELECTED_SCALE = 3;
-const DEFAULT_CONJUNCTION_SCALE = 2.2;
-/** Absolute floor so the model never shrinks to an unclickable speck even
- *  for a genuine near-collision (tens to low hundreds of meters apart). */
-const MIN_CONJUNCTION_SCALE = 0.02;
-/** Keep each model's footprint under this fraction of the *live* separation
- *  so a multi-km near-miss still shows a visible gap (zoom manually to inspect). */
-const CONJUNCTION_SIZE_FRACTION_OF_SEPARATION = 0.25;
 const scratchVel = new Vector3();
 const scratchDir = new Vector3();
 const scratchUp = new Vector3();
@@ -119,18 +114,18 @@ export class OrbitalMeshes {
       highlightSet,
     );
 
-    if (!options?.skipPointsUpdate) {
+    if (!options?.skipPointsUpdate || conjunctionFocus) {
       this.spacecraftPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches, categoryFilter,
+        showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
       );
       this.debrisPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches, categoryFilter,
+        showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
       );
     }
 
@@ -290,20 +285,6 @@ export class OrbitalMeshes {
       wrapper.visible = true;
     }
   }
-}
-
-/**
- * Cap conjunction models by live separation so they shrink as the pair
- * closes. The camera no longer auto-dollies — the user zooms manually for
- * precise inspection while the gap stays honest in world space.
- */
-export function conjunctionModelScale(liveDistanceKm: number | null): number {
-  if (liveDistanceKm == null || !Number.isFinite(liveDistanceKm) || liveDistanceKm <= 0) {
-    return DEFAULT_CONJUNCTION_SCALE;
-  }
-  const maxModelSizeScene = liveDistanceKm * ORBIT_DISPLAY_SCALE * CONJUNCTION_SIZE_FRACTION_OF_SEPARATION;
-  const distanceCappedScale = maxModelSizeScene / TARGET_MODEL_SIZE;
-  return Math.min(DEFAULT_CONJUNCTION_SCALE, Math.max(MIN_CONJUNCTION_SCALE, distanceCappedScale));
 }
 
 function orientAlongVelocity(wrapper: Group, velocityScene: Vector3): void {

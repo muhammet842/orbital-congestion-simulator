@@ -18,6 +18,7 @@ import type { PropagationResult } from '../orbital/propagator';
 import type { ObjectCategory, TrackedObject, OrbitLayer } from '../types';
 import { matchesSearchQuery } from '../state/appState';
 import { isRecentlyLaunched } from '../data/newLaunches';
+import { conjunctionModelScale } from './conjunctionScale';
 
 const scaleMatrix = new Matrix4();
 
@@ -75,6 +76,7 @@ export class InstancedOrbitalPoints {
     inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
     showOnlyRecentLaunches = false,
     categoryFilter: ObjectCategory | 'all' = 'all',
+    conjunctionLiveDistanceKm: number | null = null,
   ): void {
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
@@ -107,12 +109,8 @@ export class InstancedOrbitalPoints {
         continue;
       }
 
-      if (conjunctionFocus && isConjunction && this.kind === 'debris') {
-        this.matrix.makeScale(0, 0, 0);
-        this.mesh.setMatrixAt(i, this.matrix);
-        this.matrixDirty = true;
-        continue;
-      }
+      // Debris has no GLTF stand-in — keep the instanced sphere so sat-vs-debris
+      // close approaches show both objects, not only the satellite model.
 
       if (
         !isSelected &&
@@ -158,7 +156,7 @@ export class InstancedOrbitalPoints {
       );
 
       let scale = isSelected ? 3 : getCategoryScale(obj.category, obj.country);
-      if (isConjunction) scale = 2.2;
+      if (isConjunction) scale = conjunctionModelScale(conjunctionLiveDistanceKm);
       scale *= isConjunction ? 1 : getCategoryPulse(obj.category, pulseTimeMs, obj.country);
 
       this.matrix.makeTranslation(scenePos.x, scenePos.y, scenePos.z);
