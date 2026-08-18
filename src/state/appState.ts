@@ -2,7 +2,6 @@ import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conj
 import {
   clampVerificationTimeMs,
   conjunctionSessionKey,
-  getVerificationWindowMs,
   hasUpcomingConjunctionScanCompleted,
   normalizeConjunctionAlert,
   VERIFY_REWIND_MS,
@@ -460,10 +459,11 @@ export function setVerificationPartial(
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
   const vt = state.verificationTime;
-  const { endMs } = getVerificationWindowMs(vt.cpaTimeMs);
   const nextMs = vt.currentMs + deltaMs * vt.speed;
-  if (nextMs >= endMs) {
-    state.verificationTime = { ...vt, currentMs: endMs, playing: false };
+  // Auto-play stops at CPA so the pair is seen closing, not receding after T=0.
+  // Scrubbing can still move through the trail's T+15s tail via the slider.
+  if (nextMs >= vt.cpaTimeMs) {
+    state.verificationTime = { ...vt, currentMs: vt.cpaTimeMs, playing: false };
     listeners.forEach((fn) => fn());
     return;
   }

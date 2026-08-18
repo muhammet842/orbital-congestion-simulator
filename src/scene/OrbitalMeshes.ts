@@ -36,7 +36,8 @@ function matchesSearch(obj: TrackedObject, searchQuery: string): boolean {
   return matchesSearchQuery(obj, searchQuery);
 }
 
-function usesGltfDetail(obj: TrackedObject): boolean {
+function usesGltfDetail(obj: TrackedObject, conjunctionFocus = false): boolean {
+  if (conjunctionFocus) return true;
   return obj.category === 'active' || obj.category === 'stations';
 }
 
@@ -179,7 +180,7 @@ export class OrbitalMeshes {
     if (conjunctionFocus) {
       for (const index of highlightSet) {
         const obj = objects[index];
-        if (obj && usesGltfDetail(obj)) indices.add(index);
+        if (obj) indices.add(index);
       }
       return indices;
     }
@@ -216,7 +217,7 @@ export class OrbitalMeshes {
 
     for (const index of gltfDetailIndices) {
       const obj = objects[index];
-      if (!obj || !usesGltfDetail(obj)) continue;
+      if (!obj || !usesGltfDetail(obj, conjunctionFocus)) continue;
 
       const isSelected = index === selectedIndex;
       const isConjunction = highlightSet.has(index);
@@ -232,7 +233,8 @@ export class OrbitalMeshes {
 
       let wrapper = this.detailWrappers.get(index);
       if (!wrapper) {
-        const modelKey = resolveModelKey(obj);
+        const modelKey =
+          conjunctionFocus && obj.category === 'debris' ? 'sat_leo' : resolveModelKey(obj);
         void satelliteModelLoader.ensureLoaded(modelKey).then(() => {
           if (this.detailWrappers.has(index)) return;
           const created = satelliteModelLoader.clone(modelKey);
