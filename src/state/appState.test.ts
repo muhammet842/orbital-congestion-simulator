@@ -25,9 +25,10 @@ import {
   selectConjunctionFromAlert,
   clearSelectedConjunction,
   advanceVerificationTime,
+  MAX_FOCUSED_CLOCK_FRAME_MS,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
-import { VERIFY_REWIND_MS } from '../orbital/conjunction';
+import { VERIFY_REWIND_MS, VERIFY_TRAIL_FORWARD_MS } from '../orbital/conjunction';
 import * as propagatorModule from '../orbital/propagator';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 
@@ -559,7 +560,7 @@ describe('selectConjunctionFromAlert', () => {
     expect(vt!.currentMs).toBe(cpa.getTime() - VERIFY_REWIND_MS);
   });
 
-  it('stops auto-play at CPA instead of continuing into the receding tail', () => {
+  it('does not skip the T−60s window when a hitch delivers a huge frame delta', () => {
     setState({
       objects: [makeObj({ noradId: 1, name: 'A' }), makeObj({ noradId: 2, name: 'B' })],
     });
@@ -577,9 +578,34 @@ describe('selectConjunctionFromAlert', () => {
       midpointScene: { x: 0, y: 0, z: 0 },
     };
     selectConjunctionFromAlert(alert);
-    advanceVerificationTime(VERIFY_REWIND_MS + 30_000);
+    const start = getState().verificationTime!.currentMs;
+    advanceVerificationTime(VERIFY_REWIND_MS);
     const vt = getState().verificationTime!;
-    expect(vt.currentMs).toBe(cpa.getTime());
+    expect(vt.currentMs).toBe(start + MAX_FOCUSED_CLOCK_FRAME_MS);
+    expect(vt.playing).toBe(true);
+  });
+
+  it('pauses at the end of the T+15s tail, not at CPA', () => {
+    setState({
+      objects: [makeObj({ noradId: 1, name: 'A' }), makeObj({ noradId: 2, name: 'B' })],
+    });
+    const cpa = new Date('2026-07-25T02:12:25.000Z');
+    const alert: ConjunctionEvent = {
+      objectA: 'A',
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      distanceKm: 0.34,
+      relativeVelocityKmS: 0.4,
+      time: cpa,
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+    selectConjunctionFromAlert(alert);
+    for (let i = 0; i < 2_000; i++) advanceVerificationTime(MAX_FOCUSED_CLOCK_FRAME_MS);
+    const vt = getState().verificationTime!;
+    expect(vt.currentMs).toBe(cpa.getTime() + VERIFY_TRAIL_FORWARD_MS);
     expect(vt.playing).toBe(false);
   });
 

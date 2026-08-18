@@ -329,6 +329,7 @@ export class SceneManager {
 
         this.lastConjunctionSessionKey = sessionKey;
         this.lastConjunctionRevision = conjunctionRevision;
+        this.lastFrameTime = performance.now();
         this.conjunctionVerification.rebuildForEvent(selectedConjunction, objects);
         // Relax dolly limits *before* the fly-in so OrbitControls.update
         // does not clamp the close-pair pose back to globe minDistance.

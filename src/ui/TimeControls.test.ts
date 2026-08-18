@@ -38,8 +38,6 @@ describe('initTimeControls – DOM smoke', () => {
 
 describe('conjunction verification speed buttons', () => {
   it('auto-resumes playback when a speed is picked while paused (T-60s preview)', () => {
-    // Verification always starts paused so the user can inspect the T-60s
-    // state before committing to watch it play out.
     setState({
       selectedConjunction: {} as never,
       verificationTime: { cpaTimeMs: 1_000_000, currentMs: 940_000, playing: false, speed: 1 },
@@ -74,6 +72,26 @@ describe('conjunction verification speed buttons', () => {
 
     expect(getState().verificationTime?.playing).toBe(true);
     expect(getState().verificationTime?.speed).toBe(10);
+  });
+
+  it('restarts from T−60s when Play is pressed at the end of the window', () => {
+    const cpa = 1_000_000;
+    setState({
+      selectedConjunction: {} as never,
+      verificationTime: {
+        cpaTimeMs: cpa,
+        currentMs: cpa + 15_000,
+        playing: false,
+        speed: 1,
+      },
+    });
+
+    const container = mount();
+    container.querySelector<HTMLButtonElement>('#btn-play')!.click();
+
+    const vt = getState().verificationTime!;
+    expect(vt.playing).toBe(true);
+    expect(vt.currentMs).toBe(cpa - 60_000);
   });
 });
 

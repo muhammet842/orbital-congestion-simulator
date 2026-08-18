@@ -2,6 +2,7 @@ import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conj
 import {
   clampVerificationTimeMs,
   conjunctionSessionKey,
+  getVerificationWindowMs,
   hasUpcomingConjunctionScanCompleted,
   normalizeConjunctionAlert,
   VERIFY_REWIND_MS,
@@ -15,6 +16,12 @@ export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
 export const EVENT_REPLAY_SPEED = 15;
 /** Transport nudge while scrubbing an event replay (±). */
 export const EVENT_REPLAY_SCRUB_STEP_MS = 5_000;
+/**
+ * Wall-clock cap per animation frame for verify/replay clocks.
+ * A hitch after selecting a card (trail rebuild, fly-in) can be hundreds of
+ * ms; without a cap that one frame skips the whole T−60s window and freeze.
+ */
+export const MAX_FOCUSED_CLOCK_FRAME_MS = 50;
 
 export interface EventReplayState {
   eventId: string;
@@ -366,7 +373,8 @@ export function stopEventReplay(): void {
 export function advanceEventReplayTime(deltaMs: number): void {
   if (!state.eventReplay?.playing) return;
   const { startMs, endMs } = getEventReplayWindowMs(state.eventReplay.collisionTimeMs);
-  const nextMs = state.eventReplay.currentMs + deltaMs * state.eventReplay.speed;
+  const step = Math.min(Math.max(0, deltaMs), MAX_FOCUSED_CLOCK_FRAME_MS) * state.eventReplay.speed;
+  const nextMs = state.eventReplay.currentMs + step;
   if (nextMs >= endMs) {
     state.eventReplay = { ...state.eventReplay, currentMs: endMs, playing: false };
     return;
@@ -459,11 +467,11 @@ export function setVerificationPartial(
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
   const vt = state.verificationTime;
-  const nextMs = vt.currentMs + deltaMs * vt.speed;
-  // Auto-play stops at CPA so the pair is seen closing, not receding after T=0.
-  // Scrubbing can still move through the trail's T+15s tail via the slider.
-  if (nextMs >= vt.cpaTimeMs) {
-    state.verificationTime = { ...vt, currentMs: vt.cpaTimeMs, playing: false };
+  const { endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+  const step = Math.min(Math.max(0, deltaMs), MAX_FOCUSED_CLOCK_FRAME_MS) * vt.speed;
+  const nextMs = vt.currentMs + step;
+  if (nextMs >= endMs) {
+    state.verificationTime = { ...vt, currentMs: endMs, playing: false };
     listeners.forEach((fn) => fn());
     return;
   }

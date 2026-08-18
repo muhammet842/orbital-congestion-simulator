@@ -81,7 +81,13 @@ export function initTimeControls(container: HTMLElement): void {
   playBtn.addEventListener('click', () => {
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
-      setVerificationPartial({ playing: !vt?.playing });
+      if (!vt) return;
+      const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+      if (!vt.playing && vt.currentMs >= endMs - 1) {
+        setVerificationPartial({ currentMs: startMs, playing: true });
+        return;
+      }
+      setVerificationPartial({ playing: !vt.playing });
       return;
     }
     if (isEventReplayActive()) {
@@ -222,11 +228,14 @@ export function initTimeControls(container: HTMLElement): void {
       const { time } = getState();
 
       if (isConjunctionVerificationActive()) {
-        // Verification starts paused by design (T-60s preview before the
-        // user commits to watching it play out). Picking a speed is a clear
-        // signal of intent to watch it run — auto-resume so the objects
-        // actually move, instead of silently changing a speed that has no
-        // effect until Play is pressed separately.
+        const vt = getVerificationTimeState();
+        if (vt) {
+          const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+          if (vt.currentMs >= endMs - 1) {
+            setVerificationPartial({ speed, currentMs: startMs, playing: true });
+            return;
+          }
+        }
         setVerificationPartial({ speed, playing: true });
         return;
       }
