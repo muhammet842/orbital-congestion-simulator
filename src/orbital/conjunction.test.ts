@@ -10,6 +10,7 @@ import {
   getConjunctions,
   getRiskAssessment,
   getUpcomingConjunctions,
+  getVerificationRewindMs,
   invalidateConjunctionCache,
   invalidateUpcomingConjunctionCache,
   isCoOrbitingPair,
@@ -18,6 +19,9 @@ import {
   rankConjunctionAlertsForDisplay,
   selectConjunctionAlertsForDisplay,
   countConjunctionOverflow,
+  VERIFY_MIN_REWIND_MS,
+  VERIFY_OPENING_SEPARATION_KM,
+  VERIFY_REWIND_MS,
 } from './conjunction';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 import * as propagatorModule from './propagator';
@@ -27,6 +31,22 @@ type Vec3 = { x: number; y: number; z: number };
 function distance(a: Vec3, b: Vec3): number {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
+
+describe('getVerificationRewindMs', () => {
+  it('keeps the full T−60s window for slow / co-orbiting pairs', () => {
+    expect(getVerificationRewindMs(0.066)).toBe(VERIFY_REWIND_MS);
+    expect(getVerificationRewindMs(0.4)).toBe(VERIFY_REWIND_MS);
+    expect(getVerificationRewindMs(0)).toBe(VERIFY_REWIND_MS);
+  });
+
+  it('starts later for a 5 km/s crossing so the pair opens near ~80 km', () => {
+    expect(getVerificationRewindMs(5)).toBe(Math.round((VERIFY_OPENING_SEPARATION_KM / 5) * 1000));
+  });
+
+  it('never starts closer than VERIFY_MIN_REWIND_MS', () => {
+    expect(getVerificationRewindMs(50)).toBe(VERIFY_MIN_REWIND_MS);
+  });
+});
 
 describe('rankConjunctionAlertsForDisplay', () => {
   function alert(partial: Partial<ConjunctionEvent> & Pick<ConjunctionEvent, 'objectA' | 'time' | 'distanceKm'>): ConjunctionEvent {

@@ -82,7 +82,10 @@ export function initTimeControls(container: HTMLElement): void {
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
-      const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+      const { startMs, endMs } = getVerificationWindowMs(
+        vt.cpaTimeMs,
+        vt.relativeVelocityKmS ?? 0,
+      );
       if (!vt.playing && vt.currentMs >= endMs - 1) {
         setVerificationPartial({ currentMs: startMs, playing: true });
         return;
@@ -108,7 +111,7 @@ export function initTimeControls(container: HTMLElement): void {
         playing: false,
       });
       const next = getVerificationTimeState();
-      if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
+      if (next) syncVerificationSlider(slider, next);
       return;
     }
     if (isEventReplayActive()) {
@@ -141,7 +144,7 @@ export function initTimeControls(container: HTMLElement): void {
         playing: false,
       });
       const next = getVerificationTimeState();
-      if (next) syncVerificationSlider(slider, next.cpaTimeMs, next.currentMs);
+      if (next) syncVerificationSlider(slider, next);
       return;
     }
     if (isEventReplayActive()) {
@@ -191,8 +194,11 @@ export function initTimeControls(container: HTMLElement): void {
     if (isConjunctionVerificationActive()) {
       const vt = getVerificationTimeState();
       if (!vt) return;
-      const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
-      // Map slider −100…+100 → [CPA−60s, CPA+15s].
+      const { startMs, endMs } = getVerificationWindowMs(
+        vt.cpaTimeMs,
+        vt.relativeVelocityKmS ?? 0,
+      );
+      // Map slider −100…+100 → [window start, CPA+15s].
       const t = (parseFloat(slider.value) + 100) / 200;
       const currentMs = startMs + t * (endMs - startMs);
       setVerificationPartial({ currentMs, playing: false });
@@ -230,7 +236,10 @@ export function initTimeControls(container: HTMLElement): void {
       if (isConjunctionVerificationActive()) {
         const vt = getVerificationTimeState();
         if (vt) {
-          const { startMs, endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+          const { startMs, endMs } = getVerificationWindowMs(
+            vt.cpaTimeMs,
+            vt.relativeVelocityKmS ?? 0,
+          );
           if (vt.currentMs >= endMs - 1) {
             setVerificationPartial({ speed, currentMs: startMs, playing: true });
             return;
@@ -281,7 +290,7 @@ export function initTimeControls(container: HTMLElement): void {
       slider.value = '0';
     }
     if (!wasVerifying && verifying && vt) {
-      syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+      syncVerificationSlider(slider, vt);
     }
     if (!wasReplaying && replaying && er) {
       syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
@@ -304,7 +313,7 @@ export function initTimeControls(container: HTMLElement): void {
     rewindBtn.title = focused ? t('time.back_5s') : t('time.back_1h');
     forwardBtn.title = focused ? t('time.fwd_5s') : t('time.fwd_1h');
     slider.title = verifying
-      ? 'Scrub within the close-approach window (T−60s → T+15s)'
+      ? 'Scrub within the close-approach window (approach → T+15s)'
       : replaying
         ? 'Scrub within the event replay window (T−5m → IMPACT)'
         : 'Scrub simulation time (±7 days)';
@@ -344,7 +353,7 @@ export function initTimeControls(container: HTMLElement): void {
 
     if (!sliderDragging) {
       if (verifying && vt) {
-        syncVerificationSlider(slider, vt.cpaTimeMs, vt.currentMs);
+        syncVerificationSlider(slider, vt);
       } else if (replaying && er) {
         syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
       }
@@ -358,11 +367,13 @@ export function initTimeControls(container: HTMLElement): void {
 /** Map verification clock → slider −100…+100 across the CPA window. */
 function syncVerificationSlider(
   slider: HTMLInputElement,
-  cpaTimeMs: number,
-  currentMs: number,
+  vt: { cpaTimeMs: number; currentMs: number; relativeVelocityKmS?: number },
 ): void {
-  const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs);
-  syncWindowSlider(slider, startMs, endMs, currentMs);
+  const { startMs, endMs } = getVerificationWindowMs(
+    vt.cpaTimeMs,
+    vt.relativeVelocityKmS ?? 0,
+  );
+  syncWindowSlider(slider, startMs, endMs, vt.currentMs);
 }
 
 /** Map event-replay clock → slider −100…+100 across T−5m…IMPACT. */

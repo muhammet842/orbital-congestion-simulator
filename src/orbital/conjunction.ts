@@ -40,11 +40,18 @@ export const LIVE_REFINE_WINDOW_MS = 10 * 1000;
 export const LIVE_REFINE_STEP_MS = 1_000;
 export const VERIFY_REWIND_MS = 60 * 1000;
 /**
- * Orbit preview window around CPA. Verification playback starts at
- * `CPA - VERIFY_REWIND_MS` and the object markers move continuously from
- * there, so the trail must cover at least that whole span — otherwise for
- * most of the playback the marker sits ahead of (or behind) the drawn line
- * entirely, looking like a disconnected, unrelated trail floating nearby.
+ * Opening separation the close-approach camera is framed for (~80 km snapshot).
+ * Fast crossings (5–12 km/s) cover that gap in seconds; starting a full 60s
+ * earlier puts them hundreds of km apart in an 80 km shot, so they streak
+ * across the view even at 1x.
+ */
+export const VERIFY_OPENING_SEPARATION_KM = 80;
+/** Never start closer than this, even for hypervelocity crossings. */
+export const VERIFY_MIN_REWIND_MS = 8 * 1000;
+/**
+ * Orbit preview window around CPA. The trail always covers the full T−60s
+ * span so a shorter high-speed playback still has path context behind the
+ * markers.
  */
 export const VERIFY_TRAIL_BACK_MS = VERIFY_REWIND_MS;
 export const VERIFY_TRAIL_FORWARD_MS = 15 * 1000;
@@ -52,16 +59,34 @@ export const VERIFY_TRAIL_STEP_MS = 2_000;
 /** Keyboard / transport nudge while scrubbing a verification session. */
 export const VERIFY_SCRUB_STEP_MS = 5_000;
 
-/** Inclusive playback window around CPA (matches drawn verification trails). */
-export function getVerificationWindowMs(cpaTimeMs: number): { startMs: number; endMs: number } {
+/**
+ * How far before CPA to start 1x playback so the pair opens near the
+ * camera's ~80 km frame. Slow/co-orbiting pairs keep the full T−60s window.
+ */
+export function getVerificationRewindMs(relativeVelocityKmS: number): number {
+  const v = Number.isFinite(relativeVelocityKmS) ? relativeVelocityKmS : 0;
+  if (v <= 0) return VERIFY_REWIND_MS;
+  const leadMs = (VERIFY_OPENING_SEPARATION_KM / v) * 1000;
+  return Math.min(VERIFY_REWIND_MS, Math.max(VERIFY_MIN_REWIND_MS, Math.round(leadMs)));
+}
+
+/** Inclusive playback window around CPA (slider + clock). */
+export function getVerificationWindowMs(
+  cpaTimeMs: number,
+  relativeVelocityKmS = 0,
+): { startMs: number; endMs: number } {
   return {
-    startMs: cpaTimeMs - VERIFY_REWIND_MS,
+    startMs: cpaTimeMs - getVerificationRewindMs(relativeVelocityKmS),
     endMs: cpaTimeMs + VERIFY_TRAIL_FORWARD_MS,
   };
 }
 
-export function clampVerificationTimeMs(cpaTimeMs: number, currentMs: number): number {
-  const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs);
+export function clampVerificationTimeMs(
+  cpaTimeMs: number,
+  currentMs: number,
+  relativeVelocityKmS = 0,
+): number {
+  const { startMs, endMs } = getVerificationWindowMs(cpaTimeMs, relativeVelocityKmS);
   return Math.min(endMs, Math.max(startMs, currentMs));
 }
 export const COLLISION_THRESHOLD_KM = 0.1;

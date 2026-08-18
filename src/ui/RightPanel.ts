@@ -4,8 +4,8 @@ import {
   getVerificationAssessment,
   getColocatedObjectNames,
   formatRelativeVelocityKmS,
+  getVerificationRewindMs,
   isCoOrbitingPair,
-  VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
 import { propagateObject, toObjectSnapshot } from '../orbital/propagator';
 import type { ConjunctionEvent } from '../types';
@@ -470,7 +470,7 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
     </dl>
     ${colocatedNote}
     <p class="muted conjunction-detail-hint" data-field="verification-hint">
-      ${t('conj.hint_rewound').replace('{s}', String(VERIFY_REWIND_MS / 1000))}
+      ${t('conj.hint_rewound').replace('{s}', String(Math.round(getVerificationRewindMs(conjunction.relativeVelocityKmS) / 1000)))}
     </p>
     <button type="button" id="btn-exit-conjunction" class="btn-exit-conjunction">
       ${t('conj.return_global')}

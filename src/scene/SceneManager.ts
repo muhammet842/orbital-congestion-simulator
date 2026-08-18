@@ -438,7 +438,9 @@ export class SceneManager {
     const deltaMs = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
-    if (state.verificationTime?.playing) {
+    if (state.verificationTime?.playing && !this.cameraFly.isActive()) {
+      // Hold the verify clock during the opening fly-in so a high-speed
+      // pair does not burn its short T− window while the camera is moving.
       advanceVerificationTime(deltaMs);
     } else if (state.eventReplay?.playing) {
       advanceEventReplayTime(deltaMs);

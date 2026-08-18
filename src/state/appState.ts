@@ -2,10 +2,10 @@ import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conj
 import {
   clampVerificationTimeMs,
   conjunctionSessionKey,
+  getVerificationRewindMs,
   getVerificationWindowMs,
   hasUpcomingConjunctionScanCompleted,
   normalizeConjunctionAlert,
-  VERIFY_REWIND_MS,
 } from '../orbital/conjunction';
 import type { AppStats, ConjunctionEvent, ObjectCategory, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
 import { isRecentlyLaunched } from '../data/newLaunches';
@@ -40,6 +40,8 @@ export interface VerificationTimeState {
   currentMs: number;
   playing: boolean;
   speed: number;
+  /** CPA relative velocity — shortens the T− window for fast crossings. */
+  relativeVelocityKmS?: number;
 }
 
 export interface AppState {
@@ -403,6 +405,11 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
 
   const cpaTimeMs = frozen.time.getTime();
   const sessionKey = conjunctionSessionKey(frozen);
+  const relativeVelocityKmS =
+    frozen.relativeVelocityKmS > 1e-6
+      ? frozen.relativeVelocityKmS
+      : alert.relativeVelocityKmS;
+  const startMs = cpaTimeMs - getVerificationRewindMs(relativeVelocityKmS);
 
   setState({
     selectedConjunction: frozen,
@@ -410,11 +417,12 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     conjunctionRevision: state.conjunctionRevision + 1,
     verificationTime: {
       cpaTimeMs,
-      currentMs: cpaTimeMs - VERIFY_REWIND_MS,
-      // Auto-play from T−60s so selecting an alert immediately shows the
-      // approach — users shouldn't need a second click on VERIFY/Play.
+      currentMs: startMs,
+      // Auto-play so selecting an alert immediately shows the approach —
+      // users shouldn't need a second click on VERIFY/Play.
       playing: true,
       speed: 1,
+      relativeVelocityKmS,
     },
     selectedIndex: null,
     selectedEventId: null,
@@ -457,7 +465,11 @@ export function setVerificationPartial(
     partial.speed !== undefined ? Math.min(partial.speed, 100) : partial.speed;
   const next = { ...state.verificationTime, ...partial, ...(speed !== undefined ? { speed } : {}) };
   if (partial.currentMs !== undefined) {
-    next.currentMs = clampVerificationTimeMs(next.cpaTimeMs, partial.currentMs);
+    next.currentMs = clampVerificationTimeMs(
+      next.cpaTimeMs,
+      partial.currentMs,
+      next.relativeVelocityKmS ?? 0,
+    );
   }
   state.verificationTime = next;
   listeners.forEach((fn) => fn());
@@ -467,7 +479,7 @@ export function setVerificationPartial(
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
   const vt = state.verificationTime;
-  const { endMs } = getVerificationWindowMs(vt.cpaTimeMs);
+  const { endMs } = getVerificationWindowMs(vt.cpaTimeMs, vt.relativeVelocityKmS ?? 0);
   const step = Math.min(Math.max(0, deltaMs), MAX_FOCUSED_CLOCK_FRAME_MS) * vt.speed;
   const nextMs = vt.currentMs + step;
   if (nextMs >= endMs) {

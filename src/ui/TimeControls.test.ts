@@ -93,6 +93,27 @@ describe('conjunction verification speed buttons', () => {
     expect(vt.playing).toBe(true);
     expect(vt.currentMs).toBe(cpa - 60_000);
   });
+
+  it('restarts a high-speed crossing from its shortened window, not T−60s', () => {
+    const cpa = 1_000_000;
+    setState({
+      selectedConjunction: {} as never,
+      verificationTime: {
+        cpaTimeMs: cpa,
+        currentMs: cpa + 15_000,
+        playing: false,
+        speed: 1,
+        relativeVelocityKmS: 5,
+      },
+    });
+
+    const container = mount();
+    container.querySelector<HTMLButtonElement>('#btn-play')!.click();
+
+    const vt = getState().verificationTime!;
+    expect(vt.playing).toBe(true);
+    expect(vt.currentMs).toBe(cpa - 16_000);
+  });
 });
 
 describe('conjunction verification scrubbing', () => {

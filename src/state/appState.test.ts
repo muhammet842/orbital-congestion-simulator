@@ -28,7 +28,7 @@ import {
   MAX_FOCUSED_CLOCK_FRAME_MS,
   EVENT_REPLAY_REWIND_MS,
 } from './appState';
-import { VERIFY_REWIND_MS, VERIFY_TRAIL_FORWARD_MS } from '../orbital/conjunction';
+import { VERIFY_REWIND_MS, VERIFY_TRAIL_FORWARD_MS, getVerificationRewindMs } from '../orbital/conjunction';
 import * as propagatorModule from '../orbital/propagator';
 import type { ConjunctionEvent, TrackedObject } from '../types';
 
@@ -558,6 +558,32 @@ describe('selectConjunctionFromAlert', () => {
     expect(vt!.playing).toBe(true);
     expect(vt!.speed).toBe(1);
     expect(vt!.currentMs).toBe(cpa.getTime() - VERIFY_REWIND_MS);
+  });
+
+  it('starts a 5 km/s crossing later than T−60s so 1x is not a streak across the frame', () => {
+    setState({
+      objects: [makeObj({ noradId: 1, name: 'A' }), makeObj({ noradId: 2, name: 'B' })],
+    });
+    const cpa = new Date('2026-07-25T02:12:25.000Z');
+    const alert: ConjunctionEvent = {
+      objectA: 'A',
+      objectB: 'B',
+      noradIdA: 1,
+      noradIdB: 2,
+      indexA: 0,
+      indexB: 1,
+      distanceKm: 2.1,
+      relativeVelocityKmS: 5,
+      time: cpa,
+      midpointScene: { x: 0, y: 0, z: 0 },
+    };
+
+    selectConjunctionFromAlert(alert);
+
+    const vt = getState().verificationTime!;
+    expect(vt.currentMs).toBe(cpa.getTime() - getVerificationRewindMs(5));
+    expect(vt.currentMs).toBeGreaterThan(cpa.getTime() - VERIFY_REWIND_MS);
+    expect(vt.relativeVelocityKmS).toBe(5);
   });
 
   it('does not skip the T−60s window when a hitch delivers a huge frame delta', () => {
