@@ -208,7 +208,7 @@ function renderPanelContent(): void {
 
   panelEl.innerHTML = `
     <div class="ap-header">
-      <div class="ap-logo">🌌 ${t('kessler.title')}</div>
+      <div class="ap-logo">${t('kessler.title')}</div>
       <button class="ap-close" id="kp-close" aria-label="${t('kessler.close')}" title="${t('kessler.close')}">✕</button>
     </div>
     <div class="ap-body">
