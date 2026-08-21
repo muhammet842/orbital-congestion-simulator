@@ -59,6 +59,30 @@ let panelEl: HTMLElement | null = null;
 const BASE_DOT_COUNT = 80;
 const MAX_DOT_COUNT = 600;
 
+/**
+ * Projection UI copy is English (and mixed-language labels). Force en-US so
+ * browser Turkish locale cannot turn 144357 into "144.357", 21.8 into "21,8",
+ * or compact "155.9K" into Turkish "155,9 B" (B = bin / thousand).
+ */
+const KP_NUMBER_LOCALE = 'en-US';
+
+function formatCount(value: number, maxFractionDigits = 0): string {
+  if (!Number.isFinite(value)) return '—';
+  return value.toLocaleString(KP_NUMBER_LOCALE, { maximumFractionDigits: maxFractionDigits });
+}
+
+/** Below 100,000: plain en-US number. At/above: compact with English K/M/B. */
+export function formatCompactNumber(value: number, maxFractionDigits: number): string {
+  if (!Number.isFinite(value)) return '—';
+  if (Math.abs(value) < 100_000) {
+    return formatCount(value, maxFractionDigits);
+  }
+  return new Intl.NumberFormat(KP_NUMBER_LOCALE, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 function tickToMultiplier(tick: number): number {
   return tick / 100;
 }
@@ -394,7 +418,7 @@ function updateBaselineNote(): void {
   if (!el) return;
   el.textContent = t('kessler.today_baseline')
     .replace('{year}', String(startYear))
-    .replace('{n}', baselineTotal.toLocaleString());
+    .replace('{n}', formatCount(baselineTotal));
 }
 
 function updateForScrubIndex(idx: number): void {
@@ -403,14 +427,14 @@ function updateForScrubIndex(idx: number): void {
   const point = timeline[scrubIndex];
   if (!point) return;
 
-  setText('kp-stat-total', point.totalObjects.toLocaleString());
-  setText('kp-stat-debris', point.debrisObjects.toLocaleString());
+  setText('kp-stat-total', formatCount(point.totalObjects));
+  setText('kp-stat-debris', formatCount(point.debrisObjects));
   setText('kp-stat-collisions', formatCompactNumber(point.cumulativeCollisions, 1));
   setText('kp-stat-risk', formatRiskMultiplier(point.riskIndex));
-  setText('kp-stat-leo', point.leoObjects.toLocaleString());
-  setText('kp-stat-meo', point.meoObjects.toLocaleString());
-  setText('kp-stat-geo', point.geoObjects.toLocaleString());
-  setText('kp-scrub-val', `${point.year} — ${point.totalObjects.toLocaleString()}`);
+  setText('kp-stat-leo', formatCount(point.leoObjects));
+  setText('kp-stat-meo', formatCount(point.meoObjects));
+  setText('kp-stat-geo', formatCount(point.geoObjects));
+  setText('kp-scrub-val', `${point.year} — ${formatCount(point.totalObjects)}`);
 
   const scrubInput = getEl<HTMLInputElement>('kp-scrub');
   if (scrubInput && document.activeElement !== scrubInput) {
@@ -427,7 +451,7 @@ function updateNarrative(point: KesslerYearPoint): void {
   const risk = (point.riskIndex / 100).toFixed(1);
   const text = t(`kessler.narrative.${band}`)
     .replace('{year}', String(point.year))
-    .replace('{total}', point.totalObjects.toLocaleString())
+    .replace('{total}', formatCount(point.totalObjects))
     .replace('{mult}', mult)
     .replace('{risk}', risk);
 
@@ -716,15 +740,4 @@ function getEl<T extends HTMLElement>(id: string): T | null {
 function setText(id: string, text: string): void {
   const el = getEl<HTMLElement>(id);
   if (el) el.textContent = text;
-}
-
-/** Below 100,000 shows a plain locale-formatted number; above that, a compact
- *  form (e.g. "7.8M") so an extreme worst-case scenario doesn't overflow the
- *  stat card with a wall of digits. */
-function formatCompactNumber(value: number, maxFractionDigits: number): string {
-  if (!Number.isFinite(value)) return '—';
-  if (Math.abs(value) < 100_000) {
-    return value.toLocaleString(undefined, { maximumFractionDigits: maxFractionDigits });
-  }
-  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
 }

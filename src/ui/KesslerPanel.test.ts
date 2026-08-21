@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initState } from '../state/appState';
-import { closeKesslerPanel, initKesslerPanel, isKesslerPanelOpen, openKesslerPanel } from './KesslerPanel';
+import {
+  closeKesslerPanel,
+  formatCompactNumber,
+  initKesslerPanel,
+  isKesslerPanelOpen,
+  openKesslerPanel,
+} from './KesslerPanel';
 
 function mountHeader(): void {
   document.body.innerHTML = `
@@ -136,5 +142,38 @@ describe('openKesslerPanel / closeKesslerPanel', () => {
     const backdrop = document.getElementById('kessler-panel-backdrop')!;
     backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(isKesslerPanelOpen()).toBe(false);
+  });
+
+  it('formats outlook counts in en-US (comma thousands, dot decimals)', () => {
+    openKesslerPanel();
+    const boomBtn = document.querySelector('[data-preset="boom"]') as HTMLButtonElement;
+    boomBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const total = document.getElementById('kp-stat-total')?.textContent ?? '';
+    const collisions = document.getElementById('kp-stat-collisions')?.textContent ?? '';
+
+    // Thousands use commas, not European dots (144,357 not 144.357).
+    if (/\d{4,}/.test(total.replace(/,/g, ''))) {
+      expect(total).toMatch(/^\d{1,3}(,\d{3})*$/);
+    }
+    // Decimals use a dot (25.1), never a locale comma (25,1).
+    expect(collisions).not.toMatch(/,\d$/);
+    if (collisions.includes('.')) {
+      expect(collisions).toMatch(/^\d+(\.\d+)?$/);
+    }
+  });
+});
+
+describe('formatCompactNumber', () => {
+  it('uses en-US decimals below 100k', () => {
+    expect(formatCompactNumber(21.8, 1)).toBe('21.8');
+    expect(formatCompactNumber(25.1, 1)).toBe('25.1');
+    expect(formatCompactNumber(51969, 0)).toBe('51,969');
+  });
+
+  it('uses English K/M compact suffixes, not Turkish B-for-bin', () => {
+    expect(formatCompactNumber(155_900, 0)).toMatch(/155\.9K/i);
+    expect(formatCompactNumber(155_900, 0)).not.toMatch(/B/i);
+    expect(formatCompactNumber(7_800_000, 0)).toMatch(/7\.8M/i);
   });
 });
