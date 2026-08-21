@@ -9,7 +9,6 @@ import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
 import { initAdminSystem } from './ui/AdminPanel';
 import { initKesslerPanel } from './ui/KesslerPanel';
-import { initGlobeMessageHud } from './ui/GlobeMessageHud';
 import { initHowToGuide } from './ui/HowToGuide';
 import { findConjunctions } from './orbital/conjunction';
 import { applyTranslations, t } from './i18n/i18n';
@@ -50,7 +49,6 @@ async function main(): Promise<void> {
     const sceneManager = new SceneManager(sceneContainer);
     await sceneManager.initOrbitalMeshes(objects);
     sceneManager.start();
-    initGlobeMessageHud(sceneContainer);
 
     // Deep linking: sync ?object=NORAD / ?event=ID ↔ app state.
     // Must run after the scene is ready so a linked satellite gets framed
