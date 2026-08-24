@@ -110,6 +110,28 @@ describe('createSkyViewStabilizer', () => {
     expect(stab.isFrozen()).toBe(false);
   });
 
+  it('with autoFreeze off, never sticky-locks while the phone pauses', () => {
+    const stab = createSkyViewStabilizer({ autoFreeze: false, followAlpha: 0.5 });
+    let t = 0;
+    stab.update(0, 20, t);
+    expect(stab.isFrozen()).toBe(false);
+
+    // Hold still (as when aiming at a satellite) — must stay unlocked.
+    for (let i = 0; i < 30; i++) {
+      t += 50;
+      stab.update(0, 20 + Math.sin(i) * 0.4, t);
+      expect(stab.isFrozen()).toBe(false);
+    }
+
+    // Then tip — display should follow without an unlock delay.
+    for (let i = 1; i <= 8; i++) {
+      t += 50;
+      const out = stab.update(0, 20 + i * 3, t);
+      expect(stab.isFrozen()).toBe(false);
+      expect(out.pitchDeg).toBeGreaterThan(20);
+    }
+  });
+
   it('pitchDeltaToPixels matches sky projection scale', () => {
     expect(pitchDeltaToPixels(1, 280, 60)).toBeCloseTo(280 / 60, 5);
     expect(Math.abs(pitchDeltaToPixels(2, 280, 60))).toBeGreaterThan(8);

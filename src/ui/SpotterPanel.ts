@@ -78,15 +78,10 @@ let skyFovDeg = DEFAULT_FOV_DEG;
 let pinchStartDist = 0;
 let pinchStartFov = DEFAULT_FOV_DEG;
 let zoomUnbind: (() => void) | null = null;
-/** Net-motion sky stabilizer — freezes display against sensor drift/noise. */
+/** Soft EMA sky follow — no hard freeze when paused on a satellite. */
 const skyViewStab = createSkyViewStabilizer({
-  unlockNetPitchDeg: 2.2,
-  unlockNetHeadingDeg: 2.5,
-  motionWindowMs: 280,
-  unlockStreak: 2,
-  freezeNetDeg: 1.4,
-  freezeStreak: 6,
-  followAlpha: 0.35,
+  autoFreeze: false,
+  followAlpha: 0.42,
 });
 /** Chunked catalog scan state (avoids multi-thousand SGP4 stalls). */
 let skyScanActive = false;

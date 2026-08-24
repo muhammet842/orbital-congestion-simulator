@@ -29,6 +29,12 @@ export interface SkyViewStabilizerOptions {
   freezeStreak?: number;
   /** EMA toward sensor while unlocked (0..1). */
   followAlpha?: number;
+  /**
+   * When false, never hard-freeze the sky after the first sample — only EMA
+   * follow. Aiming at a satellite often means holding still; auto-freeze then
+   * feels like a sticky lock / stutter when the phone moves again.
+   */
+  autoFreeze?: boolean;
 }
 
 interface TimedSample {
@@ -85,10 +91,11 @@ export function createSkyViewStabilizer(
   const freezeNetDeg = opts.freezeNetDeg ?? 1.2;
   const freezeStreakNeeded = opts.freezeStreak ?? 5;
   const followAlpha = clamp01(opts.followAlpha ?? 0.3);
+  const autoFreeze = opts.autoFreeze !== false;
 
   let displayHeading: number | null = null;
   let displayPitch: number | null = null;
-  let frozen = true;
+  let frozen = autoFreeze;
   let holdFrozen = false;
   let unlockStreak = 0;
   let freezeStreak = 0;
@@ -98,7 +105,7 @@ export function createSkyViewStabilizer(
   function reset(): void {
     displayHeading = null;
     displayPitch = null;
-    frozen = true;
+    frozen = autoFreeze;
     holdFrozen = false;
     unlockStreak = 0;
     freezeStreak = 0;
@@ -161,6 +168,19 @@ export function createSkyViewStabilizer(
     return frozen;
   }
 
+  function followSensors(headingDeg: number | null, pitch: number): void {
+    displayPitch = displayPitch! + (pitch - displayPitch!) * followAlpha;
+    if (headingDeg != null) {
+      if (displayHeading == null) {
+        displayHeading = headingDeg;
+      } else {
+        displayHeading = wrap360(
+          displayHeading + signedDeltaDeg(displayHeading, headingDeg) * followAlpha,
+        );
+      }
+    }
+  }
+
   function update(
     headingDeg: number | null,
     pitchDeg: number | null,
@@ -175,7 +195,7 @@ export function createSkyViewStabilizer(
     if (displayPitch == null) {
       displayPitch = pitch;
       displayHeading = headingDeg;
-      frozen = true;
+      frozen = autoFreeze;
       unlockStreak = 0;
       freezeStreak = 0;
       return { headingDeg: displayHeading, pitchDeg: displayPitch };
@@ -189,6 +209,13 @@ export function createSkyViewStabilizer(
     if (holdFrozen) {
       frozen = true;
       unlockStreak = 0;
+      return { headingDeg: displayHeading, pitchDeg: displayPitch };
+    }
+
+    // Continuous follow — no sticky freeze when the phone pauses on a target.
+    if (!autoFreeze) {
+      frozen = false;
+      followSensors(headingDeg, pitch);
       return { headingDeg: displayHeading, pitchDeg: displayPitch };
     }
 
@@ -215,16 +242,7 @@ export function createSkyViewStabilizer(
     }
 
     // Unlocked: follow sensors.
-    displayPitch = displayPitch + (pitch - displayPitch) * followAlpha;
-    if (headingDeg != null) {
-      if (displayHeading == null) {
-        displayHeading = headingDeg;
-      } else {
-        displayHeading = wrap360(
-          displayHeading + signedDeltaDeg(displayHeading, headingDeg) * followAlpha,
-        );
-      }
-    }
+    followSensors(headingDeg, pitch);
 
     if (stillSignal) {
       freezeStreak += 1;
