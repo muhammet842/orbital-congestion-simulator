@@ -15,7 +15,7 @@ import { getDebrisUpdateStride, getPropagationResults } from '../orbital/propaga
 import { PropagationWorkerBridge } from '../orbital/PropagationWorkerBridge';
 import { eciToScene } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
-import { getVisualConjunctionLayout, PAIR_FOCUS_MAX_DISTANCE, PAIR_INSPECT_MIN_DISTANCE } from '../orbital/visualConjunction';
+import { getVisualConjunctionLayout, PAIR_FOCUS_MAX_DISTANCE, PAIR_FOCUS_NEAR, PAIR_INSPECT_MIN_DISTANCE, GLOBE_CAMERA_NEAR } from '../orbital/visualConjunction';
 import { CameraFly } from './CameraFly';
 import { ConjunctionVerification } from './ConjunctionVerification';
 import { ConjunctionLabels } from './ConjunctionLabels';
@@ -115,7 +115,7 @@ export class SceneManager {
     this.scene = new Scene();
     this.scene.background = new Color('#050510');
 
-    this.camera = new PerspectiveCamera(45, 1, 0.001, 1000);
+    this.camera = new PerspectiveCamera(45, 1, GLOBE_CAMERA_NEAR, 1000);
     this.camera.position.set(0, 0, 4.5);
 
     this.renderer = new WebGLRenderer({ antialias: true });
@@ -235,10 +235,18 @@ export class SceneManager {
     if (conjunctionFocus) {
       this.controls.minDistance = PAIR_INSPECT_MIN_DISTANCE;
       this.controls.maxDistance = PAIR_FOCUS_MAX_DISTANCE;
+      if (this.camera.near !== PAIR_FOCUS_NEAR) {
+        this.camera.near = PAIR_FOCUS_NEAR;
+        this.camera.updateProjectionMatrix();
+      }
       return;
     }
     this.controls.minDistance = 1.35;
     this.controls.maxDistance = 10;
+    if (this.camera.near !== GLOBE_CAMERA_NEAR) {
+      this.camera.near = GLOBE_CAMERA_NEAR;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   private onStateChange(): void {

@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   getConjunctionViewDistance,
   getVisualConjunctionLayout,
+  PAIR_FOCUS_NEAR,
+  PAIR_INSPECT_MIN_DISTANCE,
 } from './visualConjunction';
+
+describe('PAIR_INSPECT_MIN_DISTANCE', () => {
+  it('allows zoom closer than the old ~13 km floor for tiny models', () => {
+    expect(PAIR_INSPECT_MIN_DISTANCE).toBeLessThanOrEqual(0.0002);
+    expect(PAIR_INSPECT_MIN_DISTANCE).toBeGreaterThan(PAIR_FOCUS_NEAR);
+  });
+});
 
 describe('getConjunctionViewDistance', () => {
   it('zooms in as the framed separation shrinks', () => {
