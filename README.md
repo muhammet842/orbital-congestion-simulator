@@ -4,27 +4,29 @@
 
 **Live demo:** [https://orbital-congestion-simulator.vercel.app](https://orbital-congestion-simulator.vercel.app)
 
-![Orbital Congestion Simulator](docs/screenshot-en.png)
+![Orbital Congestion Simulator — English UI at 1440×900](docs/screenshot-en.png)
 
 ## What it does
 
 Orbital Congestion Simulator renders thousands of satellites and debris fragments orbiting Earth in real time. It uses Two-Line Element (TLE) data from CelesTrak and propagates each object with the SGP4 algorithm via [satellite.js](https://github.com/shashwatak/satellite-js).
 
-Explore orbit layers (LEO, MEO, GEO, HEO), filter by congestion type, click any object to inspect its orbital parameters, and scrub through time to see how the orbital environment evolves.
+Explore orbit layers (LEO, MEO, GEO, HEO), filter by congestion type, click any object to inspect its orbital parameters, scrub through time, replay historical collisions, and inspect close-approach pairs in a dedicated verification view.
 
 ## Features
 
-- **Live 3D globe** with instanced orbital points and day/night shading
-- **Orbit layers & filters** — LEO / MEO / GEO / HEO, satellites / stations / debris, search
-- **Object details** — altitude, velocity, country/owner, orbit trail, ground track, footprint
-- **Close-approach alerts** — next-24h scanning with verification UI
+- **Live 3D globe** with instanced orbital points, day/night Earth shading, and a LEO shell reference ring
+- **Orbit layers & filters** — LEO / MEO / GEO / HEO; satellites / stations / debris; search; altitude & inclination ranges
+- **Color by Function** — Starlink, stations, active payloads, and debris at a glance
+- **New to this catalog** — filter objects first seen in this app’s TLE list within the last 14 days (`firstSeenAt`)
+- **Object details** — altitude, velocity, country/owner, curated photos, orbit trail, ground track, footprint
+- **Close-approach alerts** — next-24h scanning with sortable cards and a VERIFY playback mode (T−60s → CPA → T+15s)
 - **Historical event replays** — seven landmark collisions, ASAT tests, and breakups
-- **Kessler “Future Projection”** — interactive what-if debris growth panel
-- **Satellite Spotter** — mobile sky guide using device sensors
+- **Kessler “Future Projection”** — header 🌌 panel with live scenario sliders, charts, and narrative (no separate run button)
+- **Satellite Spotter** — mobile sky guide using device sensors and magnetic declination correction
 - **Interactive how-to tour** — language gate + spotlight walkthrough (header `?`)
 - **i18n** — English, Turkish, German, Russian, Chinese
 - **Deep links** — `?object=<NORAD>` / `?event=<id>`
-- **Admin analytics overlay** (optional Firebase RTDB) — local PIN, visitor metrics
+- **Admin analytics overlay** (optional Firebase RTDB) — local PIN, visitor metrics (`Ctrl+Shift+A`)
 - **Automated TLE refresh** — GitHub Actions twice weekly (TLE + SATCAT country join)
 
 ## Why it matters
@@ -37,21 +39,37 @@ Earth orbit is increasingly crowded. About **40,000** objects larger than 10 cm 
 |-------|------------|
 | Build | Vite 6 + TypeScript (strict) |
 | 3D | Three.js |
-| Orbital mechanics | satellite.js (SGP4) |
+| Orbital mechanics | satellite.js (SGP4) + Web Worker batch propagation |
+| Testing | Vitest (unit) + Playwright (e2e) |
 | Data | CelesTrak TLE + SATCAT (static `tle.json`) |
 | Deploy | [Vercel](https://orbital-congestion-simulator.vercel.app) |
 
 ## Getting started
 
+**Requirements:** Node.js 20+, a WebGL-capable browser.
+
 ```bash
 git clone https://github.com/muhammet842/orbital-congestion-simulator.git
 cd orbital-congestion-simulator
 npm install
-npm run fetch-tle
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `http://localhost:5173`. The repo already ships with `public/data/tle.json`; run `npm run fetch-tle` only when you want a fresh CelesTrak pull.
+
+Optional analytics: copy `.env.example` → `.env` and set `VITE_FIREBASE_RTDB_URL` (see [firebase/README.md](firebase/README.md)).
+
+## Development & testing
+
+```bash
+npm run build        # tsc + production bundle
+npm test             # Vitest unit tests
+npm run test:e2e     # Playwright (Chromium + mobile-chrome)
+npm run check:i18n   # translation key parity (en/tr/de/ru/zh)
+npm run screenshot   # refresh docs/screenshot-en.png after UI changes
+```
+
+CI (GitHub Actions): build + unit tests on every push/PR; Playwright e2e on `main` pushes and PRs into `main`.
 
 ## How to use
 
@@ -78,6 +96,13 @@ npm run fetch-tle
 
 Objects can carry a `firstSeenAt` stamp when they first appear in an automated fetch relative to the previous catalog snapshot. The UI filter **“New to this catalog”** uses that stamp — it means **first seen in this app’s TLE list within the last 14 days**, not the physical launch or formation date (and not SATCAT `LAUNCH_DATE`). Stamps accumulate across refreshes; a cold/empty baseline does not mark the whole catalog as new. See [docs/NEW_OBJECTS.md](docs/NEW_OBJECTS.md).
 
+## Limitations (read before demoing)
+
+- **Not live tracking** — positions are propagated from static TLE snapshots with SGP4; there is no real-time position API.
+- **Educational scale** — in VERIFY close-approach mode, 3D models shrink to stay smaller than the computed miss distance so pairs do not visually overlap at sub-kilometre CPAs.
+- **Projection panel** — Kessler “Future Projection” is a simplified what-if model, not an official debris forecast (see the in-panel disclaimer).
+- **TLE age** — Live Stats shows when `tle.json` was last fetched; a warning appears after ~3 days without refresh.
+
 ## Orbital mechanics
 
 Each object is propagated with **SGP4** (Simplified General Perturbations 4), the standard model used by NORAD for TLE-based prediction. Positions are computed in Earth-Centered Inertial (ECI) coordinates and scaled for Three.js display (1 unit = Earth radius).
@@ -97,7 +122,7 @@ Orbit layers are classified by altitude and eccentricity:
 
 ## Earth texture
 
-Earth texture sourced from [NASA Visible Earth](https://visibleearth.nasa.gov/) (Blue Marble). Stored locally at `public/textures/earth.jpg`.
+Day and night maps sourced from [NASA Visible Earth](https://visibleearth.nasa.gov/) (Blue Marble). Stored locally at `public/textures/earth.jpg` and `public/textures/earth-night.jpg` and blended in a custom shader for the terminator.
 
 ## Ops & admin
 
@@ -113,4 +138,4 @@ Built for the [Hack Club Stardance](https://stardance.hackclub.com/) competition
 
 ## License
 
-MIT
+[MIT](LICENSE)

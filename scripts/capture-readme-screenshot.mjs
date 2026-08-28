@@ -52,7 +52,11 @@ try {
   await page.locator('canvas').waitFor({ state: 'visible', timeout: 45_000 });
   const select = page.locator('#lang-select');
   if (await select.count()) await select.selectOption('en');
-  await page.waitForTimeout(3000);
+  // Wait for the worker-backed catalog to populate the list meta line.
+  await page.locator('#object-list-meta').filter({ hasText: /objects/i }).waitFor({ timeout: 45_000 });
+  await page.locator('#kessler-panel-btn').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.locator('#help-guide-btn').waitFor({ state: 'visible', timeout: 10_000 });
+  await page.waitForTimeout(1500);
   await page.screenshot({ path: out, type: 'png' });
   await browser.close();
   console.log('Wrote', out);
