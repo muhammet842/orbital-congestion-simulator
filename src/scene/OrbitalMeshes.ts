@@ -178,12 +178,14 @@ export class OrbitalMeshes {
       const index = wrapper.userData.objectIndex;
       if (typeof index !== 'number') continue;
       wrapper.getWorldPosition(scratchPick);
+      const radial = scratchPick.length();
       scratchPick.project(camera);
       candidates.push({
         index,
         ndcX: scratchPick.x,
         ndcY: scratchPick.y,
         ndcZ: scratchPick.z,
+        radial,
       });
     }
 
@@ -206,12 +208,14 @@ export class OrbitalMeshes {
       if (Math.abs(scratchMatrix.elements[0]) < 1e-12) continue;
       scratchPick.setFromMatrixPosition(scratchMatrix);
       mesh.localToWorld(scratchPick);
+      const radial = scratchPick.length();
       scratchPick.project(camera);
       out.push({
         index: i,
         ndcX: scratchPick.x,
         ndcY: scratchPick.y,
         ndcZ: scratchPick.z,
+        radial,
       });
     }
   }
