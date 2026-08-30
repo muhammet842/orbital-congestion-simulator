@@ -94,6 +94,9 @@ export function initLeftPanel(container: HTMLElement): void {
     <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
     <div class="display-options" id="display-options"></div>
 
+    <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
+    <div class="advanced-filters" id="advanced-filters"></div>
+
     <h2 class="panel-heading" data-i18n="ui.object_categories">Object Categories</h2>
     <ul class="category-stats" id="category-stats"></ul>
 
@@ -106,9 +109,6 @@ export function initLeftPanel(container: HTMLElement): void {
       <div class="conjunction-filters" id="conjunction-filters"></div>
       <div class="conjunction-list" id="conjunction-list"></div>
     </div>
-
-    <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
-    <div class="advanced-filters" id="advanced-filters"></div>
   `;
 
   initSearchAndList(container);
