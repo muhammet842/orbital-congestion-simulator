@@ -89,13 +89,13 @@ export function initLeftPanel(container: HTMLElement): void {
       <h2 class="panel-heading" data-i18n="ui.object_types">Object Types</h2>
       <p class="panel-lede" data-i18n="ui.category_hint">${t('ui.category_hint')}</p>
       <div class="category-filters" id="category-filters"></div>
+
+      <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
+      <div class="display-options" id="display-options"></div>
+
+      <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
+      <div class="advanced-filters" id="advanced-filters"></div>
     </div>
-
-    <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
-    <div class="display-options" id="display-options"></div>
-
-    <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
-    <div class="advanced-filters" id="advanced-filters"></div>
 
     <h2 class="panel-heading" data-i18n="ui.object_categories">Object Categories</h2>
     <ul class="category-stats" id="category-stats"></ul>
