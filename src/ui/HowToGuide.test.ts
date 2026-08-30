@@ -24,6 +24,7 @@ function mountAppShell(): void {
             <option value="tr">TR</option>
           </select>
         </div>
+        <a class="header-github" href="https://github.com/muhammet842/orbital-congestion-simulator">GitHub</a>
       </div>
     </header>
     <aside id="left-panel" class="panel panel-left" style="overflow-y: auto; height: 200px;">
@@ -103,7 +104,7 @@ describe('interactive tour', () => {
 
   it('starts the UI tour immediately from ? after the guide has been seen', () => {
     openHowToGuide();
-    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 9');
     expect(document.getElementById('thesis-collision')).toBeNull();
     expect(document.getElementById('thesis-projection')).toBeNull();
   });
@@ -114,15 +115,15 @@ describe('interactive tour', () => {
     document.querySelector<HTMLButtonElement>('.tour-lang-btn[data-lang="tr"]')?.click();
     expect(getLang()).toBe('tr');
     expect(document.querySelector<HTMLSelectElement>('#lang-select')?.value).toBe('tr');
-    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 9');
     expect(document.getElementById('thesis-collision')).toBeNull();
   });
 
   it('advances with Next and can be skipped', () => {
     openHowToGuide();
-    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 7');
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('1 / 9');
     document.getElementById('tour-next')?.click();
-    expect(document.querySelector('.tour-progress')?.textContent).toBe('2 / 7');
+    expect(document.querySelector('.tour-progress')?.textContent).toBe('2 / 9');
     document.getElementById('tour-skip')?.click();
     expect(isHowToGuideOpen()).toBe(false);
     expect(localStorage.getItem(LS_HELP_SEEN)).toBe('1');

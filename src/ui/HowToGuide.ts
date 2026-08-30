@@ -14,6 +14,8 @@ const LANG_LABELS: Record<Lang, string> = {
 
 const STEPS = [
   'globe',
+  'language',
+  'github',
   'search',
   'details',
   'approaches',
@@ -34,6 +36,8 @@ interface StepConfig {
 
 const STEP_CONFIG: StepConfig[] = [
   { id: 'globe', target: '#scene-container', panel: null },
+  { id: 'language', target: '.header-lang', panel: null },
+  { id: 'github', target: '.header-github', panel: null },
   { id: 'search', target: '#tour-region-search', panel: 'left' },
   { id: 'details', target: '#right-panel', panel: 'right' },
   { id: 'approaches', target: '#tour-region-approaches', panel: 'left' },
