@@ -528,6 +528,31 @@ async function main() {
     objects: allObjects,
   };
 
+  const stations = counts.stations ?? 0;
+  const active = counts.active ?? 0;
+  const debris = counts.debris ?? 0;
+  // CelesTrak outages / 403 bursts used to write a half-empty catalog (e.g.
+  // ~3.5k objects and zero stations) and the Actions bot would ship it to
+  // production. Refuse catastrophically thin results so the previous good
+  // tle.json stays on disk and CI fails closed.
+  const MIN_TOTAL = 8_000;
+  const MIN_STATIONS = 5;
+  const MIN_ACTIVE = 3_000;
+  const MIN_DEBRIS = 2_000;
+  if (
+    allObjects.length < MIN_TOTAL ||
+    stations < MIN_STATIONS ||
+    active < MIN_ACTIVE ||
+    debris < MIN_DEBRIS
+  ) {
+    throw new Error(
+      `Refusing to write incomplete catalog: total=${allObjects.length} ` +
+        `(need ≥${MIN_TOTAL}), stations=${stations} (need ≥${MIN_STATIONS}), ` +
+        `active=${active} (need ≥${MIN_ACTIVE}), debris=${debris} (need ≥${MIN_DEBRIS}). ` +
+        `Previous public/data/tle.json left unchanged.`,
+    );
+  }
+
   const { mkdir, writeFile } = await import('node:fs/promises');
   const { dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -539,11 +564,11 @@ async function main() {
   // whitespace for zero benefit.
   await writeFile(outPath, JSON.stringify(dataset));
 
-  const spacecraftTotal = (counts.stations ?? 0) + (counts.active ?? 0);
+  const spacecraftTotal = stations + active;
   console.log(`\nFetched ${allObjects.length} objects at ${fetchedAt}`);
-  console.log(`  stations: ${counts.stations ?? 0}`);
-  console.log(`  active:   ${counts.active ?? 0}`);
-  console.log(`  debris:   ${counts.debris ?? 0}`);
+  console.log(`  stations: ${stations}`);
+  console.log(`  active:   ${active}`);
+  console.log(`  debris:   ${debris}`);
   console.log(`  spacecraft subtotal: ${spacecraftTotal} / ${MAX_SATELLITES}`);
 }
 
