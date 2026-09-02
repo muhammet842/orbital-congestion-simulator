@@ -132,6 +132,30 @@ Day and night maps sourced from [NASA Visible Earth](https://visibleearth.nasa.g
 
 The admin overlay (Ctrl+Shift+A) is a **local debug panel**. The PIN is hashed on-device (SHA-256); it is not remote authentication.
 
+## Quick test guide (reviewers)
+
+Open the [live demo](https://orbital-congestion-simulator.vercel.app) (desktop first). Skip or finish the short tour, then try:
+
+1. **Color by Function** (Display Options) — Starlink / stations / active / debris become readable at a glance.
+2. **Search** `ISS` or `25544`, select it, toggle orbit trail / ground track on the right.
+3. **Historical Events** — start with Iridium 33 ↔ Cosmos 2251; scrub or Exit when done.
+4. **Close Approach Alerts** — if cards appear, open one for VERIFY playback (may take a minute to scan).
+5. **Future Projection** — header 🌌 button; move the sliders (no separate Run).
+6. **Phone** — select a bright target → **Spot from here**; allow location/motion. Outside + figure-eight if the compass drifts.
+
+Positions are SGP4 from a periodic TLE snapshot, not a live tracking API.
+
+## If the live catalog looks wrong
+
+Healthy catalog: **~12,000** objects and **stations** (ISS / Tiangong) visible in Live Stats. A thin fetch once shipped ~3.5k objects and zero stations.
+
+1. Check GitHub → **Actions → TLE Refresh** (and CI).
+2. Locally: `npm run fetch-tle` — the script **refuses** to overwrite `public/data/tle.json` if totals/stations/active/debris fall below hard minimums.
+3. If the fetch succeeds with a full catalog, commit/push `public/data/tle.json` (or wait for a green scheduled run).
+4. On the deployed site, confirm **Live Stats → TLE data updated** and object counts.
+
+Details: [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
 ## Stardance / NASA
 
 Built for the [Hack Club Stardance](https://stardance.hackclub.com/) competition in collaboration with NASA themes on space sustainability and orbital debris awareness.
