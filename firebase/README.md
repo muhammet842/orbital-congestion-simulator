@@ -43,5 +43,8 @@ block wipe / arbitrary overwrite attacks.
 
 ## Client URL
 
-Set `VITE_FIREBASE_RTDB_URL` in `.env` / Vercel (see `.env.example`). Analytics
-are skipped when the URL is empty or invalid.
+Set `VITE_FIREBASE_RTDB_URL` in `.env` / Vercel (see `.env.example`).
+
+- **Unset / valid URL** — uses that URL, or the built-in default when unset.
+- **`off` / `disabled` / `false` / `0`** — remote analytics stay off.
+- Invalid localStorage overrides also disable remote writes for that browser.

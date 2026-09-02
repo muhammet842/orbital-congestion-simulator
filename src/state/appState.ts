@@ -371,6 +371,12 @@ export function stopEventReplay(): void {
   setState({ eventReplay: null, selectedEventId: null });
 }
 
+/** Clear historical event selection even when replay has not started yet. */
+export function clearHistoricalEventSelection(): void {
+  if (state.selectedEventId == null && state.eventReplay == null) return;
+  setState({ eventReplay: null, selectedEventId: null });
+}
+
 /** Advance event replay clock without triggering full re-render. */
 export function advanceEventReplayTime(deltaMs: number): void {
   if (!state.eventReplay?.playing) return;

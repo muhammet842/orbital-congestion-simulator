@@ -31,5 +31,5 @@ Residual risk (spam `+1`) is documented in `firebase/README.md` — App Check wo
 
 ## CI
 
-- Unit tests + build: every push/PR.
+- Unit tests + build + i18n key parity (`npm run check:i18n`): every push/PR.
 - Playwright e2e: push to `main` **and** pull requests targeting `main`.

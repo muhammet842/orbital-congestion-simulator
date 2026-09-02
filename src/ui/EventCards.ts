@@ -54,8 +54,8 @@ export interface HistoricalEvent {
   approachA: { inclinationDeg: number; ascending: boolean };
   approachB: { inclinationDeg: number; ascending: boolean } | null;
   /**
-   * Turkish-language background card shown in the right panel.
-   * title  — short label (e.g. "Tarihteki İlk Büyük Uydu Çarpışması")
+   * Background card shown in the right panel (localized via `event.<id>.info.*`).
+   * title  — short label (e.g. "The First Major Satellite Collision in History")
    * reason — why it happened
    * outcome — consequences / historical significance
    */

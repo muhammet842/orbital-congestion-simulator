@@ -162,3 +162,20 @@ test.describe('Left panel filters', () => {
     await expect(input).toHaveValue('ISS');
   });
 });
+
+test.describe('Deep links', () => {
+  test('?event=iridium-cosmos selects the featured historical event card', async ({ page }) => {
+    await page.goto('/?event=iridium-cosmos');
+    const card = page.locator('.event-card[data-event-id="iridium-cosmos"]');
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card).toHaveClass(/event-card--active/);
+    await expect(page.getByText('Historical Event')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('?object=25544 selects ISS in the right panel', async ({ page }) => {
+    await page.goto('/?object=25544');
+    await expect(page.locator('canvas')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/ISS/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/object=25544/);
+  });
+});

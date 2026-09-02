@@ -118,4 +118,16 @@ describe('initDeepLink — browser Back/Forward (popstate)', () => {
 
     expect(getState().selectedIndex).toBe(0);
   });
+
+  it('clears a historical event when popstate navigates back to /', () => {
+    initDeepLink(makeObjects());
+    selectHistoricalEvent('iridium-cosmos');
+    expect(getState().selectedEventId).toBe('iridium-cosmos');
+
+    goto('/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(getState().selectedEventId).toBeNull();
+    expect(getState().eventReplay).toBeNull();
+  });
 });

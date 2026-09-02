@@ -211,6 +211,10 @@ describe('isValidFirebaseRtdbUrl', () => {
 });
 
 describe('getFirebaseUrl / setFirebaseUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('falls back to the built-in default URL when nothing is stored', () => {
     expect(getFirebaseUrl()).toContain('firebaseio.com');
   });
@@ -229,6 +233,11 @@ describe('getFirebaseUrl / setFirebaseUrl', () => {
     setFirebaseUrl('https://evil.example.com');
     expect(localStorage.getItem('orbital_firebase_url')).toBeNull();
     expect(getFirebaseUrl()).toContain('firebaseio.com');
+  });
+
+  it('disables remote analytics when the env URL is an explicit off token', () => {
+    vi.stubEnv('VITE_FIREBASE_RTDB_URL', 'off');
+    expect(getFirebaseUrl()).toBe('');
   });
 });
 

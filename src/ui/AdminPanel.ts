@@ -35,10 +35,12 @@ const SS_SESSION_PREFIX= 'orbital_ses_';     // current tab/session
 /**
  * Legacy fallback URL (public RTDB endpoint — not a secret; security comes
  * from `firebase/database.rules.json`, not from hiding the host). Prefer
- * `VITE_FIREBASE_RTDB_URL` in `.env` / Vercel so analytics can be pointed at
- * another project or disabled entirely (empty string).
+ * `VITE_FIREBASE_RTDB_URL` in `.env` / Vercel to point at another project.
+ * Set the env var to `off` (or `disabled` / `false` / `0`) to turn analytics off.
  */
 const DEFAULT_FIREBASE_URL = 'https://orbital-congestion-sim-default-rtdb.firebaseio.com';
+
+const FIREBASE_DISABLE_TOKENS = new Set(['off', 'disabled', 'false', '0']);
 
 /** True for https://*.firebaseio.com and https://*.firebasedatabase.app roots. */
 export function isValidFirebaseRtdbUrl(url: string): boolean {
@@ -54,9 +56,18 @@ export function isValidFirebaseRtdbUrl(url: string): boolean {
   }
 }
 
+function envFirebaseRaw(): string {
+  return (import.meta.env.VITE_FIREBASE_RTDB_URL as string | undefined)?.trim() ?? '';
+}
+
+function isFirebaseDisableToken(raw: string): boolean {
+  return FIREBASE_DISABLE_TOKENS.has(raw.toLowerCase());
+}
+
 function envFirebaseUrl(): string {
-  const raw = (import.meta.env.VITE_FIREBASE_RTDB_URL as string | undefined)?.trim() ?? '';
-  return raw && isValidFirebaseRtdbUrl(raw) ? raw.replace(/\/$/, '') : '';
+  const raw = envFirebaseRaw();
+  if (!raw || isFirebaseDisableToken(raw)) return '';
+  return isValidFirebaseRtdbUrl(raw) ? raw.replace(/\/$/, '') : '';
 }
 
 // ── Real-time Presence ────────────────────────────────────────────────────────
@@ -195,7 +206,7 @@ if (!sessionStorage.getItem(SS_SESSION_PREFIX + 'loaded')) {
 /**
  * Resolve the RTDB base URL used for analytics.
  * Priority: valid localStorage override → VITE_FIREBASE_RTDB_URL → built-in default.
- * Returns '' when analytics should stay off (invalid / explicitly disabled).
+ * Returns '' when analytics should stay off (invalid override, or env set to off/disabled/false/0).
  */
 export function getFirebaseUrl(): string {
   try {
@@ -204,6 +215,8 @@ export function getFirebaseUrl(): string {
       return isValidFirebaseRtdbUrl(override) ? override.replace(/\/$/, '') : '';
     }
   } catch { /* ignore */ }
+  const raw = envFirebaseRaw();
+  if (raw && isFirebaseDisableToken(raw)) return '';
   return envFirebaseUrl() || DEFAULT_FIREBASE_URL;
 }
 

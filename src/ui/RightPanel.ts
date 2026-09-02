@@ -504,7 +504,7 @@ function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
 function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   const event = getHistoricalEvent(eventId);
   if (!event) {
-    detailEl.innerHTML = `<p class="muted">Event not found.</p>`;
+    detailEl.innerHTML = `<p class="muted">${t('detail.event_not_found')}</p>`;
     return;
   }
 

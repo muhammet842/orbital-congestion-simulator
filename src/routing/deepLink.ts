@@ -23,7 +23,7 @@ import {
   selectObject,
   clearObjectSelection,
   selectHistoricalEvent,
-  stopEventReplay,
+  clearHistoricalEventSelection,
 } from '../state/appState';
 import { getHistoricalEvent } from '../ui/EventCards';
 import type { TrackedObject } from '../types';
@@ -124,14 +124,9 @@ function applyUrl(): void {
     }
   }
 
-  // URL has params that don't match anything — clear selection silently.
+  // URL has no valid object/event — clear any leftover selection silently.
   const { selectedIndex, selectedEventId, eventReplay } = getState();
-  if (eventReplay) stopEventReplay();
-  if (selectedEventId) {
-    // selectHistoricalEvent clears it indirectly; use setState via clearObjectSelection path
-    // We need to clear both fields. The cleanest is to call stopEventReplay (which already
-    // resets selectedEventId) and then ensure no satellite remains selected.
-  }
+  if (eventReplay || selectedEventId) clearHistoricalEventSelection();
   if (selectedIndex != null) clearObjectSelection();
 }
 

@@ -287,9 +287,10 @@ function renderObjectList(container: HTMLElement): void {
   const metaEl = container.querySelector('#object-list-meta') as HTMLElement;
 
   const total = indices.length;
+  const n = total.toLocaleString();
   metaEl.textContent = state.searchQuery.trim()
-    ? `${total.toLocaleString()} match${total === 1 ? '' : 'es'}`
-    : `${total.toLocaleString()} objects · A–Z`;
+    ? t(total === 1 ? 'ui.list_match_one' : 'ui.list_match_other').replace('{n}', n)
+    : t('ui.list_objects_az').replace('{n}', n);
 
   const itemHeight = listItemHeight();
   spacer.style.height = `${total * itemHeight}px`;
