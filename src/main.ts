@@ -1,3 +1,15 @@
+/**
+ * Application bootstrap.
+ *
+ * Load order matters:
+ *   1. Fetch `public/data/tle.json` and build TrackedObject[] + stats
+ *   2. initState → create Layout + left/right/time panels
+ *   3. SceneManager (meshes + rAF) — must exist before deep links frame a sat
+ *   4. Deep link, admin (Ctrl+Shift+A), Kessler panel, how-to tour
+ *
+ * There is no backend for orbital data; the catalog is the committed JSON
+ * refreshed by `npm run fetch-tle` / GitHub Actions. See `.cursor/rules/project-map.mdc`.
+ */
 import './style.css';
 import { loadTleDataset, createTrackedObjects, computeStats } from './data/tleLoader';
 import { getState, initState } from './state/appState';

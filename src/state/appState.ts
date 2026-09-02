@@ -1,3 +1,17 @@
+/**
+ * Central app store (subscribe / setState).
+ *
+ * Selection exclusivity: picking an object, historical event, or conjunction
+ * clears the other two. Do not set selectedIndex and selectedEventId together.
+ *
+ * Clock priority (see getSimulationTime):
+ *   verificationTime  →  eventReplay  →  global time.live/historical
+ * Cap focused-clock advances with MAX_FOCUSED_CLOCK_FRAME_MS so a hitch after
+ * selecting a card cannot skip the whole VERIFY/replay window in one frame.
+ *
+ * UI panels should read via getState() + subscribe(); SceneManager advances
+ * clocks each animation frame without full panel re-renders where possible.
+ */
 import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conjunction';
 import {
   clampVerificationTimeMs,

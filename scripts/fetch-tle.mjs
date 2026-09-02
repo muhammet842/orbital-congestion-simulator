@@ -1,3 +1,15 @@
+/**
+ * Fetch + assemble public/data/tle.json from CelesTrak GP groups + SATCAT.
+ *
+ * Invoked by `npm run fetch-tle` and `.github/workflows/tle-refresh.yml`
+ * (Mon/Thu). Caps active/debris counts, stamps firstSeenAt vs previous file,
+ * joins OWNER → country when satcat.csv is available.
+ *
+ * CRITICAL: after assembly, refuse to write if the catalog is catastrophically
+ * thin (see MIN_TOTAL / MIN_STATIONS / MIN_ACTIVE / MIN_DEBRIS near the end).
+ * CelesTrak 403/503 partial responses once shipped ~3.5k objects and 0 stations
+ * to production; fail closed and leave the previous tle.json on disk.
+ */
 import { applyFirstSeenAt } from './applyFirstSeenAt.mjs';
 import { applySatcatOwners, fetchSatcatOwnerMap } from './enrichFromSatcat.mjs';
 

@@ -1,3 +1,12 @@
+/**
+ * Historical event cards + catalog of replayable incidents (HISTORICAL_EVENTS).
+ *
+ * Seven shipped events: collisions, ASATs, one breakup. `docking` exists as an
+ * EventType for UI/meta but no docking incident is in the list yet.
+ * Selecting a card sets selectedEventId; SceneManager starts eventReplay and
+ * EventReplayVisuals lerps objects to collisionGeo (verified lat/lon/alt) —
+ * do not trust decade-old TLEs for SGP4 back-propagation.
+ */
 import { selectHistoricalEvent, getState, subscribe } from '../state/appState';
 import { t, onLangChange } from '../i18n/i18n';
 

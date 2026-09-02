@@ -1,3 +1,17 @@
+/**
+ * Close-approach (conjunction) detection for LEO traffic.
+ *
+ * Live scan: coarse spatial hash with DETECTION_RADIUS_KM, then fine refine
+ * (LIVE_REFINE_*) so fast 5–12 km/s crossings are not skipped between ticks.
+ * UI shows at most MAX_DISPLAY_ALERTS; more stay in state for filters.
+ *
+ * VERIFY mode: click an alert → dedicated verificationTime clock (T− adaptive
+ * to relative speed → CPA → T+15s). Does not rewrite the global sim clock.
+ * Co-orbiting stacks (ISS/CSS modules) are excluded from alerts.
+ *
+ * invalidateUpcomingConjunctionScan() when catalog/time mode changes so a
+ * stale idle callback cannot wipe cards mid-rescan.
+ */
 import { eciToScene } from './coordinates';
 import { propagateObject } from './propagator';
 import type { ConjunctionEvent, OrbitLayer, TrackedObject } from '../types';

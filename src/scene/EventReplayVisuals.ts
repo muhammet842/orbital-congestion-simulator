@@ -1,3 +1,11 @@
+/**
+ * 3-D visuals for historical event replay (collision / ASAT / breakup).
+ *
+ * Motion is a PURE LINEAR LERP from back-tracked start positions to
+ * event.collisionGeo at T=0 — not SGP4 of archival TLEs (those drift too
+ * far for 1996–2021 epochs). ASAT: object B rises from Earth surface.
+ * Breakup: only object A. Docking meta exists but no shipped docking event.
+ */
 import {
   AdditiveBlending,
   BufferAttribute,

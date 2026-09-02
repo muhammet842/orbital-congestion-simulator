@@ -1,3 +1,11 @@
+/**
+ * Left panel: search/list, orbit layers, categories, display options,
+ * advanced filters, live stats, close-approach alerts, historical events.
+ *
+ * Object list is virtualized (spacer + visible window) — keep renderObjectList
+ * cheap; do not mount 12k DOM rows. Conjunction cards: max 5 displayed; sort
+ * by time or criticality via appState.conjunctionSortMode.
+ */
 import { LAYER_HEX, type ObjectCategory, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,

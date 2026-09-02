@@ -1,3 +1,9 @@
+/**
+ * Name/NORAD heuristics that fill country + owner when SATCAT join is missing.
+ * Prefer NORAD overrides (e.g. ISS 25544) over regex so catalog quirks like
+ * ISS (NAUKA) / separate modules stay intentional. Keep TURKISH_NORAD_IDS in
+ * sync with scripts/fetch-tle.mjs PRIORITY_NORAD_IDS.
+ */
 import type { ObjectCategory } from '../types';
 
 export const TURKISH_NORAD_IDS = new Set([

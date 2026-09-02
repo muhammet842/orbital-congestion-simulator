@@ -15,6 +15,10 @@
  *   Selecting a satellite or event   → pushState  (creates a history entry)
  *   Clearing a selection             → replaceState (no extra history entry)
  *   Browser back / forward           → restores the selection at that URL
+ *
+ * Clearing: when the URL has no valid object/event, call
+ * clearHistoricalEventSelection() — stopEventReplay() alone is a no-op if
+ * selectedEventId is set but eventReplay has not started yet.
  */
 
 import {

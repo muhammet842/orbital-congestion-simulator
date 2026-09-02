@@ -1,3 +1,11 @@
+/**
+ * Shared domain types for the catalog and UI.
+ *
+ * TleRecord  — raw JSON from public/data/tle.json
+ * TrackedObject — satrec + derived layer/color/altitude after tleLoader
+ * firstSeenAt — when THIS app’s automated fetch first saw the NORAD id
+ *               (not SATCAT launch date; drives “New to this catalog”)
+ */
 export type OrbitLayer = 'LEO' | 'MEO' | 'GEO' | 'HEO';
 export type ObjectCategory = 'stations' | 'active' | 'debris';
 

@@ -1,3 +1,11 @@
+/**
+ * Load and enrich the static TLE catalog for the running app.
+ *
+ * Uses cache: 'no-cache' so CDN Cache-Control cannot keep a post-deploy stale
+ * tle.json (and its firstSeenAt stamps) in the browser for hours.
+ * createTrackedObjects builds satellite.js satrecs and drops objects that fail
+ * to propagate at the reference epoch.
+ */
 import { twoline2satrec } from 'satellite.js';
 import { getCategoryColor, inferFunctionGroup } from '../orbital/classify';
 import { propagateObject } from '../orbital/propagator';

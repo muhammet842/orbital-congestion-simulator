@@ -1,3 +1,8 @@
+/**
+ * Right panel: empty state, selected satellite detail, VERIFY chrome, or
+ * historical event detail + replay HUD. Opens Spotter via #btn-spotter.
+ * Re-renders on subscribe(); keep photo/Spotter side effects idempotent.
+ */
 import {
   getDistanceAtTime,
   getRelativeVelocityAtTime,

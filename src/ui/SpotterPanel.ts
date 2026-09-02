@@ -4,6 +4,10 @@
  * Look direction follows the back camera (through the screen into the sky),
  * not the top bezel. Shows how far to rotate and tip until the target is centered.
  * Heavy globe rendering is paused while this panel is open.
+ *
+ * Always uses wall-clock UTC — never the simulator’s 10×/100× speed — so the
+ * sky map matches what is overhead now. Catalog scan is chunked (skyScan) to
+ * avoid multi-thousand SGP4 stalls on the UI thread.
  */
 
 import {

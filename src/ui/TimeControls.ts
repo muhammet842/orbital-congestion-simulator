@@ -1,3 +1,8 @@
+/**
+ * Bottom time bar: LIVE / historical speed, VERIFY and event-replay transports.
+ * Displays getSimulationTime() — when VERIFY or replay is active the global
+ * clock is left alone and the focused clock drives the label/slider.
+ */
 import {
   getVerificationWindowMs,
   VERIFY_SCRUB_STEP_MS,

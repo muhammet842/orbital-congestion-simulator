@@ -1,3 +1,9 @@
+/**
+ * First-visit language gate + 9-step UI tour (header "?" reopens).
+ * Completion flag: localStorage `orbital-help-seen-v3` — bump the suffix when
+ * step list changes so returning users see the updated tour once.
+ * Steps may open mobile drawers via setTourPanel; keep selectors in sync with Layout.
+ */
 import { applyTranslations, onLangChange, setLang, SUPPORTED_LANGS, t, type Lang } from '../i18n/i18n';
 import { closeKesslerPanel, openKesslerPanel } from './KesslerPanel';
 import { setTourPanel } from './Layout';

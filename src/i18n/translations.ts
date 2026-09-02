@@ -1,23 +1,30 @@
+/**
+ * Flat i18n dictionaries (en, tr, de, ru, zh) — keep KEY SETS IDENTICAL.
+ * After adding/renaming a key in one language, update all five and run
+ * `npm run check:i18n` (CI fails on missing/extra keys or dupes).
+ *
+ * Keys are grouped into namespaces by prefix:
+ *   ui.*        — left-panel static headings / labels
+ *   stats.*     — live stats labels
+ *   tle.*       — TLE staleness banners
+ *   cat.*       — object-category names
+ *   conj.*      — conjunction panel
+ *   risk.*      — conjunction risk / verification status labels
+ *   event_type.*— event-type badge labels
+ *   replay.*    — collision-replay panel
+ *   detail.*    — right-panel detail labels
+ *   sat.*       — satellite detail labels
+ *   event.<id>.info.*  — per-event background card
+ *   kessler.*   — Kessler-syndrome future-projection panel
+ *   spotter.* / admin.* / help.* / time.* — other surfaces
+ */
 export type Lang = 'en' | 'tr' | 'de' | 'ru' | 'zh';
 export const SUPPORTED_LANGS: Lang[] = ['en', 'tr', 'de', 'ru', 'zh'];
 
 export type Translations = Record<string, string>;
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Flat key → string dictionary for each language.
-   Keys are grouped into namespaces by prefix:
-     ui.*        — left-panel static headings / labels
-     stats.*     — live stats labels
-     tle.*       — TLE staleness banners
-     cat.*       — object-category names
-     conj.*      — conjunction panel
-     risk.*      — conjunction risk / verification status labels
-     event_type.*— event-type badge labels
-     replay.*    — collision-replay panel
-     detail.*    — right-panel detail labels
-     sat.*       — satellite detail labels
-     event.<id>.info.*  — per-event background card
-     kessler.*   — Kessler-syndrome future-projection panel
+   Flat key → string dictionary for each language (see file header).
 ───────────────────────────────────────────────────────────────────────── */
 
 const en: Translations = {

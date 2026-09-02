@@ -1,3 +1,16 @@
+/**
+ * Three.js scene owner: Earth, instanced sats/debris, trails, VERIFY overlays,
+ * and historical event replay visuals.
+ *
+ * Drive loop (start): advance the active clock → pull propagation results →
+ * update meshes → handle OrbitControls / camera fly-ins.
+ * Propagation for the full catalog runs in `propagation.worker` via
+ * PropagationWorkerBridge; do not SGP4 every object on the main thread.
+ *
+ * When Spotter is open, heavy globe work is paused (see isSpotterOpen).
+ * Historical replays hide the live catalog and use EventReplayVisuals lerp
+ * paths — not live TLE propagation of 2009-era elements.
+ */
 import {
   AmbientLight,
   Color,
