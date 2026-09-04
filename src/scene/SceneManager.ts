@@ -1,16 +1,4 @@
-/**
- * Three.js scene owner: Earth, instanced sats/debris, trails, VERIFY overlays,
- * and historical event replay visuals.
- *
- * Drive loop (start): advance the active clock → pull propagation results →
- * update meshes → handle OrbitControls / camera fly-ins.
- * Propagation for the full catalog runs in `propagation.worker` via
- * PropagationWorkerBridge; do not SGP4 every object on the main thread.
- *
- * When Spotter is open, heavy globe work is paused (see isSpotterOpen).
- * Historical replays hide the live catalog and use EventReplayVisuals lerp
- * paths — not live TLE propagation of 2009-era elements.
- */
+// Main Three.js scene manager
 import {
   AmbientLight,
   Color,
@@ -60,7 +48,6 @@ import {
 import { EventReplayVisuals } from './EventReplayVisuals';
 import { EventReplayLabels } from './EventReplayLabels';
 import { getHistoricalEvent } from '../ui/EventCards';
-import { isSpotterOpen } from '../ui/SpotterPanel';
 
 export class SceneManager {
   readonly renderer: WebGLRenderer;
@@ -147,9 +134,7 @@ export class SceneManager {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.target.set(0, 0, 0);
-    // Pinch-zoom must not pan the orbit target — phones default to
-    // two-finger DOLLY_PAN, which drifts Earth off-center. Disabling pan
-    // keeps pinch as zoom-only while orbit stays locked on the origin.
+    // Disable pan to keep orbit centered on origin
     this.controls.enablePan = false;
     this.controls.screenSpacePanning = false;
     this.applyOrbitDistanceLimits(false);
@@ -208,8 +193,8 @@ export class SceneManager {
     this.applyDayNight(getSimulationTime());
   }
 
-  async initOrbitalMeshes(objects: TrackedObject[]): Promise<void> {
-    this.orbitalMeshes = await OrbitalMeshes.create(objects);
+  initOrbitalMeshes(objects: TrackedObject[]): void {
+    this.orbitalMeshes = OrbitalMeshes.create(objects);
     this.scene.add(this.orbitalMeshes.group);
     this.propWorker.init(objects);
   }
@@ -226,10 +211,7 @@ export class SceneManager {
     cancelAnimationFrame(this.animationId);
   }
 
-  /**
-   * Free navigation always orbits Earth (origin). Conjunction / event-replay
-   * modes temporarily move the target; don't fight those.
-   */
+  // Keep free navigation centered on Earth
   private keepEarthCenteredOrbit(): void {
     const state = getState();
     if (state.selectedConjunction || state.eventReplay || state.verificationTime) return;
@@ -239,11 +221,7 @@ export class SceneManager {
     }
   }
 
-  /**
-   * Globe view clamps the camera outside Earth (radius ≈ 1). Close-pair
-   * focus orbits the midpoint — never Earth origin — with a tight inspect
-   * floor so the pair stays framed like the opening fly-in.
-   */
+  // Set camera limits based on focus mode
   private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
     if (conjunctionFocus) {
       this.controls.minDistance = PAIR_INSPECT_MIN_DISTANCE;
@@ -280,28 +258,22 @@ export class SceneManager {
 
           if (!comingFromReplay) {
             this.cameraFly.captureGlobalView(this.camera, this.controls);
-            // Same close-pair orbit limits as conjunction verification so the
-            // fly-in can lock onto the colliding objects instead of the globe.
+            // Apply close-pair limits for fly-in
             this.applyOrbitDistanceLimits(true);
             this.canvasContainer.classList.add('scene-container--conjunction-focus');
 
-            // Clear any satellite selection visuals immediately so the footprint
-            // cone and orbit trail don't linger while the replay loads.
+            // Clear selection visuals
             this.satelliteFootprint.update(null, objects, new Date());
             this.selectionMarker.update(null, objects, new Date());
             this.orbitTrail.update(false, null, objects, new Date());
             this.groundTrack.clear();
 
-            // Hide all catalog satellite dots so only the 2 historical objects
-            // are visible. Modern TLEs extrapolated 15+ years backwards produce
-            // garbage positions that scatter across the scene.
+            // Hide live catalog during replay
             if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
             this.leoShell.setVisible(false);
           }
         } else if (!getState().eventReplay) {
-          // Same card clicked again: selectHistoricalEvent cleared eventReplay
-          // while lastEventReplayId still matched, which used to freeze the
-          // scene with no clock. Rewind and play without tearing down the view.
+          // Rewind and play if same event clicked again
           this._eventReplayStarted = true;
           startEventReplay(selectedEventId, collisionTimeMs);
         }
@@ -313,9 +285,7 @@ export class SceneManager {
       }
     }
 
-    // Clear event replay when the card is deselected OR when stopEventReplay()
-    // was called (e.g. from "Return to Global View"). Both paths clear
-    // lastEventReplayId so this block only runs once.
+    // Clear event replay
     const { eventReplay } = getState();
     if (this.lastEventReplayId && (!selectedEventId || !eventReplay)) {
       this.lastEventReplayId = null;
@@ -350,8 +320,7 @@ export class SceneManager {
         this.lastConjunctionRevision = conjunctionRevision;
         this.lastFrameTime = performance.now();
         this.conjunctionVerification.rebuildForEvent(selectedConjunction, objects);
-        // Relax dolly limits *before* the fly-in so OrbitControls.update
-        // does not clamp the close-pair pose back to globe minDistance.
+        // Relax limits before fly-in
         this.applyOrbitDistanceLimits(true);
 
         const flyTime = getSimulationTime();
@@ -446,20 +415,12 @@ export class SceneManager {
   }
 
   private tick(now: number): void {
-    // Spotter owns the screen on mobile — skip the heavy 3D/propagation loop
-    // so compass aiming stays responsive.
-    if (isSpotterOpen()) {
-      this.lastFrameTime = now;
-      return;
-    }
-
     const state = getState();
     const deltaMs = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
     if (state.verificationTime?.playing && !this.cameraFly.isActive()) {
-      // Hold the verify clock during the opening fly-in so a high-speed
-      // pair does not burn its short T− window while the camera is moving.
+      // Hold clock during fly-in
       advanceVerificationTime(deltaMs);
     } else if (state.eventReplay?.playing) {
       advanceEventReplayTime(deltaMs);
@@ -472,9 +433,7 @@ export class SceneManager {
     const currentState = getState();
     const simTime = getSimulationTime();
 
-    // ── Event replay fast-path: skip bulk propagation of all catalog satellites
-    //    (they have modern TLEs; propagating them to 2007/2009/2021 is extremely
-    //    slow and produces garbage results). Only run the two historical satrecs.
+    // Fast-path for historical replays
     if (currentState.eventReplay) {
       // Keep Earth day/night shader in sync with the replay time
       this.applyDayNight(simTime);
@@ -486,9 +445,7 @@ export class SceneManager {
         currentState.eventReplay.collisionTimeMs,
       );
 
-      // Pause exactly at T=0 — the collision moment is the natural end-point.
-      // This prevents post-impact Earth rotation from drifting the dots over
-      // wrong geographic regions while keeping the impact flash visible.
+      // Pause replay at collision moment
       if (replayResult && currentState.eventReplay.playing) {
         const msToImpact = currentState.eventReplay.collisionTimeMs - currentState.eventReplay.currentMs;
         if (msToImpact <= 0) {
@@ -496,8 +453,7 @@ export class SceneManager {
         }
       }
 
-      // One-time fly-in: lock onto the pair like close-approach verification
-      // (midpoint target + close orbit), not a globe-facing frame.
+      // One-time fly-in to colliding pair
       if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
         this._eventReplayStarted = true;
         const collisionScene = this.eventReplayVisuals.getCollisionScene();
@@ -580,21 +536,15 @@ export class SceneManager {
 
     this.applyDayNight(simTime);
 
-    // Fire async request to the Worker for the next frame's data.
-    // The Worker result arrives via message handler and is buffered.
-    // Falls back to synchronous propagation only on the very first frame
-    // before the Worker has replied (null → synchronous).
-    this.propWorker.request(simTime.getTime(), timeSpeed);
+    // Request next frame data from propagation worker
+    this.propWorker.request(simTime.getTime());
     const propagations =
       this.propWorker.getLatestResults() ??
       getPropagationResults(currentState.objects, simTime, timeSpeed);
     const debrisStride = getDebrisUpdateStride(timeSpeed);
     const skipPointsUpdate = this.debrisFrameCounter++ % debrisStride !== 0;
 
-    // Real-world separation for the two verified objects, used to cap their
-    // model size below (see conjunctionLiveDistanceKm in updatePositions) —
-    // otherwise the ~25km-wide exaggerated satellite model dwarfs genuine
-    // multi-km near-misses and makes them look like a physical collision.
+    // Cap model size based on true separation
     let conjunctionLiveDistanceKm: number | null = null;
     if (currentState.selectedConjunction) {
       const propA = propagations[currentState.selectedConjunction.indexA];
@@ -636,10 +586,7 @@ export class SceneManager {
 
     this.satelliteFootprint.update(footprintIndex, currentState.objects, simTime);
 
-    // Suppress the regular single-satellite selection marker and orbit trail
-    // while verifying a close approach — otherwise a satellite selected
-    // *before* opening the conjunction view lingers as an unrelated dot and
-    // trail floating in the zoomed-in verification camera.
+    // Suppress selection visuals during conjunction view
     const selectionIndexForOverlays = currentState.selectedConjunction ? null : currentState.selectedIndex;
 
     this.selectionMarker.update(
@@ -655,8 +602,7 @@ export class SceneManager {
       simTime,
     );
 
-    // Ground track: show 1.5-orbit projection on Earth surface for selected satellite.
-    // Hidden during event replay or conjunction verification views.
+    // Update ground track
     this.groundTrack.update(
       !currentState.eventReplay && !currentState.selectedConjunction && currentState.showGroundTrack
         ? currentState.selectedIndex
@@ -677,8 +623,7 @@ export class SceneManager {
         if (propA && propB) {
           const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
           const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-          // Follow the *live* gap so the camera dollies in as the pair closes,
-          // matching model-scale shrink during VERIFY playback.
+          // Follow live gap for camera dolly
           const liveKm = conjunctionLiveDistanceKm ?? conj.distanceKm;
           this.cameraFly.followConjunctionMidpoint(
             this.camera,
@@ -714,8 +659,7 @@ export class SceneManager {
     );
 
     if (!currentState.selectedConjunction) {
-      // Forward-looking: predicts the closest approaches over the next 24h
-      // rather than only reporting what's happening at this exact instant.
+      // Predict upcoming close approaches
       getUpcomingConjunctions(currentState.objects, simTime, (fresh) => {
         setConjunctions(fresh);
       });
@@ -743,9 +687,7 @@ export class SceneManager {
       focusState.selectedConjunction ||
       focusState.verificationTime
     ) {
-      // Catalog points stay raycastable even when the group is hidden for
-      // historical replay. Picking one would call selectObject() and abort
-      // the story (2009 collision, close-approach verify, …).
+      // Block picking during focused views
       return;
     }
 

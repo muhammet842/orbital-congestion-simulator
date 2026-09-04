@@ -19,7 +19,6 @@ import {
   type KesslerScenarioParams,
   type KesslerYearPoint,
 } from '../orbital/kesslerProjection';
-import { onLangChange, t } from '../i18n/i18n';
 
 // ── Module-local component state ────────────────────────────────────────────
 
@@ -120,27 +119,17 @@ export function initKesslerPanel(): void {
   btn.type = 'button';
   btn.textContent = '🌌';
 
-  const refreshLabel = (): void => {
-    const label = t('kessler.button');
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-  };
-  refreshLabel();
+  const label = 'Future Projection';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
   btn.addEventListener('click', openKesslerPanel);
 
-  const header = document.querySelector('.app-header');
   const actions = document.getElementById('header-actions');
-  const langSel = document.getElementById('lang-select');
-  if (actions && langSel) actions.insertBefore(btn, langSel.closest('.header-lang') ?? langSel);
-  else if (header) {
-    if (langSel) header.insertBefore(btn, langSel);
-    else header.appendChild(btn);
+  if (actions) {
+    actions.appendChild(btn);
+  } else {
+    document.querySelector('.app-header')?.appendChild(btn);
   }
-
-  onLangChange(() => {
-    refreshLabel();
-    if (backdropEl) renderPanelContent();
-  });
 }
 
 // ── Modal open / close ───────────────────────────────────────────────────────
@@ -158,13 +147,13 @@ export function openKesslerPanel(): void {
 
   const backdrop = document.createElement('div');
   backdrop.id = 'kessler-panel-backdrop';
-  backdrop.className = 'admin-backdrop kessler-backdrop';
+  backdrop.className = 'modal-backdrop kessler-backdrop';
 
   const panel = document.createElement('div');
   panel.id = 'kessler-panel';
-  panel.className = 'admin-panel kessler-panel';
+  panel.className = 'modal-panel kessler-panel';
   panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', t('kessler.title'));
+  panel.setAttribute('aria-label', 'Kessler Syndrome Projection');
 
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
@@ -201,114 +190,121 @@ function renderPanelContent(): void {
   if (!panelEl) return;
   const hasRun = timeline.length > 0;
 
+  const PRESET_LABELS: Record<KesslerPresetId, string> = {
+    bau: 'Business as Usual',
+    boom: 'Megaconstellation Boom',
+    green: 'Green Space',
+    asat: 'ASAT War'
+  };
+
   const presetButtons = PRESET_IDS.map((id) => {
     const active = activePreset === id ? ' kp-preset--active' : '';
-    return `<button type="button" class="kp-preset${active}" data-preset="${id}">${t(`kessler.preset.${id}`)}</button>`;
+    return `<button type="button" class="kp-preset${active}" data-preset="${id}">${PRESET_LABELS[id]}</button>`;
   }).join('');
 
   panelEl.innerHTML = `
     <div class="ap-header">
-      <div class="ap-logo">${t('kessler.title')}</div>
-      <button class="ap-close" id="kp-close" aria-label="${t('kessler.close')}" title="${t('kessler.close')}">✕</button>
+      <div class="ap-logo">Kessler Syndrome Projection</div>
+      <button class="ap-close" id="kp-close" aria-label="Close" title="Close">✕</button>
     </div>
     <div class="ap-body">
-      <p class="kp-subtitle">${t('kessler.subtitle')}</p>
+      <p class="kp-subtitle">Explore how launch rates, mitigation compliance, and collision risks could shape the future of low Earth orbit.</p>
 
       <div class="ap-section">
-        <h3 class="ap-section-title">${t('kessler.presets_heading')}</h3>
+        <h3 class="ap-section-title">Scenarios</h3>
         <div class="kp-presets" id="kp-presets">${presetButtons}</div>
 
-        <h3 class="ap-section-title kp-scenario-title">${t('kessler.scenario_heading')}</h3>
+        <h3 class="ap-section-title kp-scenario-title">Custom Parameters</h3>
 
         <div class="kp-slider-row">
           <div class="kp-slider-label-row">
-            <span class="kp-slider-label">${t('kessler.param.launch_rate')}</span>
+            <span class="kp-slider-label">Launch Rate</span>
             <span class="kp-slider-value" id="kp-launch-val">${formatMultiplier(sliderTicks.launch)}</span>
           </div>
-          <span class="kp-slider-hint">${t('kessler.param.launch_rate_hint')}</span>
+          <span class="kp-slider-hint">Multiplier on current annual launches</span>
           <input type="range" id="kp-launch" class="kp-range" min="0" max="600" step="5" value="${sliderTicks.launch}" />
         </div>
 
         <div class="kp-slider-row">
           <div class="kp-slider-label-row">
-            <span class="kp-slider-label">${t('kessler.param.mitigation')}</span>
+            <span class="kp-slider-label">Mitigation Rate</span>
             <span class="kp-slider-value" id="kp-mitigation-val">${formatMultiplier(sliderTicks.mitigation)}</span>
           </div>
-          <span class="kp-slider-hint">${t('kessler.param.mitigation_hint')}</span>
+          <span class="kp-slider-hint">Rate of successful post-mission disposal</span>
           <input type="range" id="kp-mitigation" class="kp-range" min="0" max="300" step="5" value="${sliderTicks.mitigation}" />
         </div>
 
         <div class="kp-slider-row">
           <div class="kp-slider-label-row">
-            <span class="kp-slider-label">${t('kessler.param.collision_risk')}</span>
+            <span class="kp-slider-label">Collision Risk</span>
             <span class="kp-slider-value" id="kp-risk-val">${formatMultiplier(sliderTicks.risk)}</span>
           </div>
-          <span class="kp-slider-hint">${t('kessler.param.collision_risk_hint')}</span>
+          <span class="kp-slider-hint">Probability of cascading collisions</span>
           <input type="range" id="kp-risk" class="kp-range" min="0" max="600" step="5" value="${sliderTicks.risk}" />
         </div>
 
         <div class="kp-slider-row">
           <div class="kp-slider-label-row">
-            <span class="kp-slider-label">${t('kessler.param.target_year')}</span>
+            <span class="kp-slider-label">Target Year</span>
             <span class="kp-slider-value" id="kp-year-val">${sliderTicks.targetYear}</span>
           </div>
-          <span class="kp-slider-hint">${t('kessler.param.target_year_hint')}</span>
+          <span class="kp-slider-hint">End year of the projection timeline</span>
           <input type="range" id="kp-target-year" class="kp-range"
             min="${CURRENT_YEAR + 5}" max="${CURRENT_YEAR + 75}" step="5" value="${sliderTicks.targetYear}" />
         </div>
       </div>
 
       <div class="ap-section" id="kp-results-section" ${hasRun ? '' : 'hidden'}>
-        <h3 class="ap-section-title">${t('kessler.results_heading')}</h3>
+        <h3 class="ap-section-title">Projection Results</h3>
 
         <div class="kp-metrics">
-          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-total">—</div><div class="ap-metric-lbl">${t('kessler.stat.total_objects')}</div></div>
-          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-debris">—</div><div class="ap-metric-lbl">${t('kessler.stat.debris_objects')}</div></div>
-          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-collisions">—</div><div class="ap-metric-lbl">${t('kessler.stat.collisions')}</div></div>
-          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-risk">—</div><div class="ap-metric-lbl">${t('kessler.stat.risk_index')}</div></div>
+          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-total">—</div><div class="ap-metric-lbl">Total Objects</div></div>
+          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-debris">—</div><div class="ap-metric-lbl">Debris</div></div>
+          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-collisions">—</div><div class="ap-metric-lbl">Collisions</div></div>
+          <div class="ap-metric"><div class="ap-metric-val" id="kp-stat-risk">—</div><div class="ap-metric-lbl">Risk Index</div></div>
         </div>
 
         <div class="kp-shell-grid">
-          <div class="kp-shell"><span class="kp-shell-lbl">${t('kessler.stat.leo')}</span><span class="kp-shell-val" id="kp-stat-leo">—</span></div>
-          <div class="kp-shell"><span class="kp-shell-lbl">${t('kessler.stat.meo')}</span><span class="kp-shell-val" id="kp-stat-meo">—</span></div>
-          <div class="kp-shell"><span class="kp-shell-lbl">${t('kessler.stat.geo')}</span><span class="kp-shell-val" id="kp-stat-geo">—</span></div>
+          <div class="kp-shell"><span class="kp-shell-lbl">LEO</span><span class="kp-shell-val" id="kp-stat-leo">—</span></div>
+          <div class="kp-shell"><span class="kp-shell-lbl">MEO</span><span class="kp-shell-val" id="kp-stat-meo">—</span></div>
+          <div class="kp-shell"><span class="kp-shell-lbl">GEO</span><span class="kp-shell-val" id="kp-stat-geo">—</span></div>
         </div>
 
         <p class="kp-slider-hint kp-baseline-note" id="kp-baseline-note"></p>
 
         <div class="kp-scrub-block">
           <div class="kp-slider-label-row">
-            <span class="kp-slider-label">${t('kessler.year_scrub')}</span>
+            <span class="kp-slider-label">Timeline Scrub</span>
             <span class="kp-slider-value" id="kp-scrub-val">—</span>
           </div>
           <div class="kp-scrub-row">
             <input type="range" id="kp-scrub" class="kp-range" min="0" max="1" step="1" value="0" />
-            <button class="kp-animate-btn" id="kp-animate">${t('kessler.play')}</button>
+            <button class="kp-animate-btn" id="kp-animate">Play</button>
           </div>
         </div>
 
-        <h4 class="ap-section-title">${t('kessler.chart_heading')}</h4>
+        <h4 class="ap-section-title">Population Growth</h4>
         <canvas id="kp-chart" class="kp-chart-canvas"></canvas>
         <div class="kp-chart-legend">
-          <span><i class="kp-swatch kp-swatch--total"></i>${t('kessler.chart.total')}</span>
-          <span><i class="kp-swatch kp-swatch--debris"></i>${t('kessler.chart.debris')}</span>
-          <span><i class="kp-swatch kp-swatch--baseline"></i>${t('kessler.chart.baseline')}</span>
+          <span><i class="kp-swatch kp-swatch--total"></i>Total</span>
+          <span><i class="kp-swatch kp-swatch--debris"></i>Debris</span>
+          <span><i class="kp-swatch kp-swatch--baseline"></i>Today</span>
         </div>
 
-        <h4 class="ap-section-title">${t('kessler.density_heading')}</h4>
+        <h4 class="ap-section-title">Orbital Density</h4>
         <div class="kp-density-wrap">
           <canvas id="kp-density" class="kp-density-canvas"></canvas>
         </div>
         <div class="kp-chart-legend kp-shell-legend">
-          <span><i class="kp-swatch kp-swatch--leo"></i>${t('kessler.shell.leo')}</span>
-          <span><i class="kp-swatch kp-swatch--meo"></i>${t('kessler.shell.meo')}</span>
-          <span><i class="kp-swatch kp-swatch--geo"></i>${t('kessler.shell.geo')}</span>
+          <span><i class="kp-swatch kp-swatch--leo"></i>LEO</span>
+          <span><i class="kp-swatch kp-swatch--meo"></i>MEO</span>
+          <span><i class="kp-swatch kp-swatch--geo"></i>GEO</span>
         </div>
 
         <p class="kp-narrative" id="kp-narrative"></p>
       </div>
 
-      <p class="kp-disclaimer">${t('kessler.disclaimer')}</p>
+      <p class="kp-disclaimer">Note: This is a simplified interactive model, not a rigorous physics simulation.</p>
     </div>
   `;
 
@@ -416,9 +412,7 @@ function runProjection(opts: { preserveScrubFraction?: boolean } = {}): void {
 function updateBaselineNote(): void {
   const el = getEl<HTMLElement>('kp-baseline-note');
   if (!el) return;
-  el.textContent = t('kessler.today_baseline')
-    .replace('{year}', String(startYear))
-    .replace('{n}', formatCount(baselineTotal));
+  el.textContent = `Baseline in ${startYear}: ${formatCount(baselineTotal)} tracked objects`;
 }
 
 function updateForScrubIndex(idx: number): void {
@@ -449,11 +443,15 @@ function updateNarrative(point: KesslerYearPoint): void {
   const band: KesslerOutlookBand = classifyOutlook(point.riskIndex);
   const mult = (point.totalObjects / baselineTotal).toFixed(1);
   const risk = (point.riskIndex / 100).toFixed(1);
-  const text = t(`kessler.narrative.${band}`)
-    .replace('{year}', String(point.year))
-    .replace('{total}', formatCount(point.totalObjects))
-    .replace('{mult}', mult)
-    .replace('{risk}', risk);
+  
+  let text = '';
+  if (band === 'stable') {
+    text = `By ${point.year}, the tracked population stabilizes around ${formatCount(point.totalObjects)} objects (${mult}x today). The environment remains mostly stable, though ongoing maintenance is required.`;
+  } else if (band === 'warning') {
+    text = `By ${point.year}, the tracked population grows to ${formatCount(point.totalObjects)} objects (${mult}x today). Collision risk rises significantly (${risk}x), creating a hazardous but navigable environment.`;
+  } else {
+    text = `By ${point.year}, the tracked population explodes to ${formatCount(point.totalObjects)} objects (${mult}x today). A Kessler cascade is underway, rendering major LEO shells virtually unusable.`;
+  }
 
   const el = getEl<HTMLElement>('kp-narrative');
   if (!el) return;
@@ -471,7 +469,7 @@ function toggleAnimate(): void {
   if (timeline.length === 0) return;
 
   animating = true;
-  setText('kp-animate', t('kessler.pause'));
+  setText('kp-animate', 'Pause');
   if (scrubIndex >= timeline.length - 1) scrubIndex = 0;
 
   animTimer = setInterval(() => {
@@ -491,7 +489,7 @@ function stopAnimation(): void {
     clearInterval(animTimer);
     animTimer = null;
   }
-  setText('kp-animate', t('kessler.play'));
+  setText('kp-animate', 'Play');
 }
 
 // ── Canvas rendering ─────────────────────────────────────────────────────────

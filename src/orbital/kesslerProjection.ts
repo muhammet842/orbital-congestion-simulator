@@ -1,27 +1,11 @@
-/**
- * Kessler Syndrome projection model (shell-aware).
- *
- * Educational "what if" model projecting tracked orbital populations by
- * altitude regime (LEO / MEO / GEO). Nearly all catastrophic collision risk
- * and launch-driven growth sit in LEO — matching ESA/NASA public reporting.
- * This is NOT an official forecast (LEGEND / DELTA use full fragmentation
- * physics); constants are loosely calibrated to mid-2020s public figures.
- *
- * Calibration anchors (~2025):
- *  - ~40,000 tracked objects >10 cm (USSPACECOM / ESA order of magnitude)
- *  - ~80–85% of those in LEO; MEO ~5–10%; GEO belt ~8–12%
- *  - ~2,600 new payloads/year, overwhelmingly LEO-bound (mega-constellations)
- *  - Catastrophic fragmentations historically ~once per 8–10 years → ~0.1/yr,
- *    almost exclusively in LEO
- *  - Collision opportunity scales ~density² within each shell (Kessler feedback)
- */
+// Kessler Syndrome projection model (shell-aware).
 
 export interface KesslerScenarioParams {
-  /** Multiplier on today's real-world annual launch cadence (~2,600/yr). 1 = business as usual. */
+  // Launch rate multiplier
   launchRateMultiplier: number;
-  /** Multiplier on active debris-mitigation effectiveness (deorbiting / end-of-life disposal). 1 = today's policy effort. */
+  // Mitigation rate multiplier
   mitigationRate: number;
-  /** Multiplier on collision / ASAT-test frequency risk. 1 = today's historical baseline. */
+  // Collision risk multiplier
   collisionRiskMultiplier: number;
 }
 
@@ -31,7 +15,7 @@ export const DEFAULT_KESSLER_SCENARIO: KesslerScenarioParams = {
   collisionRiskMultiplier: 1,
 };
 
-/** Named presets for one-click realistic storylines. */
+// Presets
 export const KESSLER_PRESETS = {
   bau: { launchRateMultiplier: 1, mitigationRate: 1, collisionRiskMultiplier: 1 },
   boom: { launchRateMultiplier: 2.5, mitigationRate: 0.7, collisionRiskMultiplier: 1.3 },
@@ -43,36 +27,30 @@ export type KesslerPresetId = keyof typeof KESSLER_PRESETS;
 
 export interface KesslerYearPoint {
   year: number;
-  /** Cumulative tracked objects (active + debris) at the end of this year. */
+  // Cumulative tracked objects
   totalObjects: number;
-  /** Of which are debris. Always ≤ totalObjects. */
+  // Debris objects
   debrisObjects: number;
-  /** Objects in LEO (< ~2,000 km). Dominates risk and growth. */
+  // LEO objects
   leoObjects: number;
-  /** Objects in MEO (incl. GNSS shells). */
+  // MEO objects
   meoObjects: number;
-  /** Objects in / near the GEO belt. */
+  // GEO objects
   geoObjects: number;
-  /** Expected (fractional) catastrophic fragmentation events this year. */
+  // Expected collisions this year
   expectedCollisionsThisYear: number;
-  /** Cumulative expected fragmentations since the start year. */
+  // Cumulative collisions
   cumulativeCollisions: number;
-  /**
-   * Collision-risk index relative to today: 100 = same LEO risk as the
-   * baseline year. Display as `(riskIndex/100)×`, not as a raw percent.
-   */
+  // Risk index
   riskIndex: number;
 }
 
 export type KesslerOutlookBand = 'stable' | 'concerning' | 'critical' | 'runaway';
 
-/**
- * Real-world estimate of tracked objects (active + debris, >10 cm) in orbit
- * today. Independent of this app's filtered TLE catalog size.
- */
+// Real-world baseline objects
 export const REAL_WORLD_BASELINE_OBJECTS = 40_000;
 
-/** Approximate share of today's tracked catalog by regime. */
+// Shell fractions
 export const BASELINE_SHELL_FRACTIONS = {
   leo: 0.82,
   meo: 0.08,
@@ -80,29 +58,19 @@ export const BASELINE_SHELL_FRACTIONS = {
 } as const;
 
 const BASELINE_ANNUAL_LAUNCHES = 2600;
-/** Where new payloads go under today's launch mix. */
+// Launch shell fractions
 const LAUNCH_SHELL_FRACTIONS = { leo: 0.92, meo: 0.04, geo: 0.04 } as const;
 
-/**
- * Baseline annual probability of a catastrophic fragmentation *in that shell*
- * at today's density. Nearly all real events are LEO.
- */
+// Baseline collision probability
 const BASELINE_COLLISION_P = { leo: 0.11, meo: 0.006, geo: 0.008 } as const;
 
-/** Trackable fragments per catastrophic event (shell-dependent yields). */
+// Debris per collision
 const DEBRIS_PER_COLLISION = { leo: 1800, meo: 900, geo: 600 } as const;
 
-/**
- * Annual removal fraction for intact/controllable objects at 1× mitigation.
- * LEO benefits most from drag + active deorbit norms; GEO "removal" means
- * graveyard-orbit relocation out of the protected belt.
- */
+// Active removal fraction
 const ACTIVE_REMOVAL_FRACTION = { leo: 0.07, meo: 0.02, geo: 0.015 } as const;
 
-/**
- * Annual debris removal / decay fraction at 1× mitigation.
- * LEO debris still decays slowly; MEO/GEO debris is essentially permanent.
- */
+// Debris removal fraction
 const DEBRIS_REMOVAL_FRACTION = { leo: 0.025, meo: 0.002, geo: 0.0004 } as const;
 
 const INITIAL_DEBRIS_FRACTION = 0.55;
@@ -122,7 +90,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Keeps user-supplied scenario sliders within sane, non-explosive bounds. */
+// Clamp scenario params
 export function clampScenarioParams(params: KesslerScenarioParams): KesslerScenarioParams {
   return {
     launchRateMultiplier: clamp(params.launchRateMultiplier, 0, 6),
@@ -180,13 +148,7 @@ function stepShell(
   };
 }
 
-/**
- * Projects the orbital population year-by-year from `startYear` to `endYear`.
- * Returns one point per simulated year (not including the start year itself).
- *
- * `startingObjectCount` should normally be `REAL_WORLD_BASELINE_OBJECTS`;
- * shells are seeded from that total using {@link BASELINE_SHELL_FRACTIONS}.
- */
+// Project Kessler timeline
 export function projectKesslerTimeline(
   startYear: number,
   endYear: number,
@@ -225,7 +187,7 @@ export function projectKesslerTimeline(
     const totalObjects = leoObjects + meoObjects + geoObjects;
     const debris = shells.leo.debris + shells.meo.debris + shells.geo.debris;
 
-    // Kessler risk is a LEO story — index tracks LEO density² only.
+    // LEO risk index
     const leoDensityRatio = shells.leo.total / Math.max(shellBaseline.leo, 1);
     const riskIndex = leoDensityRatio * leoDensityRatio * params.collisionRiskMultiplier * 100;
 
@@ -245,13 +207,7 @@ export function projectKesslerTimeline(
   return points;
 }
 
-/**
- * Buckets a risk index into a coarse narrative outlook used to pick UI copy.
- *
- * Because riskIndex scales with LEO density-ratio *squared*, a 3–4× LEO
- * population already yields ~900–1,600 — serious, but not yet a self-sustaining
- * runaway cascade. "Runaway" is reserved for extreme density / ASAT scenarios.
- */
+// Classify outlook
 export function classifyOutlook(riskIndex: number): KesslerOutlookBand {
   if (riskIndex >= 3000) return 'runaway';
   if (riskIndex >= 800) return 'critical';

@@ -1,8 +1,4 @@
-/**
- * Right panel: empty state, selected satellite detail, VERIFY chrome, or
- * historical event detail + replay HUD. Opens Spotter via #btn-spotter.
- * Re-renders on subscribe(); keep photo/Spotter side effects idempotent.
- */
+// Right panel: satellite detail, conjunction verify view, or historical event replay HUD.
 import {
   getDistanceAtTime,
   getRelativeVelocityAtTime,
@@ -32,14 +28,9 @@ import type { HistoricalEvent } from './EventCards';
 import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
 import { isRecentlyLaunched } from '../data/newLaunches';
-import { t, onLangChange } from '../i18n/i18n';
-import { openSpotterPanel } from './SpotterPanel';
 
-/**
- * Compute the 3-D separation in km between the two collision objects at T-5min,
- * using the same orbital back-tracking geometry as EventReplayVisuals.setup().
- * This mirrors the slerp model so the displayed distance decreases to 0 at T=0.
- */
+// Compute the 3-D separation in km between two collision objects at T-5min,
+// mirroring the same back-tracking geometry as EventReplayVisuals.
 function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): number {
   if (!event.approachB) return 0;
   const { collisionGeo, approachA, approachB } = event;
@@ -52,7 +43,7 @@ function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): n
   function backtrack(
     incl: number,
     asc: boolean,
-  ): [number, number] { // [latRad, lonRad] at startMs
+  ): [number, number] {
     const lat1 = collisionGeo.latDeg * DEG;
     const lon1 = collisionGeo.lonDeg * DEG;
     const sinAz = Math.min(1, Math.abs(Math.cos(incl * DEG) / Math.cos(lat1)));
@@ -73,19 +64,13 @@ function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): n
   const [latA, lonA] = backtrack(approachA.inclinationDeg, approachA.ascending);
   const [latB, lonB] = backtrack(approachB.inclinationDeg, approachB.ascending);
 
-  // Haversine between start positions
   const dLat = latB - latA;
   const dLon = lonB - lonA;
   const a = Math.sin(dLat/2)**2 + Math.cos(latA)*Math.cos(latB)*Math.sin(dLon/2)**2;
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
-/**
- * Cache for event replay initial separation values.
- * Key = eventId, value = initial separation in km at T-5min.
- */
 const replayInitialSepCache: Map<string, number> = new Map();
-
 
 function verificationRiskClass(status: string): string {
   if (status === 'COLLISION CONFIRMED') return 'conjunction-risk--confirmed';
@@ -95,42 +80,19 @@ function verificationRiskClass(status: string): string {
   return 'conjunction-risk--monitor';
 }
 
-/** Canonical English risk/status labels from conjunction.ts → i18n keys for display. */
-const RISK_LABEL_KEYS: Record<string, string> = {
-  'NO RISK': 'risk.no',
-  'LOW RISK': 'risk.low',
-  MONITORING: 'risk.monitoring',
-  'CRITICAL RISK': 'risk.critical',
-  PENDING: 'risk.pending',
-  APPROACHING: 'risk.approaching',
-  'COLLISION CONFIRMED': 'risk.confirmed',
-  'COLLISION AVERTED': 'risk.averted',
-  UNAVAILABLE: 'risk.unavailable',
-};
-
-function translateRiskLabel(label: string): string {
-  const key = RISK_LABEL_KEYS[label];
-  return key ? t(key, label) : label;
-}
-
-/**
- * Rebuilds the localized hint text from the assessment's status/riskLabel
- * rather than translating conjunction.ts's English `hint` string directly —
- * keeps the orbital-math module UI-agnostic (see getVerificationAssessment).
- */
-function translateVerificationHint(
+function getVerificationHint(
   assessment: ReturnType<typeof getVerificationAssessment>,
   liveDistanceKm: number | null,
 ): string {
-  if (assessment.riskLabel === 'UNAVAILABLE') return t('conj.hint_unavailable');
+  if (assessment.riskLabel === 'UNAVAILABLE') return 'Verification data unavailable.';
   if (assessment.status === 'COLLISION CONFIRMED') {
-    return t('conj.hint_confirmed').replace('{km}', (liveDistanceKm ?? 0).toFixed(3));
+    return `Confirmed collision at ${(liveDistanceKm ?? 0).toFixed(3)} km separation.`;
   }
   if (assessment.status === 'COLLISION AVERTED') {
-    return t('conj.hint_averted').replace('{km}', (liveDistanceKm ?? 0).toFixed(3));
+    return `Closest approach: ${(liveDistanceKm ?? 0).toFixed(3)} km — no collision.`;
   }
-  if (assessment.status === 'APPROACHING') return t('conj.hint_approaching');
-  return t('conj.hint_paused');
+  if (assessment.status === 'APPROACHING') return 'Objects approaching...';
+  return 'Paused. Press play to continue.';
 }
 
 export function initRightPanel(container: HTMLElement): void {
@@ -149,20 +111,7 @@ export function initRightPanel(container: HTMLElement): void {
   maybeRender();
   subscribe(maybeRender);
 
-  // Force re-render when language changes so all translated strings update
-  onLangChange(() => {
-    renderKey = '';
-    maybeRender();
-  });
-
   container.addEventListener('click', (e) => {
-    const spotterBtn = (e.target as HTMLElement).closest('#btn-spotter');
-    if (spotterBtn) {
-      e.preventDefault();
-      openSpotterPanel();
-      return;
-    }
-
     const trailBtn = (e.target as HTMLElement).closest('#btn-orbit-trail');
     if (trailBtn) {
       e.preventDefault();
@@ -178,6 +127,7 @@ export function initRightPanel(container: HTMLElement): void {
       setShowGroundTrack(!showGroundTrack);
       return;
     }
+
     const exitBtn = (e.target as HTMLElement).closest('#btn-exit-conjunction');
     if (exitBtn) {
       e.preventDefault();
@@ -245,9 +195,9 @@ export function initRightPanel(container: HTMLElement): void {
     const { eventReplay } = getState();
     if (!eventReplay) return;
     const { startMs, endMs } = getEventReplayWindowMs(eventReplay.collisionTimeMs);
-    const t = Number(scrub.value) / 100;
+    const pct = Number(scrub.value) / 100;
     setEventReplayPartial({
-      currentMs: startMs + t * (endMs - startMs),
+      currentMs: startMs + pct * (endMs - startMs),
       playing: false,
     });
   });
@@ -343,14 +293,14 @@ function refreshConjunctionVerification(container: HTMLElement, conjunction: Con
     const msToCpa = conjunction.time.getTime() - simTime.getTime();
     timeToCpaEl.textContent =
       msToCpa > 0
-        ? t('conj.t_minus').replace('{s}', String(Math.ceil(msToCpa / 1000)))
-        : t('conj.t_plus').replace('{s}', String(Math.ceil(-msToCpa / 1000)));
+        ? `T−${Math.ceil(msToCpa / 1000)}s`
+        : `T+${Math.ceil(-msToCpa / 1000)}s`;
   }
   if (riskEl) {
-    riskEl.textContent = translateRiskLabel(assessment.riskLabel);
+    riskEl.textContent = assessment.riskLabel;
     riskEl.className = verificationRiskClass(assessment.riskLabel);
   }
-  if (hintEl) hintEl.textContent = translateVerificationHint(assessment, liveDistance);
+  if (hintEl) hintEl.textContent = getVerificationHint(assessment, liveDistance);
 }
 
 function render(container: HTMLElement): void {
@@ -376,8 +326,8 @@ function render(container: HTMLElement): void {
 
   if (state.selectedIndex == null) {
     detailEl.innerHTML = `
-      <h2 class="panel-heading">${t('sat.empty_title')}</h2>
-      <p class="muted">${t('sat.empty_body')}</p>
+      <h2 class="panel-heading">Satellite Details</h2>
+      <p class="muted">Click any object on the globe to see its details here.</p>
     `;
     return;
   }
@@ -389,7 +339,7 @@ function render(container: HTMLElement): void {
   if (!propagation) {
     detailEl.innerHTML = `
       <h2 class="panel-heading">${escapeHtml(obj.name)}</h2>
-      <p class="muted">${t('sat.unavailable')}</p>
+      <p class="muted">Propagation data unavailable.</p>
     `;
     return;
   }
@@ -404,8 +354,14 @@ function render(container: HTMLElement): void {
   );
 
   const newBadge = isRecentlyLaunched(obj)
-    ? `<span class="new-launch-badge" title="${escapeHtml(t('badge.new_launch_title'))}">${t('badge.new_launch')}</span>`
+    ? `<span class="new-launch-badge" title="Launched within the last 30 days">NEW</span>`
     : '';
+
+  const categoryLabel: Record<string, string> = {
+    active: 'Active Satellite',
+    debris: 'Debris',
+    stations: 'Space Station',
+  };
 
   detailEl.innerHTML = `
     <div class="detail-header">
@@ -414,25 +370,22 @@ function render(container: HTMLElement): void {
     </div>
     <div class="object-photo-wrap" data-object-photo hidden></div>
     <dl class="detail-list detail-list--meta">
-      <div class="detail-row"><dt>${t('sat.country')}</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
-      <div class="detail-row"><dt>${t('sat.operator_owner')}</dt><dd>${escapeHtml(snapshot.owner)}</dd></div>
+      <div class="detail-row"><dt>Country</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
+      <div class="detail-row"><dt>Operator</dt><dd>${escapeHtml(snapshot.owner)}</dd></div>
     </dl>
     <hr class="detail-divider" />
     <dl class="detail-list">
-      <div class="detail-row"><dt>${t('sat.altitude')}</dt><dd data-field="altitude">${snapshot.altitudeKm.toFixed(0)} km</dd></div>
-      <div class="detail-row"><dt>${t('sat.velocity')}</dt><dd data-field="velocity">${snapshot.velocityKmS.toFixed(2)} km/s</dd></div>
-      <div class="detail-row"><dt>${t('sat.layer')}</dt><dd>${snapshot.layer}</dd></div>
-      <div class="detail-row"><dt>${t('sat.category')}</dt><dd>${t(`cat.${snapshot.category}`)}</dd></div>
-      <div class="detail-row"><dt>${t('sat.inclination')}</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
+      <div class="detail-row"><dt>Altitude</dt><dd data-field="altitude">${snapshot.altitudeKm.toFixed(0)} km</dd></div>
+      <div class="detail-row"><dt>Velocity</dt><dd data-field="velocity">${snapshot.velocityKmS.toFixed(2)} km/s</dd></div>
+      <div class="detail-row"><dt>Orbit</dt><dd>${snapshot.layer}</dd></div>
+      <div class="detail-row"><dt>Type</dt><dd>${categoryLabel[snapshot.category] ?? snapshot.category}</dd></div>
+      <div class="detail-row"><dt>Inclination</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
     </dl>
-    <button type="button" id="btn-spotter" class="btn-orbit-trail btn-spotter">
-      ${t('spotter.open')}
-    </button>
     <button type="button" id="btn-orbit-trail" class="btn-orbit-trail${state.showOrbitTrail ? ' active' : ''}">
-      ${state.showOrbitTrail ? t('sat.hide_trail') : t('sat.show_trail')}
+      ${state.showOrbitTrail ? 'Hide Orbit Trail' : 'Show Orbit Trail'}
     </button>
     <button type="button" id="btn-ground-track" class="btn-orbit-trail${state.showGroundTrack ? ' active' : ''}">
-      ${state.showGroundTrack ? t('sat.hide_ground') : t('sat.show_ground')}
+      ${state.showGroundTrack ? 'Hide Ground Track' : 'Show Ground Track'}
     </button>
   `;
 
@@ -448,37 +401,34 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
   const colocatedB = getColocatedObjectNames(state.objects, conjunction.indexB);
   let colocatedNote = '';
   if (colocatedA.length > 1 || colocatedB.length > 1) {
-    const appearsWith =
-      colocatedA.length > 1
-        ? `${t('conj.colocated_appears_with')
-            .replace('{name}', escapeHtml(conjunction.objectA))
-            .replace('{names}', escapeHtml(colocatedA.filter((n) => n !== conjunction.objectA).join(', ')))} `
-        : '';
-    colocatedNote = `<p class="muted conjunction-colocated-note">${t('conj.colocated_prefix')} ${appearsWith}${t('conj.colocated_suffix')}</p>`;
+    const names = colocatedA.filter((n) => n !== conjunction.objectA).join(', ');
+    colocatedNote = `<p class="muted conjunction-colocated-note">${escapeHtml(conjunction.objectA)} appears alongside ${escapeHtml(names)}</p>`;
   } else if (isCoOrbitingPair(conjunction.relativeVelocityKmS)) {
-    colocatedNote = `<p class="muted conjunction-colocated-note">${t('conj.coorbiting_note')}</p>`;
+    colocatedNote = `<p class="muted conjunction-colocated-note">These objects are co-orbiting (very low relative velocity).</p>`;
   }
 
+  const rewindSecs = Math.round(getVerificationRewindMs(conjunction.relativeVelocityKmS) / 1000);
+
   detailEl.innerHTML = `
-    <h2 class="panel-heading panel-heading--alert">${t('conj.heading')}</h2>
+    <h2 class="panel-heading panel-heading--alert">Close Approach</h2>
     <div class="conjunction-detail-title">
       ${escapeHtml(conjunction.objectA)} vs ${escapeHtml(conjunction.objectB)}
     </div>
     <dl class="detail-list">
-      <div class="detail-row"><dt>${t('conj.cpa_event')}</dt><dd>${formatUtcDateTime(conjunction.time)}</dd></div>
-      <div class="detail-row"><dt>${t('conj.sim_time')}</dt><dd data-field="sim-time">—</dd></div>
-      <div class="detail-row"><dt>${t('conj.time_to_cpa')}</dt><dd data-field="time-to-cpa">—</dd></div>
-      <div class="detail-row"><dt>${t('conj.live_separation')}</dt><dd data-field="live-distance">—</dd></div>
-      <div class="detail-row"><dt>${t('conj.cpa_minimum')}</dt><dd>${conjunction.distanceKm.toFixed(3)} km</dd></div>
-      <div class="detail-row"><dt>${t('conj.relative_velocity')}</dt><dd data-field="relative-velocity">—</dd></div>
-      <div class="detail-row"><dt>${t('conj.risk_assessment')}</dt><dd data-field="verification-risk" class="conjunction-risk--monitor">—</dd></div>
+      <div class="detail-row"><dt>CPA Time</dt><dd>${formatUtcDateTime(conjunction.time)}</dd></div>
+      <div class="detail-row"><dt>Sim Time</dt><dd data-field="sim-time">—</dd></div>
+      <div class="detail-row"><dt>Time to CPA</dt><dd data-field="time-to-cpa">—</dd></div>
+      <div class="detail-row"><dt>Live Separation</dt><dd data-field="live-distance">—</dd></div>
+      <div class="detail-row"><dt>Minimum Distance</dt><dd>${conjunction.distanceKm.toFixed(3)} km</dd></div>
+      <div class="detail-row"><dt>Relative Velocity</dt><dd data-field="relative-velocity">—</dd></div>
+      <div class="detail-row"><dt>Risk</dt><dd data-field="verification-risk" class="conjunction-risk--monitor">—</dd></div>
     </dl>
     ${colocatedNote}
     <p class="muted conjunction-detail-hint" data-field="verification-hint">
-      ${t('conj.hint_rewound').replace('{s}', String(Math.round(getVerificationRewindMs(conjunction.relativeVelocityKmS) / 1000)))}
+      Rewound ${rewindSecs}s before closest approach. Press play to watch.
     </p>
     <button type="button" id="btn-exit-conjunction" class="btn-exit-conjunction">
-      ${t('conj.return_global')}
+      ← Back to Globe
     </button>
   `;
 }
@@ -486,21 +436,18 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
 function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
   if (!event?.info) return '';
   const eType = event.eventType ?? 'collision';
-  const title   = t(`event.${event.id}.info.title`,   event.info.title);
-  const reason  = t(`event.${event.id}.info.reason`,  event.info.reason);
-  const outcome = t(`event.${event.id}.info.outcome`, event.info.outcome);
   return `
     <div class="eic eic--${escapeHtml(eType)}">
       <div class="eic__title">
-        <span class="eic__badge">${escapeHtml(title)}</span>
+        <span class="eic__badge">${escapeHtml(event.info.title)}</span>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">${t('detail.why')}</h4>
-        <p class="eic__text">${escapeHtml(reason)}</p>
+        <h4 class="eic__heading">Why it happened</h4>
+        <p class="eic__text">${escapeHtml(event.info.reason)}</p>
       </div>
       <div class="eic__section">
-        <h4 class="eic__heading">${t('detail.outcome')}</h4>
-        <p class="eic__text">${escapeHtml(outcome)}</p>
+        <h4 class="eic__heading">Outcome</h4>
+        <p class="eic__text">${escapeHtml(event.info.outcome)}</p>
       </div>
     </div>
   `;
@@ -509,7 +456,7 @@ function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
 function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   const event = getHistoricalEvent(eventId);
   if (!event) {
-    detailEl.innerHTML = `<p class="muted">${t('detail.event_not_found')}</p>`;
+    detailEl.innerHTML = `<p class="muted">Event not found.</p>`;
     return;
   }
 
@@ -521,13 +468,13 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
   });
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading">${t('detail.historical')}</h2>
+    <h2 class="panel-heading">Historical Event</h2>
     <div class="event-detail">
-      <div class="event-detail-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</div>
+      <div class="event-detail-title">${escapeHtml(event.title)}</div>
       <div class="event-detail-date">${formattedDate}</div>
-      <p class="event-detail-description">${escapeHtml(t(`event.${event.id}.description`, event.description))}</p>
+      <p class="event-detail-description">${escapeHtml(event.description)}</p>
       <dl class="detail-list">
-        <div class="detail-row"><dt>${t('detail.debris')}</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
+        <div class="detail-row"><dt>Debris Created</dt><dd>${escapeHtml(event.debrisCount)}</dd></div>
       </dl>
     </div>
     ${buildInfoCard(event)}
@@ -535,10 +482,10 @@ function renderHistoricalEvent(detailEl: Element, eventId: string): void {
 }
 
 const REPLAY_PANEL_META = {
-  collision: { headingKey: 'replay.heading.collision', ttiKey: 'replay.tti.collision', bannerKey: 'replay.banner.collision', showSep: true  },
-  asat:      { headingKey: 'replay.heading.asat',      ttiKey: 'replay.tti.asat',      bannerKey: 'replay.banner.asat',      showSep: false },
-  docking:   { headingKey: 'replay.heading.docking',   ttiKey: 'replay.tti.docking',   bannerKey: 'replay.banner.docking',   showSep: true  },
-  breakup:   { headingKey: 'replay.heading.breakup',   ttiKey: 'replay.tti.breakup',   bannerKey: 'replay.banner.breakup',   showSep: false },
+  collision: { heading: 'Collision Replay', tti: 'Time to Impact', banner: 'IMPACT', showSep: true  },
+  asat:      { heading: 'ASAT Intercept Replay', tti: 'Time to Intercept', banner: 'INTERCEPT', showSep: false },
+  docking:   { heading: 'Docking Replay', tti: 'Time to Docking', banner: 'DOCKED', showSep: true  },
+  breakup:   { heading: 'Breakup Replay', tti: 'Time to Breakup', banner: 'BREAKUP', showSep: false },
 } as const;
 
 function renderEventReplayPanel(detailEl: Element, eventId: string): void {
@@ -556,14 +503,14 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
               </div>`;
     }
     if (eType === 'asat') {
-      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">${t('replay.asat_missile')}</span></div>`;
+      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">Missile</span></div>`;
     }
     return '';
   })();
 
   detailEl.innerHTML = `
-    <h2 class="panel-heading panel-heading--alert">${escapeHtml(t(meta.headingKey))}</h2>
-    <div class="event-replay-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</div>
+    <h2 class="panel-heading panel-heading--alert">${escapeHtml(meta.heading)}</h2>
+    <div class="event-replay-title">${escapeHtml(event.title)}</div>
 
     <div class="event-replay-approach">
       <div class="era-sat era-sat--a" title="${escapeHtml(event.objectA.name)}">
@@ -582,30 +529,30 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
         max="100"
         step="0.1"
         value="0"
-        aria-label="${t('replay.sim_time')}"
+        aria-label="Replay timeline"
       />
       <div class="era-timeline-labels">
         <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
-        <span>${eType === 'docking' ? t('replay.dock_label') : t('replay.impact_label')}</span>
+        <span>${eType === 'docking' ? 'DOCK' : 'IMPACT'}</span>
       </div>
     </div>
 
     <dl class="detail-list era-stats">
-      <div class="detail-row"><dt>${t('replay.sim_time')}</dt><dd data-field="era-simtime">—</dd></div>
-      <div class="detail-row"><dt>${escapeHtml(t(meta.ttiKey))}</dt><dd data-field="era-tti">—</dd></div>
+      <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>
+      <div class="detail-row"><dt>${escapeHtml(meta.tti)}</dt><dd data-field="era-tti">—</dd></div>
       ${meta.showSep
-        ? `<div class="detail-row"><dt>${t('replay.separation')}</dt><dd data-field="era-dist">—</dd></div>`
+        ? `<div class="detail-row"><dt>Separation</dt><dd data-field="era-dist">—</dd></div>`
         : ''
       }
     </dl>
 
     <div class="era-impact-banner" data-field="era-impact" hidden>
       <div class="era-impact-ring"></div>
-      <div class="era-impact-text">${escapeHtml(t(meta.bannerKey))}</div>
+      <div class="era-impact-text">${escapeHtml(meta.banner)}</div>
     </div>
 
     <div class="era-completed-banner" data-field="era-completed" hidden>
-      ${t('replay.complete')}
+      Replay complete
     </div>
 
     <div class="era-controls">
@@ -616,7 +563,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
     </div>
 
     <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
-      ${t('replay.return')}
+      ← Back to Globe
     </button>
 
     ${buildInfoCard(event)}
@@ -667,38 +614,33 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance — computed from the same linear slerp model used in EventReplayVisuals.
-  // separation(progress) = (1 − progress) × initialSeparationKm  → 0 at T=0.
+  // Distance decreases from initialSep → 0 at impact, using the same linear model as EventReplayVisuals
   if (distEl) {
     const event = getHistoricalEvent(eventId);
     if (event?.approachB) {
-      // Compute initialSeparationKm once: 3-D distance between the two backtracked
-      // start positions. Uses the same geometry as EventReplayVisuals.setup().
       if (!replayInitialSepCache.has(eventId)) {
         const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
         const sep = computeInitialSeparationKm(event, startMs);
         replayInitialSepCache.set(eventId, sep);
       }
       const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
-      const progress = Math.max(0, Math.min(1,
+      const prog = Math.max(0, Math.min(1,
         (eventReplay.currentMs - startMs) / (collisionTimeMs - startMs),
       ));
       const initialSep = replayInitialSepCache.get(eventId) ?? 0;
-      const distKm = (1 - progress) * initialSep;
+      const distKm = (1 - prog) * initialSep;
       distEl.textContent = distKm < 1
         ? `${distKm.toFixed(2)} km`
         : `${distKm.toFixed(0)} km`;
     }
   }
 
-  // Impact banner — show from T=0 onwards (replay pauses here automatically)
   if (impactEl) {
     const atOrPastImpact = msToImpact <= 0;
     impactEl.hidden = !atOrPastImpact;
     impactEl.classList.toggle('era-impact--active', atOrPastImpact);
   }
 
-  // "Replay complete" label: visible when paused at the collision moment
   const completedEl = container.querySelector<HTMLElement>('[data-field="era-completed"]');
   if (completedEl) {
     const pausedAtImpact = msToImpact <= 0 && !eventReplay.playing;

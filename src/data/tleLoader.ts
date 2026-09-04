@@ -1,11 +1,4 @@
-/**
- * Load and enrich the static TLE catalog for the running app.
- *
- * Uses cache: 'no-cache' so CDN Cache-Control cannot keep a post-deploy stale
- * tle.json (and its firstSeenAt stamps) in the browser for hours.
- * createTrackedObjects builds satellite.js satrecs and drops objects that fail
- * to propagate at the reference epoch.
- */
+// Load and enrich the static TLE catalog
 import { twoline2satrec } from 'satellite.js';
 import { getCategoryColor, inferFunctionGroup } from '../orbital/classify';
 import { propagateObject } from '../orbital/propagator';
@@ -13,9 +6,7 @@ import { enrichRecord } from './objectMetadata';
 import type { TleDataset, TrackedObject, ObjectCategory } from '../types';
 
 export async function loadTleDataset(): Promise<TleDataset> {
-  // Always revalidate with the server. tle.json is covered by a CDN
-  // Cache-Control that can otherwise keep a stale catalog (and its
-  // firstSeenAt stamps) in the browser for hours after a deploy.
+  // Always revalidate with the server
   const response = await fetch('/data/tle.json', { cache: 'no-cache' });
   if (!response.ok) {
     throw new Error('Orbital data not found. Run: npm run fetch-tle');

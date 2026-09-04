@@ -1,11 +1,4 @@
-/**
- * Left panel: search/list, orbit layers, categories, display options,
- * advanced filters, live stats, close-approach alerts, historical events.
- *
- * Object list is virtualized (spacer + visible window) — keep renderObjectList
- * cheap; do not mount 12k DOM rows. Conjunction cards: max 5 displayed; sort
- * by time or criticality via appState.conjunctionSortMode.
- */
+// Left panel: search, satellite list, filters, stats, conjunction alerts, historical events.
 import { LAYER_HEX, type ObjectCategory, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
@@ -37,7 +30,7 @@ import {
   resetAdvancedFilters,
 } from '../state/appState';
 import { initEventCards } from './EventCards';
-import { t, applyTranslations, onLangChange } from '../i18n/i18n';
+
 import { isRecentlyLaunched, hasAnyRecentlyLaunched } from '../data/newLaunches';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
@@ -47,7 +40,7 @@ const LIST_ITEM_HEIGHT_COARSE = 42;
 const LIST_VIEWPORT_HEIGHT_DESKTOP = 200;
 const LIST_VIEWPORT_HEIGHT_MOBILE = 160;
 const LIST_OVERSCAN = 6;
-/** Finger movement beyond this cancels list-item selection so the viewport can scroll. */
+
 const LIST_TAP_SLOP_PX = 10;
 const SORT_MODES: ConjunctionSortMode[] = ['time', 'criticality'];
 
@@ -67,20 +60,19 @@ function listViewportHeight(): number {
     : LIST_VIEWPORT_HEIGHT_DESKTOP;
 }
 
-/** Currently visible alert cards — click handler reads this, not the raw pool. */
+
 let displayedConjunctions: ReturnType<typeof selectConjunctionAlertsForDisplay> = [];
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
     <div id="tour-region-search" class="tour-region">
-      <h2 class="panel-heading" data-i18n="ui.search_objects">Search Objects</h2>
+      <h2 class="panel-heading">Search Objects</h2>
       <div class="search-wrap">
         <input
           type="search"
           id="object-search"
           class="search-input"
-          placeholder="${t('ui.search_ph')}"
-          data-i18n-ph="ui.search_ph"
+          placeholder="Name, NORAD, country, or operator"
           autocomplete="off"
           spellcheck="false"
         />
@@ -91,29 +83,29 @@ export function initLeftPanel(container: HTMLElement): void {
         <div class="object-list-items" id="object-list-items"></div>
       </div>
 
-      <h2 class="panel-heading" data-i18n="ui.orbit_layers">Orbit Layers</h2>
+      <h2 class="panel-heading">Orbit Layers</h2>
       <div class="layer-filters" id="layer-filters"></div>
 
-      <h2 class="panel-heading" data-i18n="ui.object_types">Object Types</h2>
-      <p class="panel-lede" data-i18n="ui.category_hint">${t('ui.category_hint')}</p>
+      <h2 class="panel-heading">Object Types</h2>
+      <p class="panel-lede">Not every point is a working satellite. Debris is the junk left behind; Color by Function keeps both visible at once.</p>
       <div class="category-filters" id="category-filters"></div>
 
-      <h2 class="panel-heading" data-i18n="ui.display_options">Display Options</h2>
+      <h2 class="panel-heading">Display Options</h2>
       <div class="display-options" id="display-options"></div>
 
-      <h2 class="panel-heading" data-i18n="ui.advanced_filters">Advanced Filters</h2>
+      <h2 class="panel-heading">Advanced Filters</h2>
       <div class="advanced-filters" id="advanced-filters"></div>
     </div>
 
-    <h2 class="panel-heading" data-i18n="ui.object_categories">Object Categories</h2>
+    <h2 class="panel-heading">Object Categories</h2>
     <ul class="category-stats" id="category-stats"></ul>
 
-    <h2 class="panel-heading" data-i18n="ui.live_stats">Live Stats</h2>
+    <h2 class="panel-heading">Live Stats</h2>
     <dl class="stats-list" id="live-stats"></dl>
 
     <div id="tour-region-approaches" class="tour-region">
-      <h2 class="panel-heading panel-heading--alert" data-i18n="ui.close_approach">Close Approach Alerts (Next 24h)</h2>
-      <p class="panel-lede" data-i18n="conj.why_it_matters">${t('conj.why_it_matters')}</p>
+      <h2 class="panel-heading panel-heading--alert">Close Approach Alerts (Next 24h)</h2>
+      <p class="panel-lede">These satellites are predicted to come within 3 km of each other. Click any alert to watch the approach.</p>
       <div class="conjunction-filters" id="conjunction-filters"></div>
       <div class="conjunction-list" id="conjunction-list"></div>
     </div>
@@ -165,17 +157,7 @@ export function initLeftPanel(container: HTMLElement): void {
   };
   requestAnimationFrame(refreshLiveStatTime);
 
-  // On language change: update data-i18n labels and re-render dynamic sections
-  onLangChange(() => {
-    applyTranslations(container);
-    renderDisplayOptions(container);
-    renderCategoryFilters(container);
-    renderLayerFilters(container);
-    renderStats(container);
-    renderConjunctionFilters(container);
-    renderConjunctions(container);
-    renderAdvancedFilters(container);
-  });
+
 
   let lastListKey = '';
   let lastSelectedIndex: number | null = null;
@@ -297,8 +279,8 @@ function renderObjectList(container: HTMLElement): void {
   const total = indices.length;
   const n = total.toLocaleString();
   metaEl.textContent = state.searchQuery.trim()
-    ? t(total === 1 ? 'ui.list_match_one' : 'ui.list_match_other').replace('{n}', n)
-    : t('ui.list_objects_az').replace('{n}', n);
+    ? `${n} ${total === 1 ? 'match' : 'matches'}`
+    : `${n} objects · A–Z`;
 
   const itemHeight = listItemHeight();
   spacer.style.height = `${total * itemHeight}px`;
@@ -317,7 +299,7 @@ function renderListItem(state: ReturnType<typeof getState>, index: number): stri
   const selected = state.selectedIndex === index;
   const name = escapeHtml(obj.name.trim() || `NORAD ${obj.noradId}`);
   const newBadge = isRecentlyLaunched(obj)
-    ? `<span class="new-launch-badge" title="${escapeHtml(t('badge.new_launch_title'))}">${t('badge.new_launch')}</span>`
+    ? `<span class="new-launch-badge" title="Launched within the last 30 days">NEW</span>`
     : '';
   return `
     <button type="button" class="object-list-item${selected ? ' object-list-item--selected' : ''}" data-index="${index}">
@@ -348,7 +330,7 @@ function renderLayerFilters(container: HTMLElement): void {
   const { layerFilters } = getState();
 
   filtersEl.innerHTML = `
-    <div class="filter-chip-grid" role="group" aria-label="${t('ui.orbit_layers')}">
+    <div class="filter-chip-grid" role="group" aria-label="Orbit Layers">
       ${LAYERS.map(
         (layer) => `
           <button
@@ -379,7 +361,7 @@ function renderCategoryFilters(container: HTMLElement): void {
   const { categoryFilter } = getState();
 
   el.innerHTML = `
-    <div class="filter-segment" role="radiogroup" aria-label="${t('ui.object_types')}">
+    <div class="filter-segment" role="radiogroup" aria-label="Object Types">
       ${CATEGORY_FILTERS.map(
         (cat) => `
           <label class="filter-segment-option${categoryFilter === cat ? ' filter-segment-option--on' : ''}">
@@ -391,7 +373,7 @@ function renderCategoryFilters(container: HTMLElement): void {
               ${categoryFilter === cat ? 'checked' : ''}
             />
             <span class="filter-segment-swatch filter-segment-swatch--${cat}" aria-hidden="true"></span>
-            <span>${t(cat === 'all' ? 'cat.filter_all' : `cat.${cat}`)}</span>
+            <span>${cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
           </label>
         `,
       ).join('')}
@@ -424,8 +406,8 @@ function renderDisplayOptions(container: HTMLElement): void {
         <span class="function-dot function-dot--debris"></span>
       </span>
       <span class="filter-toggle-copy">
-        <strong>${t('ui.color_by_function')}</strong>
-        <span class="muted">${t('ui.cbf_hint')}</span>
+        <strong>Color by Function</strong>
+        <span class="muted">Starlink · Stations · Active · Debris</span>
       </span>
     </button>
     ${
@@ -436,12 +418,12 @@ function renderDisplayOptions(container: HTMLElement): void {
       class="filter-toggle-card${showOnlyRecentLaunches ? ' filter-toggle-card--on' : ''}"
       id="show-recent-launches"
       aria-pressed="${showOnlyRecentLaunches}"
-      title="${escapeHtml(t('badge.new_launch_title'))}"
+      title="Launched within the last 30 days"
     >
-      <span class="new-launch-badge" aria-hidden="true">${t('badge.new_launch')}</span>
+      <span class="new-launch-badge" aria-hidden="true">NEW</span>
       <span class="filter-toggle-copy">
-        <strong>${t('ui.recent_launches')}</strong>
-        <span class="muted">${t('ui.recent_launches_hint')}</span>
+        <strong>Recent Launches</strong>
+        <span class="muted">Show only objects launched in the last 30 days</span>
       </span>
     </button>
     `
@@ -475,9 +457,9 @@ function renderStats(container: HTMLElement): void {
 
   const categoryEl = container.querySelector('#category-stats')!;
   categoryEl.innerHTML = `
-    <li><span>${t('cat.active')}</span><strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
-    <li><span>${t('cat.debris')}</span><strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
-    <li><span>${t('cat.stations')}</span><strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
+    <li><span>Active Satellites</span><strong>${stats.categoryCounts.active.toLocaleString()}</strong></li>
+    <li><span>Debris</span><strong>${stats.categoryCounts.debris.toLocaleString()}</strong></li>
+    <li><span>Space Stations</span><strong>${stats.categoryCounts.stations.toLocaleString()}</strong></li>
   `;
 
   const fetchedDate = stats.fetchedAt
@@ -494,23 +476,23 @@ function renderStats(container: HTMLElement): void {
     : 0;
 
   const tleStaleHtml = tleAgeDays > 7
-    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ ${t('tle.critical').replace('{n}', String(Math.floor(tleAgeDays)))}</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ Orbital data is ${Math.floor(tleAgeDays)} days old — accuracy may be reduced</div>`
     : tleAgeDays > 3
-    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ ${t('tle.warn').replace('{n}', String(Math.floor(tleAgeDays)))}</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ Orbital data is ${Math.floor(tleAgeDays)} days old</div>`
     : '';
 
   const liveEl = container.querySelector('#live-stats')!;
-  const timeLabel = isLive ? t('stats.utc_time') : t('stats.sim_time');
+  const timeLabel = isLive ? 'UTC Time' : 'Sim Time';
   const visibleCount = state.filteredIndices.length;
   const closeApproachTotal = state.conjunctions.length + state.conjunctionHiddenCount;
 
   liveEl.innerHTML = `
     ${tleStaleHtml}
     <div class="stat-row"><dt>${timeLabel}</dt><dd id="live-stat-time">${formatUtcDateTime(simTime)}</dd></div>
-    <div class="stat-row"><dt>${t('stats.total')}</dt><dd>${stats.total.toLocaleString()}</dd></div>
-    <div class="stat-row"><dt>${t('stats.visible')}</dt><dd>${visibleCount.toLocaleString()}</dd></div>
-    <div class="stat-row"><dt>${t('stats.close_24h')}</dt><dd>${closeApproachTotal.toLocaleString()}</dd></div>
-    <div class="stat-row"><dt>${t('stats.tle_updated')}</dt><dd>${fetchedDate}</dd></div>
+    <div class="stat-row"><dt>Total Objects</dt><dd>${stats.total.toLocaleString()}</dd></div>
+    <div class="stat-row"><dt>Visible</dt><dd>${visibleCount.toLocaleString()}</dd></div>
+    <div class="stat-row"><dt>Close Approaches (24h)</dt><dd>${closeApproachTotal.toLocaleString()}</dd></div>
+    <div class="stat-row"><dt>Data Updated</dt><dd>${fetchedDate}</dd></div>
   `;
 }
 
@@ -519,6 +501,7 @@ function renderConjunctionFilters(container: HTMLElement): void {
   if (!el) return;
   const { conjunctionSortMode } = getState();
 
+  const sortLabels: Record<string, string> = { time: 'By Time', criticality: 'By Distance' };
   const options = SORT_MODES.map(
     (mode) => `
       <label class="conjunction-sort-option">
@@ -529,13 +512,13 @@ function renderConjunctionFilters(container: HTMLElement): void {
           data-sort="${mode}"
           ${conjunctionSortMode === mode ? 'checked' : ''}
         />
-        <span>${t(`conj.sort_${mode}`)}</span>
+        <span>${sortLabels[mode] ?? mode}</span>
       </label>
     `,
   ).join('');
 
   el.innerHTML = `
-    <div class="conjunction-sort" role="radiogroup" aria-label="${t('conj.sort_label')}">
+    <div class="conjunction-sort" role="radiogroup" aria-label="Sort alerts">
       ${options}
     </div>
   `;
@@ -560,7 +543,7 @@ function renderConjunctions(container: HTMLElement): void {
     displayedConjunctions = [];
     const stillScanning =
       isUpcomingConjunctionScanPending() || !hasUpcomingConjunctionScanCompleted();
-    const emptyText = t(stillScanning ? 'conj.scanning' : 'conj.empty');
+    const emptyText = stillScanning ? 'Scanning...' : 'No close approaches predicted in the next 24h.';
     const existing = listEl.querySelector('.conjunction-empty');
     if (existing && !listEl.querySelector('.conjunction-alert')) {
       if (existing.textContent !== emptyText) existing.textContent = emptyText;
@@ -582,7 +565,7 @@ function renderConjunctions(container: HTMLElement): void {
   if (visible.length === 0) {
     previousAlertKeys.clear();
     lastConjunctionStructureKey = 'filtered-empty';
-    listEl.innerHTML = `<p class="muted conjunction-empty">${t('conj.empty')}</p>`;
+    listEl.innerHTML = `<p class="muted conjunction-empty">No close approaches predicted in the next 24h.</p>`;
     return;
   }
 
@@ -633,10 +616,7 @@ function renderConjunctions(container: HTMLElement): void {
 }
 
 function formatConjunctionOverflowText(overflowTotal: number): string {
-  return t(overflowTotal === 1 ? 'conj.more_one' : 'conj.more_other').replace(
-    '{n}',
-    overflowTotal.toLocaleString(),
-  );
+  return `+${overflowTotal.toLocaleString()} more`;
 }
 
 function updateConjunctionOverflow(listEl: Element, overflowTotal: number): void {
@@ -658,11 +638,11 @@ function updateConjunctionOverflow(listEl: Element, overflowTotal: number): void
 
 function formatAlertMessage(c: { objectA: string; objectB: string; distanceKm: number; time: Date }, nowMs: number): string {
   const msUntil = c.time.getTime() - nowMs;
-  return t(msUntil > 1000 ? 'conj.alert_in' : 'conj.alert')
-    .replace('{a}', c.objectA)
-    .replace('{b}', c.objectB)
-    .replace('{km}', c.distanceKm.toFixed(2))
-    .replace('{t}', formatTimeUntil(msUntil));
+  const distStr = c.distanceKm.toFixed(2);
+  if (msUntil > 1000) {
+    return `${c.objectA} ↔ ${c.objectB} — ${distStr} km in ${formatTimeUntil(msUntil)}`;
+  }
+  return `${c.objectA} ↔ ${c.objectB} — ${distStr} km`;
 }
 
 function updateConjunctionAlertTexts(
@@ -705,17 +685,15 @@ let previousAlertKeys = new Set<string>();
 let lastConjunctionStructureKey = '';
 let lastConjunctionCountdownMs = 0;
 
-/** Compact "in 3h 12m" / "in 45s" style duration, for predicted close approaches
- *  up to 24h out. Falls back to 0s for anything already at/past CPA. */
 function formatTimeUntil(ms: number): string {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = totalSeconds % 60;
 
-  if (h > 0) return t('unit.h_m').replace('{h}', String(h)).replace('{m}', String(m));
-  if (m > 0) return t('unit.m_s').replace('{m}', String(m)).replace('{s}', String(s));
-  return t('unit.s').replace('{s}', String(s));
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }
 
 // ── Advanced Filters ──────────────────────────────────────────────────────────
@@ -725,7 +703,6 @@ const ALT_MAX_DEFAULT  = 36000;
 const INCL_MIN_DEFAULT =     0;
 const INCL_MAX_DEFAULT =   180;
 
-/** Build the static HTML scaffold (inputs + tracks). Called once on init and on language change. */
 function buildAdvancedFiltersHTML(
   altMin: number, altMax: number,
   inclMin: number, inclMax: number,
@@ -739,7 +716,7 @@ function buildAdvancedFiltersHTML(
   return `
     <div class="af-group">
       <div class="af-label-row">
-        <span class="af-label" data-i18n="filter.altitude">${t('filter.altitude')}</span>
+        <span class="af-label">Altitude</span>
         <span class="af-values" id="af-alt-values">${altMin.toLocaleString()} km — ${altMax.toLocaleString()} km</span>
       </div>
       <div class="dual-range">
@@ -756,7 +733,7 @@ function buildAdvancedFiltersHTML(
 
     <div class="af-group">
       <div class="af-label-row">
-        <span class="af-label" data-i18n="filter.inclination">${t('filter.inclination')}</span>
+        <span class="af-label">Inclination</span>
         <span class="af-values" id="af-incl-values">${inclMin}° — ${inclMax}°</span>
       </div>
       <div class="dual-range">
@@ -772,10 +749,10 @@ function buildAdvancedFiltersHTML(
     </div>
 
     <div class="af-footer">
-      <span class="af-count muted" id="af-count">${t('filter.objects_shown').replace('{n}', shown.toLocaleString())}</span>
+      <span class="af-count muted" id="af-count">${shown.toLocaleString()} objects shown</span>
       <button type="button" id="af-reset"
               class="btn-af-reset${hasFilter ? '' : ' btn-af-reset--dim'}"
-              ${hasFilter ? '' : 'disabled'}>${t('filter.reset')}</button>
+              ${hasFilter ? '' : 'disabled'}>Reset</button>
     </div>
   `;
 }
@@ -833,7 +810,7 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
 
   // Object count
   const countEl = el.querySelector('#af-count');
-  if (countEl) countEl.textContent = t('filter.objects_shown').replace('{n}', state.filteredIndices.length.toLocaleString());
+  if (countEl) countEl.textContent = `${state.filteredIndices.length.toLocaleString()} objects shown`;
 
   // Reset button
   const hasFilter = af !== null || incf !== null;
@@ -844,7 +821,7 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
   }
 }
 
-/** Full rebuild (called once on init and on language change only). */
+
 function renderAdvancedFilters(container: HTMLElement): void {
   const el = container.querySelector('#advanced-filters');
   if (!el) return;

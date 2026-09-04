@@ -1,32 +1,14 @@
-/**
- * Historical event cards + catalog of replayable incidents (HISTORICAL_EVENTS).
- *
- * Seven shipped events: collisions, ASATs, one breakup. `docking` exists as an
- * EventType for UI/meta but no docking incident is in the list yet.
- * Selecting a card sets selectedEventId; SceneManager starts eventReplay and
- * EventReplayVisuals lerps objects to collisionGeo (verified lat/lon/alt) —
- * do not trust decade-old TLEs for SGP4 back-propagation.
- */
+// Historical event cards + catalog of replayable incidents (HISTORICAL_EVENTS).
 import { selectHistoricalEvent, getState, subscribe } from '../state/appState';
-import { t, onLangChange } from '../i18n/i18n';
 
 export interface HistoricalEventTLE {
   name: string;
   noradId: number;
-  /** TLE line 1 (69 chars, valid checksum) */
   line1: string;
-  /** TLE line 2 (69 chars, valid checksum) */
   line2: string;
 }
 
-/**
- * Visual/behavioural category of the event.
- *
- * collision – two active/defunct satellites hit each other (two-object replay)
- * asat      – anti-satellite missile intercept (missile rises from surface)
- * docking   – successful rendezvous; terminal flash is green, no explosion
- * breakup   – single satellite mysteriously breaks up; no second object animated
- */
+// Visual/behavioural category of the event.
 export type EventType = 'collision' | 'asat' | 'docking' | 'breakup';
 
 export interface HistoricalEvent {
@@ -35,39 +17,14 @@ export interface HistoricalEvent {
   date: string;
   description: string;
   debrisCount: string;
-  /** Visual / behavioural category. Defaults to 'collision' if omitted. */
   eventType: EventType;
-  /** Exact collision/destruction UTC time for replay */
   collisionTimeUtc: string;
-  /** Primary satellite TLE (valid near event epoch) */
   objectA: HistoricalEventTLE;
-  /** Secondary satellite TLE — null for ASAT/breakup events */
   objectB: HistoricalEventTLE | null;
-  /** Altitude (km) of the event — used to position the camera */
   altitudeKm: number;
-  /**
-   * Verified geographic location of the collision at collisionTimeUtc.
-   * This is the authoritative source for the slerp endpoint — used by
-   * EventReplayVisuals as the `collisionScene` target. Independent of TLE.
-   */
   collisionGeo: { latDeg: number; lonDeg: number; altKm: number };
-  /**
-   * Orbital approach direction for each object at the collision moment.
-   * Used by EventReplayVisuals to back-track 5 min along the orbital arc
-   * from collisionGeo, giving realistic start positions without TLE drift.
-   *
-   * ascending: true  → satellite was travelling south→north (lat increasing)
-   * ascending: false → satellite was travelling north→south (lat decreasing)
-   * inclinationDeg: orbital inclination (degrees)
-   */
   approachA: { inclinationDeg: number; ascending: boolean };
   approachB: { inclinationDeg: number; ascending: boolean } | null;
-  /**
-   * Background card shown in the right panel (localized via `event.<id>.info.*`).
-   * title  — short label (e.g. "The First Major Satellite Collision in History")
-   * reason — why it happened
-   * outcome — consequences / historical significance
-   */
   info: { title: string; reason: string; outcome: string };
 }
 
@@ -312,7 +269,7 @@ const EVENT_TYPE_LABELS: Record<EventType, string> = {
 };
 
 function eventTypeLabel(type: EventType): string {
-  return t(`event_type.${type}`, EVENT_TYPE_LABELS[type] ?? type);
+  return EVENT_TYPE_LABELS[type] ?? type;
 }
 
 function escapeHtml(text: string): string {
@@ -335,8 +292,8 @@ export function initEventCards(container: HTMLElement): void {
   const section = document.createElement('div');
   section.className = 'event-cards';
   section.innerHTML = `
-    <h2 class="panel-heading" data-i18n="ui.historical_events">Historical Events</h2>
-    <p class="panel-lede" data-i18n="ui.events_lead">${escapeHtml(t('ui.events_lead'))}</p>
+    <h2 class="panel-heading">Historical Events</h2>
+    <p class="panel-lede">Replay the most significant orbital collisions and anti-satellite tests in space history.</p>
     <div class="event-accordion" id="event-accordion"></div>
   `;
   container.appendChild(section);
@@ -354,12 +311,12 @@ export function initEventCards(container: HTMLElement): void {
           aria-expanded="${String(event.id === selectedEventId)}"
         >
           <div class="event-card-top">
-            <span class="event-card-title">${escapeHtml(t(`event.${event.id}.title`, event.title))}</span>
+            <span class="event-card-title">${escapeHtml(event.title)}</span>
             <span class="event-type-badge event-type-badge--${event.eventType}">${eventTypeLabel(event.eventType)}</span>
           </div>
           ${
             event.id === FEATURED_HISTORICAL_EVENT_ID
-              ? `<span class="event-card-kicker">${escapeHtml(t('event.iridium-cosmos.featured'))}</span>`
+              ? `<span class="event-card-kicker">FEATURED EVENT</span>`
               : ''
           }
           <span class="event-card-date">${formatEventDate(event.date)}</span>
@@ -386,10 +343,7 @@ export function initEventCards(container: HTMLElement): void {
     });
   });
 
-  // Re-render badges on language change (badge text needs re-translation)
-  onLangChange(() => {
-    renderCards();
-  });
+
 }
 
 export function getHistoricalEvent(id: string): HistoricalEvent | undefined {

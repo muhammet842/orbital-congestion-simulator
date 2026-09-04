@@ -1,17 +1,4 @@
-/**
- * Central app store (subscribe / setState).
- *
- * Selection exclusivity: picking an object, historical event, or conjunction
- * clears the other two. Do not set selectedIndex and selectedEventId together.
- *
- * Clock priority (see getSimulationTime):
- *   verificationTime  →  eventReplay  →  global time.live/historical
- * Cap focused-clock advances with MAX_FOCUSED_CLOCK_FRAME_MS so a hitch after
- * selecting a card cannot skip the whole VERIFY/replay window in one frame.
- *
- * UI panels should read via getState() + subscribe(); SceneManager advances
- * clocks each animation frame without full panel re-renders where possible.
- */
+// Central app store
 import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conjunction';
 import {
   clampVerificationTimeMs,
@@ -30,11 +17,7 @@ export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
 export const EVENT_REPLAY_SPEED = 15;
 /** Transport nudge while scrubbing an event replay (±). */
 export const EVENT_REPLAY_SCRUB_STEP_MS = 5_000;
-/**
- * Wall-clock cap per animation frame for verify/replay clocks.
- * A hitch after selecting a card (trail rebuild, fly-in) can be hundreds of
- * ms; without a cap that one frame skips the whole T−60s window and freeze.
- */
+// Wall-clock cap per animation frame for verify/replay clocks
 export const MAX_FOCUSED_CLOCK_FRAME_MS = 50;
 
 export interface EventReplayState {
@@ -92,7 +75,7 @@ export interface AppState {
 
 type Listener = () => void;
 
-/** One-shot wake after an empty predictive sweep so the UI leaves "Scanning…". */
+// Wake after empty sweep
 let emptyConjunctionScanAcked = false;
 
 const defaultLayerFilters: Record<OrbitLayer, boolean> = {
@@ -145,7 +128,7 @@ export function getState(): AppState {
   return state;
 }
 
-/** Time used for SGP4 propagation — verification overlay → event replay → live/historical global clock. */
+// Get simulation time
 export function getSimulationTime(): Date {
   if (state.verificationTime) {
     return new Date(state.verificationTime.currentMs);
@@ -156,19 +139,14 @@ export function getSimulationTime(): Date {
   return getGlobalSimulationTime();
 }
 
-/**
- * Live/historical catalog clock only — ignores verification & event-replay overlays.
- * Use for UI that must stay anchored to “now” (e.g. close-approach alert countdowns)
- * while the 3D view is scrubbing a selected CPA.
- */
+// Get global simulation time
 export function getGlobalSimulationTime(): Date {
   return state.time.mode === 'live' ? new Date() : state.time.current;
 }
 
 export function formatUtcDateTime(date: Date): string {
   const utcTime = date.toISOString().slice(11, 19);
-  // Zero-pad the day so the string width does not jump between "3 Jan"
-  // and "13 Jan" (which was shoving wrapped labels up/down every second).
+  // Zero-pad day
   const day = String(date.getUTCDate()).padStart(2, '0');
   const month = date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
   const year = date.getUTCFullYear();
@@ -181,8 +159,7 @@ export function enterLiveMode(): void {
     return;
   }
   if (state.eventReplay) {
-    // Keep the replay clock — flipping `time.mode` to live while 3D stays in
-    // 2009 desyncs the time bar from the globe.
+    // Keep replay clock
     setEventReplayPartial({ playing: true, speed: 1 });
     return;
   }
@@ -350,7 +327,7 @@ export function selectHistoricalEvent(eventId: string): void {
   });
 }
 
-/** Start a timed replay of a historical event — sets a dedicated replay clock. */
+// Start event replay
 export function startEventReplay(eventId: string, collisionTimeMs: number): void {
   const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
   setState({
@@ -379,19 +356,17 @@ export function setEventReplayPartial(
 
 export function stopEventReplay(): void {
   if (!state.eventReplay) return;
-  // Also clear the card selection so the event card is deselected and
-  // SceneManager.onStateChange() cleans up the 3-D visuals + restores
-  // catalog satellite visibility.
+  // Clear card selection
   setState({ eventReplay: null, selectedEventId: null });
 }
 
-/** Clear historical event selection even when replay has not started yet. */
+// Clear historical event selection
 export function clearHistoricalEventSelection(): void {
   if (state.selectedEventId == null && state.eventReplay == null) return;
   setState({ eventReplay: null, selectedEventId: null });
 }
 
-/** Advance event replay clock without triggering full re-render. */
+// Advance event replay clock
 export function advanceEventReplayTime(deltaMs: number): void {
   if (!state.eventReplay?.playing) return;
   const { startMs, endMs } = getEventReplayWindowMs(state.eventReplay.collisionTimeMs);
@@ -408,7 +383,7 @@ export function getEventReplayState(): EventReplayState | null {
   return state.eventReplay;
 }
 
-/** Replay clock window: T−5m … IMPACT (T+0). */
+// Replay clock window
 export function getEventReplayWindowMs(collisionTimeMs: number): {
   startMs: number;
   endMs: number;
@@ -438,8 +413,7 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     verificationTime: {
       cpaTimeMs,
       currentMs: startMs,
-      // Auto-play so selecting an alert immediately shows the approach —
-      // users shouldn't need a second click on VERIFY/Play.
+      // Auto-play alert approach
       playing: true,
       speed: 1,
       relativeVelocityKmS,
@@ -495,7 +469,7 @@ export function setVerificationPartial(
   listeners.forEach((fn) => fn());
 }
 
-/** Advance verification playback clock without touching global time state. */
+// Advance verification playback clock
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
   const vt = state.verificationTime;
@@ -559,9 +533,7 @@ export function setConjunctions({ alerts, hiddenCount }: ConjunctionScanResult):
     );
 
   if (sameContent) {
-    // Empty→empty still needs one wake so the panel can leave "Scanning…"
-    // when the first sweep finishes with no hits. Later identical publishes
-    // must stay silent — they were remounting alert cards every idle tick.
+    // Handle empty sweep
     if (alerts.length === 0 && hasUpcomingConjunctionScanCompleted() && !emptyConjunctionScanAcked) {
       emptyConjunctionScanAcked = true;
       listeners.forEach((fn) => fn());
@@ -649,7 +621,7 @@ export function setTimePartial(partial: Partial<TimeState>): void {
   setState({ time: next });
 }
 
-/** Advance historical sim clock without re-rendering UI panels every frame. */
+// Advance historical sim clock
 export function advanceSimulationTime(current: Date): void {
   if (state.time.mode !== 'historical') return;
   state.time.current = current;

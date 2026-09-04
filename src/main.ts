@@ -1,15 +1,4 @@
-/**
- * Application bootstrap.
- *
- * Load order matters:
- *   1. Fetch `public/data/tle.json` and build TrackedObject[] + stats
- *   2. initState → create Layout + left/right/time panels
- *   3. SceneManager (meshes + rAF) — must exist before deep links frame a sat
- *   4. Deep link, admin (Ctrl+Shift+A), Kessler panel, how-to tour
- *
- * There is no backend for orbital data; the catalog is the committed JSON
- * refreshed by `npm run fetch-tle` / GitHub Actions. See `.cursor/rules/project-map.mdc`.
- */
+// Application bootstrap
 import './style.css';
 import { loadTleDataset, createTrackedObjects, computeStats } from './data/tleLoader';
 import { getState, initState } from './state/appState';
@@ -19,12 +8,9 @@ import { initLeftPanel } from './ui/LeftPanel';
 import { initRightPanel } from './ui/RightPanel';
 import { initTimeControls } from './ui/TimeControls';
 import { initDeepLink } from './routing/deepLink';
-import { initAdminSystem } from './ui/AdminPanel';
 import { initKesslerPanel } from './ui/KesslerPanel';
 import { initHowToGuide } from './ui/HowToGuide';
 import { findConjunctions } from './orbital/conjunction';
-import { applyTranslations, t } from './i18n/i18n';
-
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
   if (!app) return;
@@ -32,12 +18,12 @@ async function main(): Promise<void> {
   showLoading(app);
 
   try {
-    showLoading(app, t('boot.loading'));
+    showLoading(app, 'Loading catalog...');
 
     const dataset = await loadTleDataset();
 
     if (dataset.objects.length === 0) {
-      showError(app, t('boot.no_objects'));
+      showError(app, 'No satellites found in the catalog.');
       return;
     }
 
@@ -51,29 +37,18 @@ async function main(): Promise<void> {
     initRightPanel(rightPanel);
     initTimeControls(timeBar);
 
-    // Static [data-i18n] headings are hardcoded in English in their markup
-    // (as a no-JS-yet placeholder) and only otherwise get translated on a
-    // *later* language switch — without this, a first-time visitor whose
-    // browser/stored language resolves to non-English would see an
-    // untranslated shell until they touched the language dropdown.
-    applyTranslations(document);
 
     const sceneManager = new SceneManager(sceneContainer);
-    await sceneManager.initOrbitalMeshes(objects);
+    sceneManager.initOrbitalMeshes(objects);
     sceneManager.start();
 
-    // Deep linking: sync ?object=NORAD / ?event=ID ↔ app state.
-    // Must run after the scene is ready so a linked satellite gets framed
-    // correctly on first load.
+    // Deep linking
     initDeepLink(objects);
 
-    // Admin system: keyboard shortcut Ctrl+Shift+A, auto-auth on known devices.
-    initAdminSystem();
-
-    // Future Projection: header button opening the Kessler-syndrome "what if" panel.
+    // Future Projection panel
     initKesslerPanel();
 
-    // First-visit walkthrough + header "?" reopen control.
+    // First-visit walkthrough
     initHowToGuide();
 
     if (import.meta.env.DEV) {
@@ -81,13 +56,13 @@ async function main(): Promise<void> {
         findConjunctions(getState().objects, isoTime ? new Date(isoTime) : new Date());
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : t('boot.load_failed');
+    const message = err instanceof Error ? err.message : 'Failed to load simulator data.';
     showError(app, message);
     console.error(err);
   }
 }
 
-function showLoading(app: HTMLElement, message = t('boot.loading')): void {
+function showLoading(app: HTMLElement, message = 'Loading catalog...'): void {
   app.innerHTML = `
     <div class="loading-screen">
       <div class="loading-spinner" aria-hidden="true"></div>
@@ -99,9 +74,9 @@ function showLoading(app: HTMLElement, message = t('boot.loading')): void {
 function showError(app: HTMLElement, message: string): void {
   app.innerHTML = `
     <div class="error-screen">
-      <h1>${escapeHtml(t('boot.error_title'))}</h1>
+      <h1>System Offline</h1>
       <p class="muted">${escapeHtml(message)}</p>
-      <p class="muted">${escapeHtml(t('boot.error_hint'))}</p>
+      <p class="muted">Check your connection or try refreshing the page.</p>
     </div>
   `;
 }

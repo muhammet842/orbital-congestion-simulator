@@ -1,17 +1,4 @@
-/**
- * Close-approach (conjunction) detection for LEO traffic.
- *
- * Live scan: coarse spatial hash with DETECTION_RADIUS_KM, then fine refine
- * (LIVE_REFINE_*) so fast 5–12 km/s crossings are not skipped between ticks.
- * UI shows at most MAX_DISPLAY_ALERTS; more stay in state for filters.
- *
- * VERIFY mode: click an alert → dedicated verificationTime clock (T− adaptive
- * to relative speed → CPA → T+15s). Does not rewrite the global sim clock.
- * Co-orbiting stacks (ISS/CSS modules) are excluded from alerts.
- *
- * invalidateUpcomingConjunctionScan() when catalog/time mode changes so a
- * stale idle callback cannot wipe cards mid-rescan.
- */
+// Close-approach (conjunction) detection for LEO traffic.
 import { eciToScene } from './coordinates';
 import { propagateObject } from './propagator';
 import type { ConjunctionEvent, OrbitLayer, TrackedObject } from '../types';
@@ -26,17 +13,7 @@ export const MIN_DISTANCE_KM = 0.1;
 export const CHECK_INTERVAL_MS = 1_500;
 /** Minimum real-time gap between conjunction recomputes (all speed modes). */
 export const CHECK_WALL_INTERVAL_MS = 1_500;
-/**
- * Many crossing LEO pairs close at 5-12 km/s — at that speed a pair only
- * stays inside the final THRESHOLD_KM for roughly 0.5-2s. Point-sampling the
- * instantaneous distance every CHECK_WALL_INTERVAL_MS can step right over a
- * window that narrow. To catch these, the coarse spatial-hash pass casts a
- * wider net (DETECTION_RADIUS_KM) so fast-closing pairs are flagged as
- * candidates *before* they're actually within THRESHOLD_KM, then a fine-step
- * refine pass (see LIVE_REFINE_*) pinpoints the true minimum distance. The
- * final alert still requires the refined distance to be <= THRESHOLD_KM —
- * this only widens what gets a closer look, not what counts as a conjunction.
- */
+// Radius for coarse spatial hash pass
 export const DETECTION_RADIUS_KM = 20;
 /** Max close-approach alerts shown in the left panel (soonest CPA first). */
 export const MAX_DISPLAY_ALERTS = 5;
@@ -45,38 +22,22 @@ export const MAX_STORED_ALERTS = 30;
 export const SUBSET: OrbitLayer = 'LEO';
 export const REFINE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const REFINE_STEP_MS = 60 * 1000;
-/** Tight, fine-grained refine window used by the live scan — precise enough
- *  to resolve sub-3-second close-approach windows, unlike the coarse
- *  ±2h/60s window used for one-off historical/verification lookups. Combined
- *  with the automatic zoom-in pass in refineCloseApproach, this resolves
- *  down to ~100ms precision at negligible extra cost per candidate. */
+// Tight refine window for live scan
 export const LIVE_REFINE_WINDOW_MS = 10 * 1000;
 export const LIVE_REFINE_STEP_MS = 1_000;
 export const VERIFY_REWIND_MS = 60 * 1000;
-/**
- * Opening separation the close-approach camera is framed for (~80 km snapshot).
- * Fast crossings (5–12 km/s) cover that gap in seconds; starting a full 60s
- * earlier puts them hundreds of km apart in an 80 km shot, so they streak
- * across the view even at 1x.
- */
+// Target separation for camera framing
 export const VERIFY_OPENING_SEPARATION_KM = 80;
 /** Never start closer than this, even for hypervelocity crossings. */
 export const VERIFY_MIN_REWIND_MS = 8 * 1000;
-/**
- * Orbit preview window around CPA. The trail always covers the full T−60s
- * span so a shorter high-speed playback still has path context behind the
- * markers.
- */
+// Orbit preview window around CPA
 export const VERIFY_TRAIL_BACK_MS = VERIFY_REWIND_MS;
 export const VERIFY_TRAIL_FORWARD_MS = 15 * 1000;
 export const VERIFY_TRAIL_STEP_MS = 2_000;
 /** Keyboard / transport nudge while scrubbing a verification session. */
 export const VERIFY_SCRUB_STEP_MS = 5_000;
 
-/**
- * How far before CPA to start 1x playback so the pair opens near the
- * camera's ~80 km frame. Slow/co-orbiting pairs keep the full T−60s window.
- */
+// Time before CPA to start playback
 export function getVerificationRewindMs(relativeVelocityKmS: number): number {
   const v = Number.isFinite(relativeVelocityKmS) ? relativeVelocityKmS : 0;
   if (v <= 0) return VERIFY_REWIND_MS;
@@ -433,11 +394,7 @@ function deduplicatePhysicalConjunctions(
   return rankConjunctionAlertsByTime(Array.from(seen.values()));
 }
 
-/**
- * Left-panel ordering helpers. The scan stores up to MAX_STORED_ALERTS in the
- * next 24h; the UI then picks the top MAX_DISPLAY_ALERTS by either soonest CPA
- * or tightest miss distance.
- */
+// Order by soonest CPA
 export function rankConjunctionAlertsByTime(events: ConjunctionEvent[]): ConjunctionEvent[] {
   return [...events].sort((a, b) => {
     const dt = a.time.getTime() - b.time.getTime();
@@ -500,11 +457,7 @@ export function filterConjunctionAlertsInHorizon(
   });
 }
 
-/**
- * "+N more" footer: remaining approaches in the next 24h beyond the cards shown,
- * plus any the scan found but did not keep in the stored pool. Independent of
- * sort mode — both radios must show the same N.
- */
+// Overflow count
 export function countConjunctionOverflow(
   events: ConjunctionEvent[],
   options: {
@@ -518,9 +471,7 @@ export function countConjunctionOverflow(
   return Math.max(0, inWindow - options.displayedCount) + Math.max(0, options.hiddenCount);
 }
 
-/** Freeze alert CPA metadata — always resolve indices by NORAD ID, never
- *  by name (debris fields have many same-named fragments) and never reuse
- *  stale indices. */
+// Freeze alert CPA metadata
 export function normalizeConjunctionAlert(
   alert: ConjunctionEvent,
   objects: TrackedObject[],
@@ -597,11 +548,7 @@ export function refineCloseApproach(
   const coarse = scanForMinimumDistance(objA.satrec, objB.satrec, centerTime.getTime(), windowMs, stepMs);
   if (!coarse) return null;
 
-  // Zoom in around the coarse minimum with a step ~10x finer — the coarse
-  // pass alone can straddle the true minimum (especially for fast-closing
-  // pairs, where a single coarse step can span many km), so this second
-  // pass resolves sub-step precision cheaply (a handful of extra samples)
-  // without needing a uniformly fine step across the whole window.
+  // Fine refinement step
   const fineStepMs = Math.max(stepMs / 10, 50);
   const best =
     fineStepMs < stepMs
@@ -662,26 +609,7 @@ function getOrCreateBucket(grid: CellGrid, ix: number, iy: number, iz: number): 
   return bucket;
 }
 
-/**
- * Finds every index pair whose Euclidean distance is <= radius, without the
- * O(n^2) all-pairs scan. LEO shells routinely hold several thousand tracked
- * objects; comparing every object against every other object (tens of
- * millions of iterations per refresh) is the actual bottleneck, since almost
- * all of those pairs are obviously kilometers apart.
- *
- * Uses a uniform spatial hash grid with cell size == radius: any two points
- * within `radius` of each other can only ever land in the same cell or one
- * of its 26 neighbors, so a 3x3x3 neighborhood search is guaranteed to find
- * every true match. Cell membership alone is only a superset (diagonal
- * neighbors can be farther apart than `radius`), so each candidate is still
- * verified with an exact distance check before being returned — the result
- * is exact, verified against a brute-force O(n^2) scan in conjunction.test.ts.
- *
- * Grid cells are nested Maps keyed by integer cell index (not a stringified
- * "x,y,z" key): numeric map keys avoid per-lookup string allocation/hashing,
- * which matters here since this runs once per tracked object per refresh —
- * benchmarked ~18x faster than brute force at ~9,000 LEO objects.
- */
+// Find index pairs within radius using a spatial hash grid
 export function findCandidatePairsWithinRadius(
   positions: ReadonlyArray<{ x: number; y: number; z: number }>,
   radiusKm: number,
@@ -743,10 +671,7 @@ export function findConjunctions(objects: TrackedObject[], date: Date): Conjunct
     leoEntries.push({ index: i, name: obj.name, position: propagation.positionEci });
   }
 
-  // Cast a wider net than the final THRESHOLD_KM so fast-closing pairs are
-  // caught as candidates before they've actually crossed the threshold —
-  // see DETECTION_RADIUS_KM for why. The exact THRESHOLD_KM cutoff is
-  // re-applied below against the fine-refined minimum distance.
+  // Coarse pass
   const candidatePairs = findCandidatePairsWithinRadius(
     leoEntries.map((e) => e.position),
     DETECTION_RADIUS_KM,

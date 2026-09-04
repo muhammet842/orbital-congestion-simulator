@@ -1,27 +1,13 @@
-/**
- * First-visit language gate + 9-step UI tour (header "?" reopens).
- * Completion flag: localStorage `orbital-help-seen-v3` — bump the suffix when
- * step list changes so returning users see the updated tour once.
- * Steps may open mobile drawers via setTourPanel; keep selectors in sync with Layout.
- */
-import { applyTranslations, onLangChange, setLang, SUPPORTED_LANGS, t, type Lang } from '../i18n/i18n';
+// UI tour (header "?" reopens).
+// Completion flag: localStorage `orbital-help-seen-v3`.
+// Steps may open mobile drawers via setTourPanel; keep selectors in sync with Layout.
 import { closeKesslerPanel, openKesslerPanel } from './KesslerPanel';
 import { setTourPanel } from './Layout';
 
 const LS_HELP_SEEN = 'orbital-help-seen-v3';
 
-const LANG_LABELS: Record<Lang, string> = {
-  en: 'English',
-  tr: 'Türkçe',
-  de: 'Deutsch',
-  ru: 'Русский',
-  zh: '中文',
-};
-
 const STEPS = [
   'globe',
-  'language',
-  'github',
   'search',
   'details',
   'approaches',
@@ -31,7 +17,6 @@ const STEPS = [
 ] as const;
 
 type StepId = (typeof STEPS)[number];
-type Phase = 'lang' | 'tour';
 
 interface StepConfig {
   id: StepId;
@@ -42,22 +27,26 @@ interface StepConfig {
 
 const STEP_CONFIG: StepConfig[] = [
   { id: 'globe', target: '#scene-container', panel: null },
-  { id: 'language', target: '.header-lang', panel: null },
-  { id: 'github', target: '.header-github', panel: null },
   { id: 'search', target: '#tour-region-search', panel: 'left' },
   { id: 'details', target: '#right-panel', panel: 'right' },
   { id: 'approaches', target: '#tour-region-approaches', panel: 'left' },
   { id: 'events', target: '.event-cards', panel: 'left' },
   { id: 'time', target: '#time-bar', panel: null },
-  // Open the projection modal and spotlight the panel itself (not the tiny
-  // header button). The tooltip docks beside it in the free space.
   { id: 'projection', target: '#kessler-panel', panel: null, openKessler: true },
 ];
 
+const STEP_COPY: Record<StepId, { title: string; body: string }> = {
+  globe: { title: '3D Globe', body: 'Drag to rotate, scroll to zoom. The view is centered on Earth.' },
+  search: { title: 'Search & Filter', body: 'Find satellites by name or NORAD ID, and filter by orbit or type.' },
+  details: { title: 'Object Details', body: 'Select any satellite to see its altitude, velocity, and ownership details.' },
+  approaches: { title: 'Close Approaches', body: 'Watch alerts for predicted close approaches (conjunctions) in the next 24 hours.' },
+  events: { title: 'Historical Events', body: 'Replay famous past collisions and anti-satellite missile tests.' },
+  time: { title: 'Time Controls', body: 'Pause, speed up, or rewind time to see how the simulation changes.' },
+  projection: { title: 'Kessler Syndrome', body: 'See a projection of future orbital debris over the next century.' },
+};
+
 let rootEl: HTMLElement | null = null;
-let phase: Phase = 'lang';
 let stepIndex = 0;
-let langUnsub: (() => void) | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let repositionRaf = 0;
 let boundScrollParents: HTMLElement[] = [];
@@ -87,11 +76,6 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function syncLangSelect(lang: Lang): void {
-  const select = document.querySelector<HTMLSelectElement>('#lang-select');
-  if (select) select.value = lang;
-}
-
 function handleEsc(e: KeyboardEvent): void {
   if (e.key !== 'Escape') return;
   e.stopPropagation();
@@ -117,8 +101,6 @@ export function closeHowToGuide(): void {
   scrollGuardRaf = 0;
   resizeObserver?.disconnect();
   resizeObserver = null;
-  langUnsub?.();
-  langUnsub = null;
   cleanupStepSideEffects();
   rootEl?.remove();
   rootEl = null;
@@ -156,7 +138,7 @@ function ensureRoot(): HTMLElement {
 }
 
 function scheduleReposition(): void {
-  if (!rootEl || phase !== 'tour') return;
+  if (!rootEl) return;
   if (repositionRaf) cancelAnimationFrame(repositionRaf);
   repositionRaf = requestAnimationFrame(() => {
     repositionRaf = 0;
@@ -164,7 +146,6 @@ function scheduleReposition(): void {
   });
 }
 
-/** Nearest ancestor that actually scrolls (panel overflow), if any. */
 function getScrollParent(el: HTMLElement): HTMLElement | null {
   let parent = el.parentElement;
   while (parent && parent !== document.body) {
@@ -211,9 +192,8 @@ function bindScrollParent(target: HTMLElement | null): void {
   boundScrollParents.push(parent);
 }
 
-/** If the user scrolls the spotlight away, pull it back and re-place the hole. */
 function handleTourParentScroll(): void {
-  if (!rootEl || phase !== 'tour') return;
+  if (!rootEl) return;
   if (scrollGuardRaf) cancelAnimationFrame(scrollGuardRaf);
   scrollGuardRaf = requestAnimationFrame(() => {
     scrollGuardRaf = 0;
@@ -233,7 +213,6 @@ function handleTourParentScroll(): void {
 
 type HoleRect = { top: number; left: number; width: number; height: number };
 
-/** Target box clipped to its scroll parent’s visible area (null if fully scrolled away). */
 function getVisibleTargetRect(target: HTMLElement, parent: HTMLElement | null): HoleRect | null {
   const rect = target.getBoundingClientRect();
   if (!parent) {
@@ -255,7 +234,6 @@ function prepareStep(config: StepConfig): HTMLElement | null {
   if (config.panel) setTourPanel(config.panel);
   if (config.openKessler) openKesslerPanel();
 
-  // Prefer the live panel when present; fall back to the header trigger.
   const target =
     document.querySelector<HTMLElement>(config.target) ??
     (config.openKessler ? document.querySelector<HTMLButtonElement>('#kessler-panel-btn') : null);
@@ -309,7 +287,7 @@ function layoutPads(hole: HoleRect): void {
 }
 
 function positionHighlightAndCard(): void {
-  if (!rootEl || phase !== 'tour') return;
+  if (!rootEl) return;
   const config = STEP_CONFIG[stepIndex];
   if (!config) return;
 
@@ -390,11 +368,6 @@ function clampCardPos(
   };
 }
 
-/**
- * Place the tooltip where it stays fully on-screen and covers as little of the
- * highlighted hole as possible. Large targets (globe / full modal) dock to a
- * screen edge instead of floating over the middle of the feature.
- */
 function placeCardNear(card: HTMLElement, hole: Rect): void {
   card.classList.remove('tour-card--center');
   card.style.transform = '';
@@ -406,7 +379,6 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
   const cardWidth = Math.min(360, vw - edge * 2);
   card.style.width = `${cardWidth}px`;
 
-  // Force layout so offsetHeight reflects the current step copy.
   const cardHeight = Math.min(Math.max(card.offsetHeight, 120), Math.floor(vh * 0.42));
 
   const holeArea = Math.max(1, hole.width * hole.height);
@@ -417,7 +389,6 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
   const spaceLeft = hole.left;
 
   const candidates: Array<{ top: number; left: number; weight: number }> = [
-    // Beside the hole (best for open modals like Future Projection).
     {
       top: Math.max(edge, hole.top + 24),
       left: hole.left + hole.width + margin,
@@ -428,10 +399,8 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
       left: hole.left - cardWidth - margin,
       weight: spaceLeft >= cardWidth + margin ? -2e6 : 0,
     },
-    // Above / below
     { top: hole.top - cardHeight - margin, left: hole.left + hole.width / 2 - cardWidth / 2, weight: 0 },
     { top: hole.top + hole.height + margin, left: hole.left + hole.width / 2 - cardWidth / 2, weight: 0 },
-    // Screen-edge docks for huge highlights (globe, full-bleed targets).
     { top: vh - cardHeight - edge, left: (vw - cardWidth) / 2, weight: largeHole ? -4e5 : 0 },
     { top: edge + 56, left: (vw - cardWidth) / 2, weight: largeHole ? -3e5 : 0 },
     { top: vh - cardHeight - edge, left: edge, weight: largeHole ? -3e5 : 0 },
@@ -466,64 +435,26 @@ function placeCardNear(card: HTMLElement, hole: Rect): void {
   card.style.right = 'auto';
 }
 
-function renderLangCard(card: HTMLElement): void {
-  card.classList.add('tour-card--center');
-  card.classList.remove('tour-card--thesis');
-  card.setAttribute('aria-label', 'Choose a language to continue');
-  card.innerHTML = `
-    <div class="tour-card-top">
-      <button type="button" class="tour-skip" id="tour-skip">${escapeHtml('Skip')}</button>
-    </div>
-    <h2 class="tour-title" id="tour-title">Choose a language to continue</h2>
-    <p class="tour-body">${escapeHtml('Pick a language — the walkthrough continues in that language.')}</p>
-    <div class="tour-lang-grid" role="group" aria-label="Languages">
-      ${SUPPORTED_LANGS.map(
-        (lang) => `
-        <button type="button" class="tour-lang-btn" data-lang="${lang}">
-          <span class="tour-lang-native">${escapeHtml(LANG_LABELS[lang])}</span>
-          <span class="tour-lang-code">${lang.toUpperCase()}</span>
-        </button>`,
-      ).join('')}
-    </div>
-  `;
-
-  card.querySelector('#tour-skip')?.addEventListener('click', dismissHowToGuide);
-  card.querySelectorAll<HTMLButtonElement>('.tour-lang-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const lang = btn.dataset.lang as Lang;
-      setLang(lang);
-      syncLangSelect(lang);
-      applyTranslations(document);
-      startUiTour();
-    });
-  });
-}
-
-function startUiTour(): void {
-  phase = 'tour';
-  stepIndex = 0;
-  renderTour();
-}
-
 function renderStepCard(card: HTMLElement): void {
   const config = STEP_CONFIG[stepIndex]!;
+  const copy = STEP_COPY[config.id];
   const total = STEPS.length;
   const isLast = stepIndex >= total - 1;
   card.classList.remove('tour-card--thesis', 'tour-card--center');
-  card.setAttribute('aria-label', t(`help.step.${config.id}.title`));
+  card.setAttribute('aria-label', copy.title);
   card.innerHTML = `
     <div class="tour-card-top">
       <span class="tour-progress">${stepIndex + 1} / ${total}</span>
-      <button type="button" class="tour-skip" id="tour-skip">${escapeHtml(t('help.skip'))}</button>
+      <button type="button" class="tour-skip" id="tour-skip">Skip</button>
     </div>
-    <h2 class="tour-title">${escapeHtml(t(`help.step.${config.id}.title`))}</h2>
-    <p class="tour-body">${escapeHtml(t(`help.step.${config.id}.body`))}</p>
+    <h2 class="tour-title">${escapeHtml(copy.title)}</h2>
+    <p class="tour-body">${escapeHtml(copy.body)}</p>
     <div class="tour-actions">
       <button type="button" class="tour-secondary-btn" id="tour-back" ${stepIndex === 0 ? 'disabled' : ''}>
-        ${escapeHtml(t('help.back'))}
+        Back
       </button>
       <button type="button" class="tour-primary-btn" id="tour-next">
-        ${escapeHtml(isLast ? t('help.done') : t('help.next'))}
+        ${isLast ? 'Done' : 'Next'}
       </button>
     </div>
   `;
@@ -547,31 +478,16 @@ function renderStepCard(card: HTMLElement): void {
 function renderTour(): void {
   const root = ensureRoot();
   const card = root.querySelector<HTMLElement>('#tour-card')!;
-  const highlight = root.querySelector<HTMLElement>('#tour-highlight')!;
   const dim = root.querySelector<HTMLElement>('#tour-dim')!;
 
   resizeObserver?.disconnect();
   resizeObserver = null;
-
-  if (phase === 'lang') {
-    cleanupStepSideEffects();
-    unbindScrollParents();
-    highlight.hidden = true;
-    setPadsHidden(true);
-    dim.classList.add('tour-dim--full');
-    renderLangCard(card);
-    requestAnimationFrame(() => {
-      card.querySelector<HTMLButtonElement>('.tour-lang-btn')?.focus();
-    });
-    return;
-  }
 
   dim.classList.remove('tour-dim--full');
   const config = STEP_CONFIG[stepIndex]!;
   const target = prepareStep(config);
   renderStepCard(card);
 
-  // Allow layout (panel open / Kessler) to settle, then place the spotlight.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       positionHighlightAndCard();
@@ -584,46 +500,29 @@ function renderTour(): void {
   });
 }
 
-/** First visit: language then UI tour. Header ? reopens the tour only. */
 export function openHowToGuide(): void {
   if (rootEl) return;
-  phase = hasSeenGuide() ? 'tour' : 'lang';
   stepIndex = 0;
   renderTour();
-
-  langUnsub = onLangChange(() => {
-    if (!rootEl) return;
-    if (phase !== 'tour') return;
-    renderStepCard(rootEl.querySelector<HTMLElement>('#tour-card')!);
-    scheduleReposition();
-  });
 }
 
-/** Header help button + first-visit auto-open. */
 export function initHowToGuide(): void {
   const btn = document.createElement('button');
   btn.id = 'help-guide-btn';
   btn.className = 'help-header-btn';
   btn.type = 'button';
   btn.textContent = '?';
+  btn.title = 'Help';
+  btn.setAttribute('aria-label', 'Help');
 
-  const refreshLabel = (): void => {
-    const label = t('help.button');
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-  };
-  refreshLabel();
   btn.addEventListener('click', openHowToGuide);
 
   const actions = document.getElementById('header-actions');
-  const langSel = document.getElementById('lang-select');
-  if (actions && langSel) {
-    actions.insertBefore(btn, langSel.closest('.header-lang') ?? langSel);
+  if (actions) {
+    actions.appendChild(btn);
   } else {
     document.querySelector('.app-header')?.appendChild(btn);
   }
-
-  onLangChange(refreshLabel);
 
   if (!hasSeenGuide()) {
     window.setTimeout(() => {

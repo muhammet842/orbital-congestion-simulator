@@ -41,7 +41,7 @@ function matchesSearch(obj: TrackedObject, searchQuery: string): boolean {
   return matchesSearchQuery(obj, searchQuery);
 }
 
-function usesGltfDetail(obj: TrackedObject, conjunctionFocus = false): boolean {
+function usesSelectedDetail(obj: TrackedObject, conjunctionFocus = false): boolean {
   if (conjunctionFocus) return true;
   return obj.category === 'active' || obj.category === 'stations';
 }
@@ -64,7 +64,7 @@ export class OrbitalMeshes {
     this.group.add(this.spacecraftPoints.mesh);
   }
 
-  static async create(objects: TrackedObject[]): Promise<OrbitalMeshes> {
+  static create(objects: TrackedObject[]): OrbitalMeshes {
     const meshes = new OrbitalMeshes(objects);
     meshes.updatePositions(objects, objects.map((obj) => propagateObject(obj.satrec, new Date())), null, null, {
       LEO: true,
@@ -72,13 +72,6 @@ export class OrbitalMeshes {
       GEO: true,
       HEO: true,
     }, '', { x: 0, y: 0, z: 4.5 }, Date.now());
-
-    // Instanced points (built above) are all the first frame needs — the
-    // globe should render immediately instead of blocking on GLTF network
-    // round-trips for detail models that only matter once something is
-    // actually selected. Warm the most common ones in the background so
-    // that first selection doesn't show a bare point while it loads.
-    satelliteModelLoader.warmCache(['iss', 'sat_leo', 'cargo_capsule']);
 
     return meshes;
   }
@@ -113,7 +106,7 @@ export class OrbitalMeshes {
     const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
-    const gltfDetailIndices = this.resolveGltfDetailIndices(
+    const detailIndices = this.resolveDetailIndices(
       objects,
       selectedIndex,
       conjunctionFocus,
@@ -124,19 +117,19 @@ export class OrbitalMeshes {
       this.spacecraftPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
-        gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
+        detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
         showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
       );
       this.debrisPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
-        gltfDetailIndices, colorByFunction, altitudeFilter, inclinationFilter,
+        detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
         showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
       );
     }
 
     this.syncDetailWrappers(
-      objects, propagations, gltfDetailIndices, layerFilters, searchQuery,
+      objects, propagations, detailIndices, layerFilters, searchQuery,
       conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs,
       colorByFunction, conjunctionLiveDistanceKm, categoryFilter,
     );
@@ -220,7 +213,7 @@ export class OrbitalMeshes {
     }
   }
 
-  private resolveGltfDetailIndices(
+  private resolveDetailIndices(
     objects: TrackedObject[],
     selectedIndex: number | null,
     conjunctionFocus: boolean,
@@ -238,7 +231,7 @@ export class OrbitalMeshes {
 
     if (selectedIndex != null) {
       const obj = objects[selectedIndex];
-      if (obj && usesGltfDetail(obj)) indices.add(selectedIndex);
+      if (obj && usesSelectedDetail(obj)) indices.add(selectedIndex);
     }
 
     return indices;
@@ -247,7 +240,7 @@ export class OrbitalMeshes {
   private syncDetailWrappers(
     objects: TrackedObject[],
     propagations: (PropagationResult | null)[],
-    gltfDetailIndices: Set<number>,
+    detailIndices: Set<number>,
     layerFilters: Record<OrbitLayer, boolean>,
     searchQuery: string,
     conjunctionFocus: boolean,
@@ -260,15 +253,15 @@ export class OrbitalMeshes {
     categoryFilter: ObjectCategory | 'all' = 'all',
   ): void {
     for (const [index, wrapper] of this.detailWrappers) {
-      if (!gltfDetailIndices.has(index)) {
+      if (!detailIndices.has(index)) {
         this.group.remove(wrapper);
         this.detailWrappers.delete(index);
       }
     }
 
-    for (const index of gltfDetailIndices) {
+    for (const index of detailIndices) {
       const obj = objects[index];
-      if (!obj || !usesGltfDetail(obj, conjunctionFocus)) continue;
+      if (!obj || !usesSelectedDetail(obj, conjunctionFocus)) continue;
 
       const isSelected = index === selectedIndex;
       const isConjunction = highlightSet.has(index);
@@ -286,15 +279,13 @@ export class OrbitalMeshes {
       if (!wrapper) {
         const modelKey =
           conjunctionFocus && obj.category === 'debris' ? 'sat_leo' : resolveModelKey(obj);
-        void satelliteModelLoader.ensureLoaded(modelKey).then(() => {
-          if (this.detailWrappers.has(index)) return;
-          const created = satelliteModelLoader.clone(modelKey);
-          created.userData.objectIndex = index;
-          created.visible = false;
-          this.detailWrappers.set(index, created);
-          this.group.add(created);
-        });
-        continue;
+        satelliteModelLoader.ensureLoaded(modelKey);
+        const created = satelliteModelLoader.clone(modelKey);
+        created.userData.objectIndex = index;
+        created.visible = false;
+        this.detailWrappers.set(index, created);
+        this.group.add(created);
+        wrapper = created;
       }
 
       const result = propagations[index];

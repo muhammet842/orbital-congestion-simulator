@@ -1,8 +1,5 @@
-/**
- * Bottom time bar: LIVE / historical speed, VERIFY and event-replay transports.
- * Displays getSimulationTime() — when VERIFY or replay is active the global
- * clock is left alone and the focused clock drives the label/slider.
- */
+// Bottom time bar: play/pause, speed, slider and clock display.
+// Handles three different clock modes: live, conjunction verify, and event replay.
 import {
   getVerificationWindowMs,
   VERIFY_SCRUB_STEP_MS,
@@ -26,7 +23,7 @@ import {
   setVerificationPartial,
   subscribe,
 } from '../state/appState';
-import { onLangChange, t } from '../i18n/i18n';
+
 
 const SPEEDS = [1, 10, 100];
 const SLIDER_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -36,20 +33,20 @@ export function initTimeControls(container: HTMLElement): void {
     <div class="time-controls">
       <div class="time-row time-row--transport">
         <div class="time-buttons">
-          <button type="button" id="btn-rewind" title="${t('time.back_1h')}">⏮</button>
-          <button type="button" id="btn-play" title="${t('time.play_title')}">⏸</button>
-          <button type="button" id="btn-forward" title="${t('time.fwd_1h')}">⏭</button>
+          <button type="button" id="btn-rewind" title="Back 1 hour">⏮</button>
+          <button type="button" id="btn-play" title="Play / Pause">⏸</button>
+          <button type="button" id="btn-forward" title="Forward 1 hour">⏭</button>
         </div>
         <input type="range" id="time-slider" class="time-slider" min="-100" max="100" step="1" value="0" />
       </div>
       <div class="time-row time-row--meta">
         <div class="time-display" id="time-display"></div>
         <div class="time-mode-btns">
-          <button type="button" id="btn-now" class="btn-now" title="${t('time.now_title')}">${t('time.now')}</button>
-          <button type="button" id="btn-live" class="btn-live active" title="${t('time.live_title')}">${t('time.live_on')}</button>
+          <button type="button" id="btn-now" class="btn-now" title="Jump to current time">Now</button>
+          <button type="button" id="btn-live" class="btn-live active" title="Switch to live mode">● LIVE</button>
         </div>
         <div class="speed-controls">
-          <span class="speed-label">${t('time.speed')}</span>
+          <span class="speed-label">Speed</span>
           <div id="speed-buttons" class="speed-buttons"></div>
         </div>
       </div>
@@ -69,15 +66,11 @@ export function initTimeControls(container: HTMLElement): void {
     (s) => `<button type="button" class="speed-btn" data-speed="${s}">${s}x</button>`,
   ).join('');
 
-  const applyChromeLabels = (): void => {
-    nowBtn.textContent = t('time.now');
-    nowBtn.title = t('time.now_title');
-    liveBtn.title = t('time.live_title');
-    playBtn.title = t('time.play_title');
-    if (speedLabel) speedLabel.textContent = t('time.speed');
-  };
-  applyChromeLabels();
-  onLangChange(applyChromeLabels);
+  nowBtn.textContent = 'Now';
+  nowBtn.title = 'Jump to current time';
+  liveBtn.title = 'Switch to live mode';
+  playBtn.title = 'Play / Pause';
+  if (speedLabel) speedLabel.textContent = 'Speed';
 
   let anchorTime = Date.now();
   /** True while the user is dragging the scrubber — don't fight their input. */
@@ -308,15 +301,15 @@ export function initTimeControls(container: HTMLElement): void {
 
     liveBtn.classList.toggle('active', isLive);
     liveBtn.textContent = verifying
-      ? t('time.verify')
+      ? 'VERIFY'
       : replaying
-        ? t('time.replay')
+        ? 'REPLAY'
         : isLive
-          ? t('time.live_on')
-          : t('time.live');
+          ? '● LIVE'
+          : 'LIVE';
 
-    rewindBtn.title = focused ? t('time.back_5s') : t('time.back_1h');
-    forwardBtn.title = focused ? t('time.fwd_5s') : t('time.fwd_1h');
+    rewindBtn.title = focused ? 'Back 5s' : 'Back 1 hour';
+    forwardBtn.title = focused ? 'Forward 5s' : 'Forward 1 hour';
     slider.title = verifying
       ? 'Scrub within the close-approach window (approach → T+15s)'
       : replaying
@@ -369,7 +362,6 @@ export function initTimeControls(container: HTMLElement): void {
   requestAnimationFrame(refreshTimeDisplay);
 }
 
-/** Map verification clock → slider −100…+100 across the CPA window. */
 function syncVerificationSlider(
   slider: HTMLInputElement,
   vt: { cpaTimeMs: number; currentMs: number; relativeVelocityKmS?: number },
@@ -381,7 +373,6 @@ function syncVerificationSlider(
   syncWindowSlider(slider, startMs, endMs, vt.currentMs);
 }
 
-/** Map event-replay clock → slider −100…+100 across T−5m…IMPACT. */
 function syncEventReplaySlider(
   slider: HTMLInputElement,
   collisionTimeMs: number,

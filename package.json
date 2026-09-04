@@ -7,24 +7,14 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "fetch-tle": "node scripts/fetch-tle.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "test:all": "vitest run && playwright test",
-    "check:i18n": "node scripts/check-i18n-parity.mjs",
-    "screenshot": "npm run build && node scripts/capture-readme-screenshot.mjs"
+    "fetch-tle": "node scripts/fetch-tle.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
     "@types/three": "^0.170.0",
-    "jsdom": "^29.1.1",
     "typescript": "~5.7.2",
-    "vite": "^6.0.3",
-    "vitest": "^4.1.10"
+    "vite": "^6.0.3"
   },
   "dependencies": {
-    "magvar": "^2.0.1",
     "satellite.js": "^5.0.0",
     "three": "^0.170.0"
   }
