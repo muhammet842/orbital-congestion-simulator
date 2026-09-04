@@ -1,4 +1,3 @@
-// Historical event cards + catalog of replayable incidents (HISTORICAL_EVENTS).
 import { selectHistoricalEvent, getState, subscribe } from '../state/appState';
 
 export interface HistoricalEventTLE {
@@ -8,7 +7,6 @@ export interface HistoricalEventTLE {
   line2: string;
 }
 
-// Visual/behavioural category of the event.
 export type EventType = 'collision' | 'asat' | 'docking' | 'breakup';
 
 export interface HistoricalEvent {

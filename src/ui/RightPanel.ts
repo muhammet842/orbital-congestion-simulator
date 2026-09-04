@@ -520,23 +520,6 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
       ${objectBHtml}
     </div>
 
-    <div class="era-timeline">
-      <input
-        type="range"
-        id="era-scrub"
-        class="era-scrub"
-        min="0"
-        max="100"
-        step="0.1"
-        value="0"
-        aria-label="Replay timeline"
-      />
-      <div class="era-timeline-labels">
-        <span>T−${(EVENT_REPLAY_REWIND_MS / 60000).toFixed(0)}m</span>
-        <span>${eType === 'docking' ? 'DOCK' : 'IMPACT'}</span>
-      </div>
-    </div>
-
     <dl class="detail-list era-stats">
       <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>
       <div class="detail-row"><dt>${escapeHtml(meta.tti)}</dt><dd data-field="era-tti">—</dd></div>
@@ -545,15 +528,6 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
         : ''
       }
     </dl>
-
-    <div class="era-impact-banner" data-field="era-impact" hidden>
-      <div class="era-impact-ring"></div>
-      <div class="era-impact-text">${escapeHtml(meta.banner)}</div>
-    </div>
-
-    <div class="era-completed-banner" data-field="era-completed" hidden>
-      Replay complete
-    </div>
 
     <div class="era-controls">
       <button type="button" id="btn-replay-back" class="btn-era-ctrl" title="Back 5 seconds">⏮</button>
