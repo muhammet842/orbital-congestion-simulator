@@ -7,8 +7,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
-import type { TrackedObject } from '../types';
-import { resolveModelKey, type ModelAssetKey } from './modelResolver';
+import type { ModelAssetKey } from './modelResolver';
 
 export const TARGET_MODEL_SIZE = 0.004;
 
@@ -31,7 +30,7 @@ class SatelliteModelLoader {
   ensureLoaded(key: ModelAssetKey): ModelPrototype {
     const cached = this.cache.get(key);
     if (cached) return cached;
-
+    
     const scene = buildSimpleShape(key);
     centerAtOrigin(scene);
     const prototype = { scene, normalizedScale: measureTargetScale(scene) };

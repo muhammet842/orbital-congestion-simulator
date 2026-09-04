@@ -447,7 +447,7 @@ function updateNarrative(point: KesslerYearPoint): void {
   let text = '';
   if (band === 'stable') {
     text = `By ${point.year}, the tracked population stabilizes around ${formatCount(point.totalObjects)} objects (${mult}x today). The environment remains mostly stable, though ongoing maintenance is required.`;
-  } else if (band === 'warning') {
+  } else if (band === 'concerning') {
     text = `By ${point.year}, the tracked population grows to ${formatCount(point.totalObjects)} objects (${mult}x today). Collision risk rises significantly (${risk}x), creating a hazardous but navigable environment.`;
   } else {
     text = `By ${point.year}, the tracked population explodes to ${formatCount(point.totalObjects)} objects (${mult}x today). A Kessler cascade is underway, rendering major LEO shells virtually unusable.`;
