@@ -363,17 +363,22 @@ function renderCategoryFilters(container: HTMLElement): void {
     <div class="filter-segment" role="radiogroup" aria-label="Object Types">
       ${CATEGORY_FILTERS.map(
         (cat) => `
-          <label class="filter-segment-option${categoryFilter === cat ? ' filter-segment-option--on' : ''}">
+          <button 
+            type="button"
+            data-category="${cat}"
+            class="filter-segment-option${categoryFilter === cat ? ' filter-segment-option--on' : ''}"
+          >
             <span>${cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
-          </label>
+          </button>
         `,
       ).join('')}
     </div>
   `;
 
-  el.querySelectorAll<HTMLInputElement>('input[data-category]').forEach((input) => {
-    input.addEventListener('change', () => {
-      setCategoryFilter(input.value as ObjectCategory | 'all');
+  el.querySelectorAll<HTMLButtonElement>('button[data-category]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const category = btn.dataset.category as ObjectCategory | 'all';
+      setCategoryFilter(category);
     });
   });
 }
