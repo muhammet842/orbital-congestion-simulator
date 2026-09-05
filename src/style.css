@@ -430,6 +430,15 @@ body {
   margin-bottom: 6px;
 }
 
+#help-guide-btn{
+  width: 50px !important;
+}
+
+#kessler-panel-btn
+{
+  width: 150px !important;
+}
+
 .object-list-viewport {
   position: relative;
   height: 200px;
@@ -2574,7 +2583,7 @@ body {
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-muted);
-  background: transparent;
+  background: #334155;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;

@@ -117,7 +117,7 @@ export function initKesslerPanel(): void {
   btn.id = 'kessler-panel-btn';
   btn.className = 'kessler-header-btn';
   btn.type = 'button';
-  btn.textContent = '🌌';
+  btn.textContent = 'Future Projection';
 
   const label = 'Future Projection';
   btn.title = label;
