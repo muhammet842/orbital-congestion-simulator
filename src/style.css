@@ -803,13 +803,6 @@ body {
   color: var(--text-primary);
 }
 
-.filter-chip-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
 .filter-chip-label {
   letter-spacing: 0.02em;
 }
@@ -955,37 +948,6 @@ body {
 
 .filter-row--toggle {
   justify-content: flex-start;
-}
-
-.function-legend {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  flex-shrink: 0;
-  margin-top: 3px;
-}
-
-.function-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.function-dot--starlink {
-  background: #00e5ff;
-}
-
-.function-dot--station {
-  background: #facc15;
-}
-
-.function-dot--active {
-  background: #38bdf8;
-}
-
-.function-dot--debris {
-  background: #f43f5e;
 }
 
 /* ── Display Options & Category Stats ────────────────────────────────── */
@@ -1253,14 +1215,8 @@ body {
 }
 
 /* ── Conjunction & Event System ─────────────────────────────────────── */
-.panel-lede {
-  margin: -2px 0 8px;
-  font-size: 0.72rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
 
-.panel-heading--alert + .panel-lede {
+.panel-heading--alert{
   color: rgba(244, 63, 94, 0.9);
 }
 

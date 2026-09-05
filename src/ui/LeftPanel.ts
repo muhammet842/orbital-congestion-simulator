@@ -87,7 +87,6 @@ export function initLeftPanel(container: HTMLElement): void {
       <div class="layer-filters" id="layer-filters"></div>
 
       <h2 class="panel-heading">Object Types</h2>
-      <p class="panel-lede">Not every point is a working satellite. Debris is the junk left behind; Color by Function keeps both visible at once.</p>
       <div class="category-filters" id="category-filters"></div>
 
       <h2 class="panel-heading">Display Options</h2>
@@ -399,12 +398,6 @@ function renderDisplayOptions(container: HTMLElement): void {
       id="color-by-function"
       aria-pressed="${colorByFunction}"
     >
-      <span class="function-legend" aria-hidden="true">
-        <span class="function-dot function-dot--starlink"></span>
-        <span class="function-dot function-dot--station"></span>
-        <span class="function-dot function-dot--active"></span>
-        <span class="function-dot function-dot--debris"></span>
-      </span>
       <span class="filter-toggle-copy">
         <strong>Color by Function</strong>
         <span class="muted">Starlink · Stations · Active · Debris</span>
