@@ -368,7 +368,6 @@ function render(container: HTMLElement): void {
       <div class="norad-id">NORAD ${snapshot.noradId}</div>
       <div class="object-name">${escapeHtml(snapshot.name)}${newBadge}</div>
     </div>
-    <div class="object-photo-wrap" data-object-photo hidden></div>
     <dl class="detail-list detail-list--meta">
       <div class="detail-row"><dt>Country</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
       <div class="detail-row"><dt>Operator</dt><dd>${escapeHtml(snapshot.owner)}</dd></div>

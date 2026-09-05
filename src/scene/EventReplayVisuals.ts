@@ -204,11 +204,6 @@ function slerp(from: Vector3, to: Vector3, t: number): Vector3 {
     .multiplyScalar(radius);
 }
 
-/**
- * Build a multi-segment arc geometry following the great-circle path from
- * `from` to `to` (using slerp), so the trail hugs the sphere surface and
- * never clips through the Earth.
- */
 function buildApproachArc(from: Vector3, to: Vector3, segments = 48): BufferGeometry {
   const pts: number[] = [];
   for (let i = 0; i <= segments; i++) {
@@ -232,11 +227,6 @@ class DebrisCloud {
   readonly points: Points;
   private readonly positions: Float32Array;
   private readonly velocities: Vector3[];
-  /**
-   * Wall-clock timestamp (Date.now()) set when spawn() is called.
-   * The cloud is driven by REAL time, not replay time, so it stays
-   * animated even while the replay clock is paused at T=0.
-   */
   private spawnWallMs: number | null = null;
   private originRadius = 1;
 
@@ -392,8 +382,6 @@ export class EventReplayVisuals {
       }),
     );
 
-    /** Expanding sphere that marks the terminal flash at T=0.
-     *  Color is updated per-event in setup() — red for collisions, green for docking. */
     this.dotImpact = new Mesh(
       new SphereGeometry(DOT_RADIUS * 1.4, 12, 8),
       new MeshBasicMaterial({
@@ -415,15 +403,6 @@ export class EventReplayVisuals {
     this.group.visible = false;
   }
 
-  /**
-   * Initialise visuals for the given historical event.
-   *
-   * Initial positions are computed by orbital back-tracking (not TLE propagation)
-   * so the starting dots are always physically reasonable and near the correct
-   * geographic region — 5 minutes of flight before the verified collision point.
-   *
-   * Call once per event selection.
-   */
   setup(
     event: HistoricalEvent,
     collisionTimeMs: number,
@@ -444,9 +423,6 @@ export class EventReplayVisuals {
     );
 
     // ── Initial positions via orbital back-tracking ───────────────────────
-    // We trace back EVENT_REPLAY_REWIND_MS milliseconds along the great-circle
-    // orbital path from the collision point. This gives a realistic starting
-    // position without TLE propagation drift.
     const startTimeMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
     const startDate   = new Date(startTimeMs);
 
@@ -507,9 +483,6 @@ export class EventReplayVisuals {
     );
 
     // ── Build curved arc approach geometry ───────────────────────────────
-    // The trail follows the great-circle (slerp) path from the initial
-    // position to the collision point, matching the curved motion used in
-    // tick() — the dot always sits ON the arc, never inside the Earth.
     this.trailA.geometry.dispose();
     this.trailA.geometry = buildApproachArc(initialPosA, collisionScene);
     this.trailA.computeLineDistances();
@@ -535,18 +508,6 @@ export class EventReplayVisuals {
     this.group.visible = true;
   }
 
-  /**
-   * Move the dots to their linearly-interpolated positions.
-   *
-   * Motion model — pure linear lerp over the full 5-minute window:
-   *   progress = clamp((currentMs - startMs) / (collisionMs - startMs), 0, 1)
-   *   posA = lerp(initialPosA, collisionScene, progress)
-   *   posB = lerp(initialPosB, collisionScene, progress)
-   *
-   * This guarantees both dots meet at EXACTLY the same collision point at
-   * T=0, regardless of TLE propagation drift. No SGP4 is called in this
-   * method — positions are fully deterministic from setup() data.
-   */
   tick(
     simTime: Date,
     collisionTimeMs: number,
@@ -561,8 +522,6 @@ export class EventReplayVisuals {
     const progress = Math.max(0, Math.min(1, elapsed / totalMs));
 
     // ── Object A: slerp along curved arc to collision point ───────────────
-    // slerp preserves altitude — the dot travels on a great-circle arc
-    // above Earth's surface instead of a straight chord through the planet.
     const posA = slerp(initialPosA, collisionScene, progress);
     this.dotA.position.copy(posA);
     this.dotA.visible = true;

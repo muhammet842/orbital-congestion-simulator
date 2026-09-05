@@ -65,20 +65,6 @@ function buildPanelHTML(
   `;
 }
 
-/**
- * Floating info panels that follow the two objects during an event replay.
- *
- * Each panel is an absolutely-positioned HTML element whose top-left corner
- * is computed by projecting the object's 3-D scene position onto the canvas
- * every frame. An SVG leader line connects the panel to the dot.
- *
- * Usage:
- *   const labels = new EventReplayLabels(canvasContainer);
- *   // each frame:
- *   labels.update(posA, posB, nameA, nameB, isAsat, camera, renderer, impactFlash);
- *   // when exiting replay:
- *   labels.hide();
- */
 export class EventReplayLabels {
   readonly root: HTMLElement;
   private readonly svg: SVGSVGElement;
