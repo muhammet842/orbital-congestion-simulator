@@ -364,14 +364,6 @@ function renderCategoryFilters(container: HTMLElement): void {
       ${CATEGORY_FILTERS.map(
         (cat) => `
           <label class="filter-segment-option${categoryFilter === cat ? ' filter-segment-option--on' : ''}">
-            <input
-              type="radio"
-              name="category-filter"
-              value="${cat}"
-              data-category="${cat}"
-              ${categoryFilter === cat ? 'checked' : ''}
-            />
-            <span class="filter-segment-swatch filter-segment-swatch--${cat}" aria-hidden="true"></span>
             <span>${cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
           </label>
         `,
