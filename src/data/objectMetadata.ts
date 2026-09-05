@@ -36,7 +36,7 @@ const NAME_RULES: MetadataRule[] = [
 
   {
     pattern: /ISS\s*\(|^ISS$|NAUKA|ZARYA|POISK|RASSVET|COLUMBUS|DESTINY|HARMONY|UNITY|KIBO|CUPOLA|BEAM|NACHOS|PRSS|COTS/i,
-    country: 'International 🌍',
+    country: 'International',
     owner: 'NASA / Roscosmos / ESA',
   },
   { pattern: /CSS|TIANGONG|TIANHE|WENTIAN|MENGTIAN|TIANZHOU|SHENZHOU/i, country: 'China 🇨🇳', owner: 'CMSA / CNSA' },
@@ -64,7 +64,7 @@ const NAME_RULES: MetadataRule[] = [
   { pattern: /SENTINEL|GALILEO|METOP|ENVISAT|PROBA|SPOT|SMOS|SWARM|CHEOPS|OPS-SAT|BIROS/i, country: 'Europe 🇪🇺', owner: 'ESA / EUMETSAT' },
   { pattern: /ASTRA|EUTELSAT|SES-|O3B|HISPASAT|HOTBIRD/i, country: 'Europe 🇪🇺', owner: 'SES / Eutelsat' },
 
-  { pattern: /INTELSAT|INMARSAT|JCSAT|SUPERBIRD|OPTUS|ASTRA/i, country: 'International 🌍', owner: 'Commercial Operator' },
+  { pattern: /INTELSAT|INMARSAT|JCSAT|SUPERBIRD|OPTUS|ASTRA/i, country: 'International', owner: 'Commercial Operator' },
 
   { pattern: /HAYABUSA|IGS-|QZS|MICHIBIKI|JCSAT|SUPERBIRD|GCOM|ALOS|HIMAWARI/i, country: 'Japan 🇯🇵', owner: 'JAXA / MEXT' },
 
@@ -82,13 +82,13 @@ const NAME_RULES: MetadataRule[] = [
   { pattern: /TELECOM|SYRACUSE|SPIRALE/i, country: 'France 🇫🇷', owner: 'CNES / DGA' },
   { pattern: /BELLA|OPS-SAT|ESAIL/i, country: 'Europe 🇪🇺', owner: 'ESA' },
   { pattern: /ANGOSAT|AMAZONIA|SGDC|STAR ONE|SCD/i, country: 'Brazil 🇧🇷', owner: 'AEB / INPE' },
-  { pattern: /AFRICASAT|NILESAT|NIGCOMSAT/i, country: 'Africa 🌍', owner: 'Regional Operator' },
+  { pattern: /AFRICASAT|NILESAT|NIGCOMSAT/i, country: 'Africa', owner: 'Regional Operator' },
   { pattern: /OPTUS|SKY MIMO|SKYMED/i, country: 'Australia 🇦🇺', owner: 'Optus / CSIRO' },
   { pattern: /^MARINA$|OM9MAR/i, country: 'Slovakia 🇸🇰', owner: 'Amateur radio (OM9MAR)' },
 ];
 
 const FEATURED_OVERRIDES = new Map<number, { country: string; owner: string }>([
-  [25544, { country: 'International 🌍', owner: 'NASA / Roscosmos / ESA' }],
+  [25544, { country: 'International', owner: 'NASA / Roscosmos / ESA' }],
   [20580, { country: 'USA 🇺🇸', owner: 'NASA / ESA' }],
   [48274, { country: 'China 🇨🇳', owner: 'CMSA' }],
   [41875, { country: 'Türkiye 🇹🇷', owner: 'TSK / TAI' }],
@@ -120,7 +120,7 @@ export function inferMetadata(
   }
 
   if (category === 'stations') {
-    return { country: 'International 🌍', owner: 'Space Agency Consortium' };
+    return { country: 'International', owner: 'Space Agency Consortium' };
   }
 
   if (category === 'debris') {
@@ -137,14 +137,14 @@ export function inferMetadata(
     if (/FENGYUN|SHIYAN|CZ-/i.test(name)) return { country: 'China 🇨🇳', owner: 'CNSA (debris)' };
     if (/IRIDIUM|USA\s*\d/i.test(name)) return { country: 'USA 🇺🇸', owner: 'US Operator (debris)' };
     if (/STARLINK/i.test(name)) return { country: 'USA 🇺🇸', owner: 'SpaceX (debris)' };
-    return { country: 'Unknown 🌐', owner: 'Catalogued debris fragment' };
+    return { country: 'Unknown', owner: 'Catalogued debris fragment' };
   }
 
   if (category === 'active') {
-    return { country: 'Unknown 🌐', owner: 'Commercial / state operator (unclassified)' };
+    return { country: 'Unknown', owner: 'Commercial / state operator (unclassified)' };
   }
 
-  return { country: 'Unknown 🌐', owner: 'Unknown operator' };
+  return { country: 'Unknown', owner: 'Unknown operator' };
 }
 
 export function isTurkishSatellite(country: string): boolean {

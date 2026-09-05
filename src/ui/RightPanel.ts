@@ -502,7 +502,7 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
               </div>`;
     }
     if (eType === 'asat') {
-      return `<div class="era-sat era-sat--missile"><span class="era-missile">⚡</span><span class="era-label">Missile</span></div>`;
+      return `<div class="era-sat era-sat--missile"><span class="era-dot era-dot--b"></span><span class="era-label">Missile</span></div>`;
     }
     return '';
   })();

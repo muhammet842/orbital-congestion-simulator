@@ -2079,10 +2079,6 @@ body {
   border-left: 3px solid transparent;
 }
 
-.eic--asat      { border-left-color: #f97316; }
-.eic--docking   { border-left-color: #38bdf8; }
-.eic--breakup   { border-left-color: var(--warning); }
-
 .eic__title {
   padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);

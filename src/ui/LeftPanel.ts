@@ -588,7 +588,6 @@ function renderConjunctions(container: HTMLElement): void {
           class="conjunction-alert${isNew ? ' conjunction-alert--new' : ''}${isActive ? ' conjunction-alert--active' : ''}"
           data-session-key="${escapeHtml(sessionKey)}"
         >
-          <span class="conjunction-alert-icon" aria-hidden="true">⚠</span>
           <span class="conjunction-alert-text">${escapeHtml(formatAlertMessage(c, nowMs))}</span>
         </button>
       `;
