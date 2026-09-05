@@ -314,7 +314,7 @@ export function initEventCards(container: HTMLElement): void {
           </div>
           ${
             event.id === FEATURED_HISTORICAL_EVENT_ID
-              ? `<span class="event-card-kicker">FEATURED EVENT</span>`
+              ? ``
               : ''
           }
           <span class="event-card-date">${formatEventDate(event.date)}</span>
