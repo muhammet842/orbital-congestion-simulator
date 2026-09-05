@@ -432,11 +432,13 @@ body {
 
 #help-guide-btn{
   width: 50px !important;
+  color: #f1f5f9 !important;
 }
 
 #kessler-panel-btn
 {
   width: 150px !important;
+  color: #f1f5f9 !important;
 }
 
 .object-list-viewport {
