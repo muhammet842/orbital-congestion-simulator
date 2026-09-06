@@ -12,3 +12,10 @@ interface ImportMeta {
 declare module 'magvar' {
   export function magvar(latitudeDeg: number, longitudeDeg: number, altitudeKm?: number): number;
 }
+
+/// <reference types="vite/client" />
+
+declare module '*.css' {
+  const content: { [className: string]: string };
+  export default content;
+}
