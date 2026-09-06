@@ -1,5 +1,5 @@
-// Bottom time bar: play/pause, speed, slider and clock display.
-// Handles three different clock modes: live, conjunction verify, and event replay.
+
+
 import {
   getVerificationWindowMs,
   VERIFY_SCRUB_STEP_MS,
@@ -23,7 +23,6 @@ import {
   setVerificationPartial,
   subscribe,
 } from '../state/appState';
-
 
 const SPEEDS = [1, 10, 100];
 const SLIDER_RANGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -73,7 +72,7 @@ export function initTimeControls(container: HTMLElement): void {
   if (speedLabel) speedLabel.textContent = 'Speed';
 
   let anchorTime = Date.now();
-  /** True while the user is dragging the scrubber — don't fight their input. */
+  
   let sliderDragging = false;
 
   playBtn.addEventListener('click', () => {
@@ -196,7 +195,7 @@ export function initTimeControls(container: HTMLElement): void {
         vt.cpaTimeMs,
         vt.relativeVelocityKmS ?? 0,
       );
-      // Map slider −100…+100 → [window start, CPA+15s].
+      
       const t = (parseFloat(slider.value) + 100) / 200;
       const currentMs = startMs + t * (endMs - startMs);
       setVerificationPartial({ currentMs, playing: false });

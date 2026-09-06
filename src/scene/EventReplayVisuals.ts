@@ -1,11 +1,4 @@
-/**
- * 3-D visuals for historical event replay (collision / ASAT / breakup).
- *
- * Motion is a PURE LINEAR LERP from back-tracked start positions to
- * event.collisionGeo at T=0 — not SGP4 of archival TLEs (those drift too
- * far for 1996–2021 epochs). ASAT: object B rises from Earth surface.
- * Breakup: only object A. Docking meta exists but no shipped docking event.
- */
+
 import {
   AdditiveBlending,
   BufferAttribute,
@@ -26,47 +19,25 @@ import type { HistoricalEvent } from '../ui/EventCards';
 import type { EventType } from '../ui/EventCards';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
-/** Glow sphere radius in scene units (same scale as Earth radius = 1). */
 const DOT_RADIUS = 0.005;
 
-/**
- * All data captured once in setup() and used read-only in tick().
- *
- * The core motion model is a PURE LINEAR LERP:
- *   pos(t) = lerp(initialPos, collisionScene, progress)
- *   where progress = (currentMs - startMs) / (collisionMs - startMs)
- *
- * This guarantees both dots meet exactly at the collision point at T=0,
- * regardless of TLE propagation drift (TLEs from 2009/2021 are unusable
- * for back-propagation by the SGP4 model).
- */
 interface ParsedObjects {
   nameA: string;
   nameB: string | null;
-  /** Satellite A scene position at T−5 min (start of replay). */
+  
   initialPosA: Vector3;
-  /**
-   * Satellite B (or ASAT missile) scene position at the start of replay.
-   * For missiles this is the surface nadir of the impact point.
-   */
+  
   initialPosB: Vector3 | null;
-  /** Known ECI scene position of the collision/impact point. */
+  
   collisionScene: Vector3;
-  /** Timestamp of the replay start (collisionTimeMs − EVENT_REPLAY_REWIND_MS). */
+  
   startTimeMs: number;
-  /**
-   * 3-D distance between A and B at T−5 min in km.
-   * Used to drive the separation counter in the right panel.
-   */
+  
   initialSeparationKm: number;
-  /** Visual/behavioural category of the event. */
+  
   eventType: EventType;
 }
 
-/**
- * Convert geographic coordinates + altitude to a scene-space Vector3.
- * Uses GMST to rotate from geographic (ECEF) to ECI, then eciToScene.
- */
 function geoToScene(
   latDeg: number,
   lonDeg: number,
@@ -85,28 +56,6 @@ function geoToScene(
   return new Vector3(scene.x, scene.y, scene.z);
 }
 
-/**
- * Compute where a satellite was `rewindMs` milliseconds BEFORE the collision
- * by back-tracking along its great-circle orbital arc.
- *
- * Inputs:
- *   collisionGeo  – verified collision location (lat/lon/alt in km)
- *   inclinationDeg – orbital inclination (0°=equatorial, 90°=polar, >90°=retrograde)
- *   ascending     – true if the satellite was heading south→north at collision
- *   rewindMs      – how far back to trace (default = EVENT_REPLAY_REWIND_MS = 5 min)
- *   startDate     – Date object at T-5min (used for GMST → ECI conversion)
- *
- * Algorithm:
- *   1. Compute orbital speed v = √(GM/(R+h)) and arc length in `rewindMs`.
- *   2. From the inclination, derive the heading azimuth at the collision latitude
- *      using sin(az) = cos(I)/cos(lat).
- *   3. Reverse the heading to get the back-track bearing.
- *   4. Apply the spherical haversine formula to get the start lat/lon.
- *   5. Convert to ECI scene coordinates at `startDate`.
- *
- * This produces a physically reasonable starting position that lies on the
- * real orbital great-circle, ~5 min of flight behind the collision point.
- */
 function orbitalBacktrack(
   collisionGeo: { latDeg: number; lonDeg: number; altKm: number },
   inclinationDeg: number,
@@ -115,27 +64,27 @@ function orbitalBacktrack(
   startDate: Date,
 ): Vector3 {
   const DEG = Math.PI / 180;
-  const GM = 398600; // km³/s²
+  const GM = 398600; 
   const R = 6371 + collisionGeo.altKm;
-  const v = Math.sqrt(GM / R);          // km/s
-  const arcRad = (v * rewindMs / 1000) / R; // arc in radians on the orbit
+  const v = Math.sqrt(GM / R);          
+  const arcRad = (v * rewindMs / 1000) / R; 
 
   const lat1 = collisionGeo.latDeg * DEG;
   const lon1 = collisionGeo.lonDeg * DEG;
   const I    = inclinationDeg * DEG;
 
-  // Azimuth of travel at this latitude for the given inclination.
-  // sin(az) = cos(I) / cos(lat)  — derived from spherical triangle of the orbit.
+  
+  
   const sinAz = Math.min(1, Math.abs(Math.cos(I) / Math.cos(lat1)));
-  const azimuth = Math.asin(sinAz); // positive = eastward component
+  const azimuth = Math.asin(sinAz); 
 
-  // For a retrograde orbit (I > 90°), cos(I) < 0 → satellite moves westward.
-  // `ascending` = latitude is increasing (heading toward higher latitudes).
-  // Bearing (from North, clockwise):
-  //   Ascending  + prograde  (I<90°): NE  → bearing = +azimuth
-  //   Ascending  + retrograde(I>90°): NW  → bearing = -azimuth (= 360-azimuth)
-  //   Descending + prograde  (I<90°): SE  → bearing = π - azimuth
-  //   Descending + retrograde(I>90°): SW  → bearing = π + azimuth
+  
+  
+  
+  
+  
+  
+  
   const prograde = inclinationDeg <= 90;
   let bearing: number;
   if (ascending) {
@@ -143,37 +92,27 @@ function orbitalBacktrack(
   } else {
     bearing = prograde ? Math.PI - azimuth : Math.PI + azimuth;
   }
-  // Back-track: reverse the bearing
+  
   const backBearing = bearing + Math.PI;
 
-  // Haversine great-circle displacement
+  
   const sinLat2 = Math.sin(lat1) * Math.cos(arcRad) +
                   Math.cos(lat1) * Math.sin(arcRad) * Math.cos(backBearing);
-  // Clamp to ±sin(inclination) — a satellite can't exceed its orbital inclination.
+  
   const clampedSinLat2 = Math.max(-Math.sin(I), Math.min(Math.sin(I), sinLat2));
   const lat2 = Math.asin(clampedSinLat2);
 
-  // When the start position is very close to the orbital peak (lat ≈ inclination),
-  // the atan2 denominator can be near-zero. Use a stable fallback.
+  
+  
   const atan2Num = Math.sin(backBearing) * Math.sin(arcRad) * Math.cos(lat1);
   const atan2Den = Math.cos(arcRad) - Math.sin(lat1) * Math.sin(lat2);
   const lon2 = Math.abs(atan2Den) < 1e-9 && Math.abs(atan2Num) < 1e-9
-    ? lon1  // satellite at/near the pole — keep the collision longitude
+    ? lon1  
     : lon1 + Math.atan2(atan2Num, atan2Den);
 
   return geoToScene(lat2 / DEG, lon2 / DEG, collisionGeo.altKm, startDate);
 }
 
-/**
- * Spherical linear interpolation between two scene-space vectors.
- *
- * Unlike `lerp`, this keeps the interpolated point on the surface of an
- * ellipsoid (sphere in this case) so the satellite travels along a curved
- * arc above Earth rather than a chord that passes through the planet.
- *
- * The radius (altitude) is also linearly interpolated from |from| to |to|
- * so the object smoothly climbs or descends if the start/end altitudes differ.
- */
 function slerp(from: Vector3, to: Vector3, t: number): Vector3 {
   const rFrom = from.length();
   const rTo   = to.length();
@@ -185,11 +124,11 @@ function slerp(from: Vector3, to: Vector3, t: number): Vector3 {
   const cosTheta = Math.max(-1, Math.min(1, fromDir.dot(toDir)));
   const theta = Math.acos(cosTheta);
 
-  // Interpolated radius (altitude) — linear between |from| and |to|
+  
   const radius = rFrom + (rTo - rFrom) * t;
 
-  // When the angle is very small, fall back to linear interpolation of
-  // the direction to avoid division by near-zero.
+  
+  
   if (theta < 1e-6) {
     return fromDir.lerp(toDir, t).normalize().multiplyScalar(radius);
   }
@@ -216,11 +155,10 @@ function buildApproachArc(from: Vector3, to: Vector3, segments = 48): BufferGeom
   return geo;
 }
 
-// ── Debris cloud ──────────────────────────────────────────────────────────────
 const DEBRIS_COUNT = 160;
-/** Real-world milliseconds the cloud stays visible after spawn. */
+
 const DEBRIS_FADE_REAL_MS = 5_000;
-/** Max tangential spread speed in scene-units per real-second. */
+
 const DEBRIS_SPREAD = 0.024;
 
 class DebrisCloud {
@@ -271,13 +209,13 @@ class DebrisCloud {
     this.points.visible = true;
   }
 
-  /** Drive animation with real-world time so it runs even while replay is paused. */
+  
   tick(origin: Vector3): void {
     if (this.spawnWallMs === null) return;
-    const elapsed = Date.now() - this.spawnWallMs; // real milliseconds
+    const elapsed = Date.now() - this.spawnWallMs; 
     if (elapsed < 0) { this.points.visible = false; return; }
 
-    const t = elapsed / 1000; // real seconds
+    const t = elapsed / 1000; 
     const r = this.originRadius;
 
     for (let i = 0; i < DEBRIS_COUNT; i++) {
@@ -309,8 +247,6 @@ class DebrisCloud {
     (this.points.material as PointsMaterial).dispose();
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 export class EventReplayVisuals {
   readonly group: Group;
@@ -396,7 +332,7 @@ export class EventReplayVisuals {
 
     this.group.add(this.trailA, this.trailB, this.dotA, this.dotB, this.dotImpact);
 
-    // Debris cloud — colour set per-event in setup()
+    
     this.debrisCloud = new DebrisCloud(0xff7722);
     this.group.add(this.debrisCloud.points);
 
@@ -413,7 +349,7 @@ export class EventReplayVisuals {
 
     const { collisionGeo, approachA, approachB, objectB } = event;
 
-    // ── Collision scene position (ECI at impact time) ─────────────────────
+    
     const collisionDate = new Date(collisionTimeMs);
     const collisionScene = geoToScene(
       collisionGeo.latDeg,
@@ -422,7 +358,7 @@ export class EventReplayVisuals {
       collisionDate,
     );
 
-    // ── Initial positions via orbital back-tracking ───────────────────────
+    
     const startTimeMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
     const startDate   = new Date(startTimeMs);
 
@@ -440,7 +376,7 @@ export class EventReplayVisuals {
     const eType = event.eventType ?? 'collision';
 
     if (approachB && objectB) {
-      // Two-satellite event (collision or docking) — back-track the second object
+      
       initialPosB = orbitalBacktrack(
         collisionGeo,
         approachB.inclinationDeg,
@@ -449,15 +385,15 @@ export class EventReplayVisuals {
         startDate,
       );
 
-      // 3-D separation in km at T-5min from scene-space distance
-      // (1 scene unit = Earth radius = 6371 km)
+      
+      
       initialSeparationKm = initialPosA.distanceTo(initialPosB) * 6371;
     } else if (eType === 'asat') {
-      // ASAT event: missile rises from Earth surface toward collision point
-      initialPosB = collisionScene.clone().normalize(); // unit vector = surface
+      
+      initialPosB = collisionScene.clone().normalize(); 
       initialSeparationKm = 0;
     } else {
-      // Breakup / single-object event: only one object animates
+      
       initialPosB = null;
       initialSeparationKm = 0;
     }
@@ -473,16 +409,16 @@ export class EventReplayVisuals {
       eventType: eType,
     };
 
-    // Reset debris from any previous replay
+    
     this.debrisTriggered = false;
     this.debrisCloud.reset();
 
-    // Adjust debris colour: orange-white for collisions/asat/breakup, teal for docking
+    
     (this.debrisCloud.points.material as PointsMaterial).color.setHex(
       eType === 'docking' ? 0x44ffcc : 0xff7722,
     );
 
-    // ── Build curved arc approach geometry ───────────────────────────────
+    
     this.trailA.geometry.dispose();
     this.trailA.geometry = buildApproachArc(initialPosA, collisionScene);
     this.trailA.computeLineDistances();
@@ -499,7 +435,7 @@ export class EventReplayVisuals {
       this.trailB.visible = false;
     }
 
-    // Tint the impact flash: green for docking, red/orange for everything else
+    
     (this.dotImpact.material as MeshBasicMaterial).color.setHex(
       eType === 'docking' ? 0x44ff88 : 0xff4422,
     );
@@ -516,17 +452,17 @@ export class EventReplayVisuals {
 
     const { initialPosA, initialPosB, collisionScene, startTimeMs } = this.parsed;
 
-    // ── Linear progress [0, 1] over the 5-minute replay window ───────────
-    const totalMs = collisionTimeMs - startTimeMs; // = EVENT_REPLAY_REWIND_MS
+    
+    const totalMs = collisionTimeMs - startTimeMs; 
     const elapsed = simTime.getTime() - startTimeMs;
     const progress = Math.max(0, Math.min(1, elapsed / totalMs));
 
-    // ── Object A: slerp along curved arc to collision point ───────────────
+    
     const posA = slerp(initialPosA, collisionScene, progress);
     this.dotA.position.copy(posA);
     this.dotA.visible = true;
 
-    // ── Object B: same slerp (satellite or ASAT missile) ─────────────────
+    
     let posB: Vector3 | null = null;
     if (initialPosB) {
       posB = slerp(initialPosB, collisionScene, progress);
@@ -536,16 +472,16 @@ export class EventReplayVisuals {
       this.dotB.visible = false;
     }
 
-    // ── Approach arcs stay visible for the whole scrub window (like
-    // conjunction verification trails). Fading them with progress made the
-    // orbits look like they were being erased as objects converged.
+    
+    
+    
     (this.trailA.material as LineDashedMaterial).opacity = 0.65;
     this.trailA.visible = true;
     (this.trailB.material as LineDashedMaterial).opacity = 0.65;
     this.trailB.visible = initialPosB !== null;
 
-    // ── Impact flash at T=0 ───────────────────────────────────────────────
-    // SceneManager freezes the clock at T=0 so progress stays ≈ 1 here.
+    
+    
     const msAfterCollision = -(collisionTimeMs - simTime.getTime());
     const FLASH_WINDOW_MS = 30_000;
     let impactFlash = 0;
@@ -559,8 +495,8 @@ export class EventReplayVisuals {
       this.dotImpact.visible = false;
     }
 
-    // ── Debris cloud ──────────────────────────────────────────────────────
-    // Spawn once on impact (skip for docking events which have no debris).
+    
+    
     if (msAfterCollision >= 0 && this.parsed.eventType !== 'docking') {
       if (!this.debrisTriggered) {
         this.debrisTriggered = true;
@@ -568,7 +504,7 @@ export class EventReplayVisuals {
       }
       this.debrisCloud.tick(posA);
     } else if (msAfterCollision < 0) {
-      // Reset if replay is rewound back before T=0
+      
       if (this.debrisTriggered) {
         this.debrisTriggered = false;
         this.debrisCloud.reset();
@@ -583,12 +519,12 @@ export class EventReplayVisuals {
     return { nameA: this.parsed.nameA, nameB: this.parsed.nameB };
   }
 
-  /** Initial separation in km between the two objects at T-5min. */
+  
   getInitialSeparationKm(): number {
     return this.parsed?.initialSeparationKm ?? 0;
   }
 
-  /** Returns the known collision scene position, or null if not available. */
+  
   getCollisionScene(): Vector3 | null {
     return this.parsed?.collisionScene ?? null;
   }

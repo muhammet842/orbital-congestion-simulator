@@ -18,7 +18,6 @@ const SWATH_COLOR = 0xc9b896;
 const CONE_OPACITY = 0.16;
 const RING_OPACITY = 0.58;
 
-/** Unit cone (height = 1, radius = 1) with apex at local origin, body opening along −Y. */
 const UNIT_CONE_HEIGHT = 1;
 
 const scratchSatPos = new Vector3();
@@ -37,10 +36,6 @@ function horizonRingSegments(thetaRad: number): number {
   return Math.min(128, Math.max(36, Math.ceil((thetaRad * 180) / Math.PI)));
 }
 
-/**
- * Cone pivot at the tip: default ConeGeometry is Y-centred; shift so apex = (0,0,0).
- * translate(0, -height/2, 0) moves tip from +Y/2 down to the origin.
- */
 function createApexPivotedConeGeometry(): ConeGeometry {
   const geometry = new ConeGeometry(1, UNIT_CONE_HEIGHT, 32, 1, true);
   geometry.translate(0, -UNIT_CONE_HEIGHT / 2, 0);
@@ -142,7 +137,7 @@ export class SatelliteFootprint {
     this.horizonRing.geometry = geometry;
   }
 
-  /** Frame-synced from SceneManager.tick — position, orientation, and scale every frame. */
+  
   update(selectedIndex: number | null, objects: TrackedObject[], date: Date): void {
     if (selectedIndex == null) {
       this.group.visible = false;
@@ -186,14 +181,14 @@ export class SatelliteFootprint {
       return;
     }
 
-    // 1. Apex locked to satellite world position
+    
     this.cone.position.copy(scratchSatPos);
 
-    // 2. Orient: local −Y (apex → base) aligns with vector toward Earth centre
+    
     scratchToEarth.copy(scratchSatPos).normalize().negate();
     this.cone.quaternion.setFromUnitVectors(APEX_TO_BASE, scratchToEarth);
 
-    // 3. Scale unit geometry to physical horizon proportions (no geometry rebuild)
+    
     this.cone.scale.set(baseRadius, height, baseRadius);
     this.cone.visible = true;
 

@@ -1,9 +1,4 @@
-/**
- * Marks the LEO band as a thin rim around Earth — not a wireframe cage.
- *
- * Educational marker: faint limb glow at the conventional 2,000 km ceiling,
- * plus a quiet equatorial tick so altitude has a scale.
- */
+
 
 import {
   AdditiveBlending,
@@ -20,9 +15,8 @@ import {
 } from 'three';
 import { EARTH_RADIUS_KM } from '../types';
 
-/** Conventional LEO ceiling used in this app (~2,000 km altitude). */
 export const LEO_SHELL_ALTITUDE_KM = 2000;
-/** Inner tick near the densest traffic (ISS-class), not a hard LEO floor. */
+
 export const LEO_SHELL_INNER_ALTITUDE_KM = 400;
 
 export function leoShellRadius(altitudeKm = LEO_SHELL_ALTITUDE_KM): number {

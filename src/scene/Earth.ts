@@ -83,7 +83,7 @@ export class Earth {
     this.mesh.renderOrder = 0;
   }
 
-  /** Sync spin to simulated UTC; night lights follow world-space sun direction. */
+  
   update(simTime: Date, sunDirection?: { x: number; y: number; z: number }): void {
     const state = getDayNightState(simTime);
     this.mesh.rotation.y = state.earthRotationY;

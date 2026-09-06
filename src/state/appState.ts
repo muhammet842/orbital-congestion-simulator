@@ -1,4 +1,4 @@
-// Central app store
+
 import type { ConjunctionScanResult, ConjunctionSortMode } from '../orbital/conjunction';
 import {
   clampVerificationTimeMs,
@@ -11,33 +11,32 @@ import {
 import type { AppStats, ConjunctionEvent, ObjectCategory, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
 import { isRecentlyLaunched } from '../data/newLaunches';
 
-/** How far before the collision to start the replay (ms). */
 export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
-/** Playback multiplier for event replays. */
+
 export const EVENT_REPLAY_SPEED = 15;
-/** Transport nudge while scrubbing an event replay (±). */
+
 export const EVENT_REPLAY_SCRUB_STEP_MS = 5_000;
-// Wall-clock cap per animation frame for verify/replay clocks
+
 export const MAX_FOCUSED_CLOCK_FRAME_MS = 50;
 
 export interface EventReplayState {
   eventId: string;
-  /** Collision/destruction moment (ms UTC). */
+  
   collisionTimeMs: number;
-  /** Current replay clock position (ms UTC). */
+  
   currentMs: number;
   playing: boolean;
   speed: number;
 }
 
 export interface VerificationTimeState {
-  /** Immutable CPA instant from the alert card (ms UTC). */
+  
   cpaTimeMs: number;
-  /** Playback clock for verification only — does not mutate global time. */
+  
   currentMs: number;
   playing: boolean;
   speed: number;
-  /** CPA relative velocity — shortens the T− window for fast crossings. */
+  
   relativeVelocityKmS?: number;
 }
 
@@ -50,23 +49,23 @@ export interface AppState {
   selectedConjunctionSessionKey: string | null;
   conjunctionRevision: number;
   verificationTime: VerificationTimeState | null;
-  /** Active historical event replay clock — overrides global sim time when set. */
+  
   eventReplay: EventReplayState | null;
   searchQuery: string;
   layerFilters: Record<OrbitLayer, boolean>;
-  /** Optional altitude band filter applied to the list and 3-D scene. */
+  
   altitudeFilter: { minKm: number; maxKm: number } | null;
-  /** Optional inclination band filter applied to the list and 3-D scene. */
+  
   inclinationFilter: { minDeg: number; maxDeg: number } | null;
-  /** When true, only objects first observed in the last ~14 days are shown. */
+  
   showOnlyRecentLaunches: boolean;
-  /** Object-category filter for list + globe (`all` = no cut). */
+  
   categoryFilter: ObjectCategory | 'all';
   time: TimeState;
   stats: AppStats;
   conjunctions: ConjunctionEvent[];
   conjunctionHiddenCount: number;
-  /** Left-panel close-approach list order within the next 24h. */
+  
   conjunctionSortMode: ConjunctionSortMode;
   showOrbitTrail: boolean;
   showGroundTrack: boolean;
@@ -75,7 +74,6 @@ export interface AppState {
 
 type Listener = () => void;
 
-// Wake after empty sweep
 let emptyConjunctionScanAcked = false;
 
 const defaultLayerFilters: Record<OrbitLayer, boolean> = {
@@ -128,7 +126,6 @@ export function getState(): AppState {
   return state;
 }
 
-// Get simulation time
 export function getSimulationTime(): Date {
   if (state.verificationTime) {
     return new Date(state.verificationTime.currentMs);
@@ -139,14 +136,13 @@ export function getSimulationTime(): Date {
   return getGlobalSimulationTime();
 }
 
-// Get global simulation time
 export function getGlobalSimulationTime(): Date {
   return state.time.mode === 'live' ? new Date() : state.time.current;
 }
 
 export function formatUtcDateTime(date: Date): string {
   const utcTime = date.toISOString().slice(11, 19);
-  // Zero-pad day
+  
   const day = String(date.getUTCDate()).padStart(2, '0');
   const month = date.toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
   const year = date.getUTCFullYear();
@@ -159,7 +155,7 @@ export function enterLiveMode(): void {
     return;
   }
   if (state.eventReplay) {
-    // Keep replay clock
+    
     setEventReplayPartial({ playing: true, speed: 1 });
     return;
   }
@@ -177,7 +173,6 @@ export function enterLiveMode(): void {
   });
 }
 
-/** Reset simulated clock to the current UTC moment (historical mode). */
 export function jumpToNow(): void {
   enterHistoricalMode({
     current: new Date(),
@@ -275,7 +270,6 @@ export function getSortedObjectIndices(): number[] {
   return sortedAllIndices;
 }
 
-/** Indices for the sidebar list (same filters as the globe, A–Z order). */
 export function getListIndices(): number[] {
   const allowed = new Set(state.filteredIndices);
   return sortedAllIndices.filter((i) => allowed.has(i));
@@ -327,7 +321,6 @@ export function selectHistoricalEvent(eventId: string): void {
   });
 }
 
-// Start event replay
 export function startEventReplay(eventId: string, collisionTimeMs: number): void {
   const startMs = collisionTimeMs - EVENT_REPLAY_REWIND_MS;
   setState({
@@ -356,17 +349,15 @@ export function setEventReplayPartial(
 
 export function stopEventReplay(): void {
   if (!state.eventReplay) return;
-  // Clear card selection
+  
   setState({ eventReplay: null, selectedEventId: null });
 }
 
-// Clear historical event selection
 export function clearHistoricalEventSelection(): void {
   if (state.selectedEventId == null && state.eventReplay == null) return;
   setState({ eventReplay: null, selectedEventId: null });
 }
 
-// Advance event replay clock
 export function advanceEventReplayTime(deltaMs: number): void {
   if (!state.eventReplay?.playing) return;
   const { startMs, endMs } = getEventReplayWindowMs(state.eventReplay.collisionTimeMs);
@@ -383,7 +374,6 @@ export function getEventReplayState(): EventReplayState | null {
   return state.eventReplay;
 }
 
-// Replay clock window
 export function getEventReplayWindowMs(collisionTimeMs: number): {
   startMs: number;
   endMs: number;
@@ -413,7 +403,7 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     verificationTime: {
       cpaTimeMs,
       currentMs: startMs,
-      // Auto-play alert approach
+      
       playing: true,
       speed: 1,
       relativeVelocityKmS,
@@ -469,7 +459,6 @@ export function setVerificationPartial(
   listeners.forEach((fn) => fn());
 }
 
-// Advance verification playback clock
 export function advanceVerificationTime(deltaMs: number): void {
   if (!state.verificationTime?.playing) return;
   const vt = state.verificationTime;
@@ -533,7 +522,7 @@ export function setConjunctions({ alerts, hiddenCount }: ConjunctionScanResult):
     );
 
   if (sameContent) {
-    // Handle empty sweep
+    
     if (alerts.length === 0 && hasUpcomingConjunctionScanCompleted() && !emptyConjunctionScanAcked) {
       emptyConjunctionScanAcked = true;
       listeners.forEach((fn) => fn());
@@ -621,7 +610,6 @@ export function setTimePartial(partial: Partial<TimeState>): void {
   setState({ time: next });
 }
 
-// Advance historical sim clock
 export function advanceSimulationTime(current: Date): void {
   if (state.time.mode !== 'historical') return;
   state.time.current = current;

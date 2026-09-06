@@ -1,4 +1,4 @@
-// Left panel: search, satellite list, filters, stats, conjunction alerts, historical events.
+
 import { LAYER_HEX, type ObjectCategory, type OrbitLayer } from '../types';
 import {
   conjunctionSessionKey,
@@ -59,7 +59,6 @@ function listViewportHeight(): number {
     ? LIST_VIEWPORT_HEIGHT_MOBILE
     : LIST_VIEWPORT_HEIGHT_DESKTOP;
 }
-
 
 let displayedConjunctions: ReturnType<typeof selectConjunctionAlertsForDisplay> = [];
 
@@ -156,8 +155,6 @@ export function initLeftPanel(container: HTMLElement): void {
   };
   requestAnimationFrame(refreshLiveStatTime);
 
-
-
   let lastListKey = '';
   let lastSelectedIndex: number | null = null;
   let lastFilterUiKey = '';
@@ -221,8 +218,8 @@ function initSearchAndList(container: HTMLElement): void {
 
   viewport.addEventListener('scroll', () => renderObjectList(container));
 
-  // Select on tap only. Selecting on pointerdown + preventDefault blocked native
-  // touch scrolling on mobile (every scroll attempt became a selection).
+  
+  
   let listPointer: { id: number; x: number; y: number; index: number } | null = null;
   let listPointerDragged = false;
 
@@ -568,8 +565,8 @@ function renderConjunctions(container: HTMLElement): void {
     ),
   ].join('|');
 
-  // Same cards already mounted — only refresh countdown / overflow copy
-  // (avoids drop animation flicker when the scan pool grows).
+  
+  
   if (
     structureKey === lastConjunctionStructureKey &&
     listEl.querySelectorAll('.conjunction-alert').length === visible.length
@@ -648,7 +645,6 @@ function updateConjunctionAlertTexts(
   });
 }
 
-/** Tick countdowns without remounting cards (and refresh empty/scanning copy). */
 function refreshConjunctionCountdowns(container: HTMLElement): void {
   const listEl = container.querySelector('#conjunction-list');
   if (!listEl) return;
@@ -684,8 +680,6 @@ function formatTimeUntil(ms: number): string {
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
-
-// ── Advanced Filters ──────────────────────────────────────────────────────────
 
 const ALT_MIN_DEFAULT  =     0;
 const ALT_MAX_DEFAULT  = 36000;
@@ -746,11 +740,6 @@ function buildAdvancedFiltersHTML(
   `;
 }
 
-/**
- * Update only the display elements (labels, fills, count, reset state) without
- * touching the <input> elements. Called on every state change so that dragging
- * is never interrupted by an innerHTML replacement.
- */
 function updateAdvancedFiltersDisplay(container: HTMLElement): void {
   const el = container.querySelector('#advanced-filters');
   if (!el) return;
@@ -764,13 +753,13 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
   const inclMin = incf?.minDeg ?? INCL_MIN_DEFAULT;
   const inclMax = incf?.maxDeg ?? INCL_MAX_DEFAULT;
 
-  // Value labels
+  
   const altValEl = el.querySelector('#af-alt-values');
   if (altValEl) altValEl.textContent = `${altMin.toLocaleString()} km — ${altMax.toLocaleString()} km`;
   const inclValEl = el.querySelector('#af-incl-values');
   if (inclValEl) inclValEl.textContent = `${inclMin}° — ${inclMax}°`;
 
-  // Fill bars
+  
   const altPctMin  = (altMin  / ALT_MAX_DEFAULT)  * 100;
   const altPctMax  = (altMax  / ALT_MAX_DEFAULT)  * 100;
   const altFill = el.querySelector<HTMLElement>('#af-alt-fill');
@@ -787,7 +776,7 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
     inclFill.style.width = `${(inclPctMax - inclPctMin).toFixed(1)}%`;
   }
 
-  // Sync slider values in case filter was reset programmatically
+  
   const altMinEl  = el.querySelector<HTMLInputElement>('#af-alt-min');
   const altMaxEl  = el.querySelector<HTMLInputElement>('#af-alt-max');
   const inclMinEl = el.querySelector<HTMLInputElement>('#af-incl-min');
@@ -797,11 +786,11 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
   if (inclMinEl && document.activeElement !== inclMinEl) inclMinEl.value = String(inclMin);
   if (inclMaxEl && document.activeElement !== inclMaxEl) inclMaxEl.value = String(inclMax);
 
-  // Object count
+  
   const countEl = el.querySelector('#af-count');
   if (countEl) countEl.textContent = `${state.filteredIndices.length.toLocaleString()} objects shown`;
 
-  // Reset button
+  
   const hasFilter = af !== null || incf !== null;
   const resetBtn  = el.querySelector<HTMLButtonElement>('#af-reset');
   if (resetBtn) {
@@ -809,7 +798,6 @@ function updateAdvancedFiltersDisplay(container: HTMLElement): void {
     resetBtn.classList.toggle('btn-af-reset--dim', !hasFilter);
   }
 }
-
 
 function renderAdvancedFilters(container: HTMLElement): void {
   const el = container.querySelector('#advanced-filters');
@@ -867,6 +855,6 @@ function initAdvancedFilters(container: HTMLElement): void {
     }
   });
 
-  // On state change: update only display elements — never replace the inputs
+  
   subscribe(() => updateAdvancedFiltersDisplay(container));
 }

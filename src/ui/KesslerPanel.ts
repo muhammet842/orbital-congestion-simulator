@@ -1,13 +1,4 @@
-/**
- * KesslerPanel — "Future Projection" overlay.
- *
- * A self-contained, opt-in modal that lets any visitor run a simplified
- * "what if" Kessler-syndrome scenario (launch rate / debris mitigation /
- * collision risk) and scrub through the projected years. Deliberately kept
- * independent of the main Three.js scene and global app state: it owns its
- * own tiny Canvas-2D visualizations and local component state, so it can
- * never interfere with the live orbital simulation's performance or state.
- */
+
 
 import {
   classifyOutlook,
@@ -20,14 +11,12 @@ import {
   type KesslerYearPoint,
 } from '../orbital/kesslerProjection';
 
-// ── Module-local component state ────────────────────────────────────────────
-
 interface SliderTicks {
-  /** Launch-rate tick, 0-600 → 0x-6.0x. */
+  
   launch: number;
-  /** Mitigation tick, 0-300 → 0x-3.0x. */
+  
   mitigation: number;
-  /** Collision-risk tick, 0-600 → 0x-6.0x. */
+  
   risk: number;
   targetYear: number;
 }
@@ -58,11 +47,6 @@ let panelEl: HTMLElement | null = null;
 const BASE_DOT_COUNT = 80;
 const MAX_DOT_COUNT = 600;
 
-/**
- * Projection UI copy is English (and mixed-language labels). Force en-US so
- * browser Turkish locale cannot turn 144357 into "144.357", 21.8 into "21,8",
- * or compact "155.9K" into Turkish "155,9 B" (B = bin / thousand).
- */
 const KP_NUMBER_LOCALE = 'en-US';
 
 function formatCount(value: number, maxFractionDigits = 0): string {
@@ -70,7 +54,6 @@ function formatCount(value: number, maxFractionDigits = 0): string {
   return value.toLocaleString(KP_NUMBER_LOCALE, { maximumFractionDigits: maxFractionDigits });
 }
 
-/** Below 100,000: plain en-US number. At/above: compact with English K/M/B. */
 export function formatCompactNumber(value: number, maxFractionDigits: number): string {
   if (!Number.isFinite(value)) return '—';
   if (Math.abs(value) < 100_000) {
@@ -110,8 +93,6 @@ function applyPresetToSliders(id: KesslerPresetId): void {
   activePreset = id;
 }
 
-// ── Header trigger button ───────────────────────────────────────────────────
-
 export function initKesslerPanel(): void {
   const btn = document.createElement('button');
   btn.id = 'kessler-panel-btn';
@@ -131,8 +112,6 @@ export function initKesslerPanel(): void {
     document.querySelector('.app-header')?.appendChild(btn);
   }
 }
-
-// ── Modal open / close ───────────────────────────────────────────────────────
 
 function handleEsc(e: KeyboardEvent): void {
   if (e.key === 'Escape') closeKesslerPanel();
@@ -183,8 +162,6 @@ export function closeKesslerPanel(): void {
 export function isKesslerPanelOpen(): boolean {
   return backdropEl != null;
 }
-
-// ── Render ───────────────────────────────────────────────────────────────────
 
 function renderPanelContent(): void {
   if (!panelEl) return;
@@ -316,8 +293,6 @@ function renderPanelContent(): void {
   }
 }
 
-// ── Event wiring ─────────────────────────────────────────────────────────────
-
 function bindEvents(): void {
   panelEl?.querySelector('#kp-close')?.addEventListener('click', closeKesslerPanel);
 
@@ -382,8 +357,6 @@ function bindScenarioSlider(
     if (timeline.length > 0) runProjection({ preserveScrubFraction: true });
   });
 }
-
-// ── Projection run + scrubbing ───────────────────────────────────────────────
 
 function runProjection(opts: { preserveScrubFraction?: boolean } = {}): void {
   const wasRunning = timeline.length > 0;
@@ -459,8 +432,6 @@ function updateNarrative(point: KesslerYearPoint): void {
   el.className = `kp-narrative kp-narrative--${band}`;
 }
 
-// ── Animate ──────────────────────────────────────────────────────────────────
-
 function toggleAnimate(): void {
   if (animating) {
     stopAnimation();
@@ -491,8 +462,6 @@ function stopAnimation(): void {
   }
   setText('kp-animate', 'Play');
 }
-
-// ── Canvas rendering ─────────────────────────────────────────────────────────
 
 interface DotSlot {
   angle: number;
@@ -578,7 +547,7 @@ function drawChart(
   const xAt = (i: number): number => padL + (i / Math.max(1, timeline.length - 1)) * plotW;
   const yAt = (v: number): number => padT + plotH - ((v - minVal) / Math.max(1, maxVal - minVal)) * plotH;
 
-  // Horizontal grid + Y labels.
+  
   ctx.fillStyle = 'rgba(148,163,184,0.85)';
   ctx.font = '9px Inter, system-ui, sans-serif';
   ctx.textAlign = 'right';
@@ -595,7 +564,7 @@ function drawChart(
     ctx.fillText(formatCompactNumber(v, 0), padL - 6, y);
   }
 
-  // Baseline "today" reference line.
+  
   const baseY = yAt(baselineTotal);
   ctx.setLineDash([3, 3]);
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
@@ -606,7 +575,7 @@ function drawChart(
   ctx.stroke();
   ctx.setLineDash([]);
 
-  // Filled area under total curve.
+  
   ctx.beginPath();
   ctx.moveTo(xAt(0), yAt(0));
   timeline.forEach((p, i) => ctx.lineTo(xAt(i), yAt(p.totalObjects)));
@@ -618,7 +587,7 @@ function drawChart(
   ctx.fillStyle = gradient;
   ctx.fill();
 
-  // Debris line.
+  
   ctx.beginPath();
   timeline.forEach((p, i) => {
     const x = xAt(i);
@@ -630,7 +599,7 @@ function drawChart(
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Total line.
+  
   ctx.beginPath();
   timeline.forEach((p, i) => {
     const x = xAt(i);
@@ -642,7 +611,7 @@ function drawChart(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Scrub marker.
+  
   const mx = xAt(scrubIndex);
   const my = yAt(timeline[scrubIndex]?.totalObjects ?? 0);
   ctx.setLineDash([2, 2]);
@@ -659,7 +628,7 @@ function drawChart(
   ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Axis year labels.
+  
   ctx.fillStyle = 'rgba(148,163,184,0.9)';
   ctx.font = '10px Inter, system-ui, sans-serif';
   ctx.textBaseline = 'alphabetic';
@@ -687,7 +656,7 @@ function drawDensity(ctx: CanvasRenderingContext2D, width: number, height: numbe
     'rgba(167,139,250,0.8)',
   ];
 
-  // Shell guide rings (LEO / MEO / GEO).
+  
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
   ctx.lineWidth = 1;
   for (const r of bandRadii) {
@@ -696,7 +665,7 @@ function drawDensity(ctx: CanvasRenderingContext2D, width: number, height: numbe
     ctx.stroke();
   }
 
-  // Earth.
+  
   ctx.beginPath();
   ctx.fillStyle = '#1c3d6b';
   ctx.arc(cx, cy, Math.max(4, maxRadius * 0.12), 0, Math.PI * 2);
@@ -708,10 +677,10 @@ function drawDensity(ctx: CanvasRenderingContext2D, width: number, height: numbe
   const dotCount = Math.max(12, Math.min(MAX_DOT_COUNT, Math.round(BASE_DOT_COUNT * ratio)));
   const slots = getDotSlots(MAX_DOT_COUNT);
 
-  // Assign bands by actual shell population share (not random LEO bias).
+  
   let assigned = 0;
   const bandTargets = shellCounts.map((c) => Math.round((c / shellSum) * dotCount));
-  // Fix rounding so totals match.
+  
   bandTargets[0] += dotCount - bandTargets.reduce((a, b) => a + b, 0);
 
   for (let band = 0; band < 3; band++) {
@@ -728,8 +697,6 @@ function drawDensity(ctx: CanvasRenderingContext2D, width: number, height: numbe
     }
   }
 }
-
-// ── DOM helpers ──────────────────────────────────────────────────────────────
 
 function getEl<T extends HTMLElement>(id: string): T | null {
   return (panelEl?.querySelector(`#${id}`) as T | null) ?? null;

@@ -1,4 +1,4 @@
-// Main Three.js scene manager
+
 import {
   AmbientLight,
   Color,
@@ -134,7 +134,7 @@ export class SceneManager {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.target.set(0, 0, 0);
-    // Disable pan to keep orbit centered on origin
+    
     this.controls.enablePan = false;
     this.controls.screenSpacePanning = false;
     this.applyOrbitDistanceLimits(false);
@@ -211,7 +211,7 @@ export class SceneManager {
     cancelAnimationFrame(this.animationId);
   }
 
-  // Keep free navigation centered on Earth
+  
   private keepEarthCenteredOrbit(): void {
     const state = getState();
     if (state.selectedConjunction || state.eventReplay || state.verificationTime) return;
@@ -221,7 +221,7 @@ export class SceneManager {
     }
   }
 
-  // Set camera limits based on focus mode
+  
   private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
     if (conjunctionFocus) {
       this.controls.minDistance = PAIR_INSPECT_MIN_DISTANCE;
@@ -243,7 +243,7 @@ export class SceneManager {
   private onStateChange(): void {
     const { selectedConjunction, selectedIndex, selectedEventId, objects, conjunctionRevision } = getState();
 
-    // --- Historical event replay ---
+    
     if (selectedEventId && !selectedConjunction) {
       const event = getHistoricalEvent(selectedEventId);
       if (event && event.collisionTimeUtc && event.objectA) {
@@ -258,22 +258,22 @@ export class SceneManager {
 
           if (!comingFromReplay) {
             this.cameraFly.captureGlobalView(this.camera, this.controls);
-            // Apply close-pair limits for fly-in
+            
             this.applyOrbitDistanceLimits(true);
             this.canvasContainer.classList.add('scene-container--conjunction-focus');
 
-            // Clear selection visuals
+            
             this.satelliteFootprint.update(null, objects, new Date());
             this.selectionMarker.update(null, objects, new Date());
             this.orbitTrail.update(false, null, objects, new Date());
             this.groundTrack.clear();
 
-            // Hide live catalog during replay
+            
             if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
             this.leoShell.setVisible(false);
           }
         } else if (!getState().eventReplay) {
-          // Rewind and play if same event clicked again
+          
           this._eventReplayStarted = true;
           startEventReplay(selectedEventId, collisionTimeMs);
         }
@@ -285,16 +285,16 @@ export class SceneManager {
       }
     }
 
-    // Clear event replay
+    
     const { eventReplay } = getState();
     if (this.lastEventReplayId && (!selectedEventId || !eventReplay)) {
       this.lastEventReplayId = null;
       this._eventReplayStarted = false;
       this.eventReplayVisuals.dispose();
       this.eventReplayLabels.hide();
-      // stopEventReplay() already cleared state; call only when still set.
+      
       if (eventReplay) stopEventReplay();
-      // Restore catalog satellites visibility
+      
       if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
       this.leoShell.setVisible(true);
       this.applyOrbitDistanceLimits(false);
@@ -320,7 +320,7 @@ export class SceneManager {
         this.lastConjunctionRevision = conjunctionRevision;
         this.lastFrameTime = performance.now();
         this.conjunctionVerification.rebuildForEvent(selectedConjunction, objects);
-        // Relax limits before fly-in
+        
         this.applyOrbitDistanceLimits(true);
 
         const flyTime = getSimulationTime();
@@ -420,7 +420,7 @@ export class SceneManager {
     this.lastFrameTime = now;
 
     if (state.verificationTime?.playing && !this.cameraFly.isActive()) {
-      // Hold clock during fly-in
+      
       advanceVerificationTime(deltaMs);
     } else if (state.eventReplay?.playing) {
       advanceEventReplayTime(deltaMs);
@@ -433,9 +433,9 @@ export class SceneManager {
     const currentState = getState();
     const simTime = getSimulationTime();
 
-    // Fast-path for historical replays
+    
     if (currentState.eventReplay) {
-      // Keep Earth day/night shader in sync with the replay time
+      
       this.applyDayNight(simTime);
 
       const flying = this.cameraFly.update(this.camera, this.controls, now);
@@ -445,7 +445,7 @@ export class SceneManager {
         currentState.eventReplay.collisionTimeMs,
       );
 
-      // Pause replay at collision moment
+      
       if (replayResult && currentState.eventReplay.playing) {
         const msToImpact = currentState.eventReplay.collisionTimeMs - currentState.eventReplay.currentMs;
         if (msToImpact <= 0) {
@@ -453,7 +453,7 @@ export class SceneManager {
         }
       }
 
-      // One-time fly-in to colliding pair
+      
       if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
         this._eventReplayStarted = true;
         const collisionScene = this.eventReplayVisuals.getCollisionScene();
@@ -478,7 +478,7 @@ export class SceneManager {
         }
       }
 
-      // Keep the colliding pair framed after the fly-in completes.
+      
       if (this._eventReplayStarted && !this.cameraFly.isActive() && replayResult) {
         const posA = replayResult.posA;
         const posB = replayResult.posB ?? this.eventReplayVisuals.getCollisionScene();
@@ -500,7 +500,7 @@ export class SceneManager {
       }
       this.camera.updateMatrixWorld();
 
-      // Floating info panels over the two objects
+      
       if (replayResult) {
         const event = getHistoricalEvent(currentState.eventReplay.eventId);
         const names = this.eventReplayVisuals.getNames();
@@ -509,7 +509,7 @@ export class SceneManager {
           replayResult.posB,
           names?.nameA ?? 'OBJECT A',
           names?.nameB ?? null,
-          (event?.eventType ?? 'collision'),   // visual category drives label behaviour
+          (event?.eventType ?? 'collision'),   
           this.camera,
           this.renderer,
           replayResult.impactFlash,
@@ -520,13 +520,13 @@ export class SceneManager {
 
       this.renderer.render(this.scene, this.camera);
       this.updateFps(now);
-      return; // skip all catalog propagation, conjunction scan, etc.
+      return; 
     }
 
     this.eventReplayLabels.hide();
     this._eventReplayStarted = false;
 
-    // ── Normal tick ──────────────────────────────────────────────────────────
+    
     const timeSpeed =
       currentState.verificationTime?.speed ??
       (currentState.time.mode === 'historical' ? currentState.time.speed : 1);
@@ -536,7 +536,7 @@ export class SceneManager {
 
     this.applyDayNight(simTime);
 
-    // Request next frame data from propagation worker
+    
     this.propWorker.request(simTime.getTime());
     const propagations =
       this.propWorker.getLatestResults() ??
@@ -544,7 +544,7 @@ export class SceneManager {
     const debrisStride = getDebrisUpdateStride(timeSpeed);
     const skipPointsUpdate = this.debrisFrameCounter++ % debrisStride !== 0;
 
-    // Cap model size based on true separation
+    
     let conjunctionLiveDistanceKm: number | null = null;
     if (currentState.selectedConjunction) {
       const propA = propagations[currentState.selectedConjunction.indexA];
@@ -586,7 +586,7 @@ export class SceneManager {
 
     this.satelliteFootprint.update(footprintIndex, currentState.objects, simTime);
 
-    // Suppress selection visuals during conjunction view
+    
     const selectionIndexForOverlays = currentState.selectedConjunction ? null : currentState.selectedIndex;
 
     this.selectionMarker.update(
@@ -602,7 +602,7 @@ export class SceneManager {
       simTime,
     );
 
-    // Update ground track
+    
     this.groundTrack.update(
       !currentState.eventReplay && !currentState.selectedConjunction && currentState.showGroundTrack
         ? currentState.selectedIndex
@@ -623,7 +623,7 @@ export class SceneManager {
         if (propA && propB) {
           const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
           const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-          // Follow live gap for camera dolly
+          
           const liveKm = conjunctionLiveDistanceKm ?? conj.distanceKm;
           this.cameraFly.followConjunctionMidpoint(
             this.camera,
@@ -659,7 +659,7 @@ export class SceneManager {
     );
 
     if (!currentState.selectedConjunction) {
-      // Predict upcoming close approaches
+      
       getUpcomingConjunctions(currentState.objects, simTime, (fresh) => {
         setConjunctions(fresh);
       });
@@ -687,7 +687,7 @@ export class SceneManager {
       focusState.selectedConjunction ||
       focusState.verificationTime
     ) {
-      // Block picking during focused views
+      
       return;
     }
 

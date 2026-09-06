@@ -1,5 +1,5 @@
 :root {
-  /* Flat, student-built aesthetic */
+  
   --bg-deep: #0f172a;
   --panel-bg: #1e293b;
   --panel-border: #334155;
@@ -15,7 +15,6 @@
   --radius-sm: 4px;
   --radius-md: 4px;
 }
-
 
 *,
 *::before,
@@ -51,7 +50,6 @@ body {
     'time time time' 64px / 260px 1fr 280px;
 }
 
-/* ── Header Styling ─────────────────────────────────────────────────── */
 .app-header {
   grid-area: header;
   display: flex;
@@ -94,7 +92,6 @@ body {
   display: none;
 }
 
-
 .header-mark__ring--inner {
   inset: 3px;
   border-color: rgba(var(--accent-rgb), 0.32);
@@ -126,7 +123,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 
 .header-title-short {
   display: none;
@@ -165,13 +161,11 @@ body {
   text-decoration: none;
 }
 
-
 .header-github-icon {
   display: block;
   flex-shrink: 0;
 }
 
-/* ── Advanced Filters Panel ─────────────────────────────────────────────── */
 .advanced-filters {
   padding-bottom: 6px;
 }
@@ -208,8 +202,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Dual-range slider ─────────────────────────────────────────────────────── */
-/* ── Dual Range Container & Track ────────────────────────────────────── */
 .dual-range {
   position: relative;
   height: 20px;
@@ -227,7 +219,6 @@ body {
   pointer-events: none;
 }
 
-/* Seçili Aralık Dolgusu */
 .dual-range-fill {
   position: absolute;
   height: 100%;
@@ -236,8 +227,6 @@ body {
   transition: left 0.05s, width 0.05s;
 }
 
-
-/* ── Input & Custom Thumb Styles ──────────────────────────────────────── */
 .dr-input {
   position: absolute;
   left: 0;
@@ -247,11 +236,10 @@ body {
   background: transparent;
   -webkit-appearance: none;
   appearance: none;
-  pointer-events: none; /* Track tıklamalarını iptal et */
+  pointer-events: none; 
   outline: none;
 }
 
-/* Webkit (Chrome, Edge, Safari) Thumb */
 .dr-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -272,7 +260,6 @@ body {
   background: var(--accent);
 }
 
-/* Firefox Thumb */
 .dr-input::-moz-range-thumb {
   pointer-events: auto;
   width: 14px;
@@ -282,7 +269,6 @@ body {
   border: 1px solid #334155;
   cursor: pointer;
 }
-
 
 .dr-input::-moz-range-track {
   background: transparent;
@@ -361,7 +347,6 @@ body {
   display: none;
 }
 
-/* ── Panel Layouts ──────────────────────────────────────────────────── */
 .panel {
   background: var(--panel-bg);
   backdrop-filter: none;
@@ -412,7 +397,6 @@ body {
   transition: border-color 0.15s;
 }
 
-
 .search-input::placeholder {
   color: var(--text-muted);
   font-family: var(--font);
@@ -453,7 +437,6 @@ body {
   touch-action: pan-y;
   overscroll-behavior: contain;
 }
-
 
 .object-list-spacer {
   width: 100%;
@@ -498,7 +481,6 @@ body {
   padding-left: 8px;
 }
 
-
 .object-list-name {
   flex: 1;
   min-width: 0;
@@ -530,7 +512,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── 3D Scene Viewport ─────────────────────────────────────────────── */
 .scene-container {
   grid-area: scene;
   position: relative;
@@ -552,7 +533,6 @@ body {
   background: rgba(0, 0, 0, 0.3);
   z-index: 2;
 }
-
 
 .conjunction-labels {
   position: absolute;
@@ -582,7 +562,6 @@ body {
   stroke: #facc15;
 }
 
-/* ── Conjunction Overlay Labels ─────────────────────────────────────── */
 .conjunction-label {
   position: absolute;
   max-width: 200px;
@@ -596,7 +575,6 @@ body {
   text-overflow: ellipsis;
   border: 1px solid #000;
 }
-
 
 .conjunction-label--a {
   color: #080c14;
@@ -612,7 +590,6 @@ body {
   transform: translate(0, 0);
 }
 
-/* ── Time Transport Control Bar ─────────────────────────────────────── */
 .time-bar {
   grid-area: time;
   display: flex;
@@ -686,7 +663,6 @@ body {
 .speed-btn:hover {
   background: #475569;
 }
-
 
 .speed-btn.active {
   border-color: var(--accent);
@@ -770,7 +746,6 @@ body {
   gap: 4px;
 }
 
-/* ── Layer & Category Filters ─────────────────────────────────────── */
 .layer-filters {
   display: flex;
   flex-direction: column;
@@ -810,7 +785,6 @@ body {
   color: #fff;
   border-color: var(--accent);
 }
-
 
 .filter-chip-label {
   letter-spacing: 0.02em;
@@ -853,7 +827,6 @@ body {
   border-color: var(--accent);
 }
 
-
 .filter-segment-swatch {
   width: 7px;
   height: 7px;
@@ -877,7 +850,6 @@ body {
   background: #f43f5e;
 }
 
-/* ── Display Options & Cards ────────────────────────────────────────── */
 .display-options {
   display: flex;
   flex-direction: column;
@@ -908,7 +880,6 @@ body {
   border-color: var(--accent);
   background: #1e293b;
 }
-
 
 .filter-toggle-copy {
   display: flex;
@@ -955,7 +926,6 @@ body {
   justify-content: flex-start;
 }
 
-/* ── Display Options & Category Stats ────────────────────────────────── */
 .display-options-hint {
   margin: 0 0 4px;
   padding-left: 24px;
@@ -997,7 +967,6 @@ body {
   margin: 0;
 }
 
-/* Stacked Data Rows for High Telemetry Density */
 .stat-row,
 .detail-row {
   display: flex;
@@ -1047,7 +1016,6 @@ body {
   line-height: 1.45;
 }
 
-/* ── TLE / Data Banners ─────────────────────────────────────────────── */
 .tle-stale-banner {
   margin-bottom: 8px;
   padding: 6px 8px;
@@ -1076,7 +1044,6 @@ body {
   color: var(--danger);
 }
 
-/* ── Detail Panel & Media ───────────────────────────────────────────── */
 .detail-header {
   margin-bottom: 10px;
 }
@@ -1151,7 +1118,6 @@ body {
   margin: 10px 0;
 }
 
-/* ── Utility Views & Overlays ───────────────────────────────────────── */
 .error-screen {
   display: flex;
   flex-direction: column;
@@ -1218,8 +1184,6 @@ body {
   pointer-events: none;
   z-index: 10;
 }
-
-/* ── Conjunction & Event System ─────────────────────────────────────── */
 
 .panel-heading--alert{
   color: #b77782;
@@ -1301,7 +1265,6 @@ body {
   border-color: #ef4444;
   background: #7f1d1d;
 }
-
 
 .conjunction-alert--new {
   animation: alertDrop 0.35s ease-out, alertPulse 1.2s ease-out;
@@ -1420,7 +1383,6 @@ body {
   }
 }
 
-/* ── Historical & Featured Events ───────────────────────────────────── */
 .event-cards {
   margin-top: 4px;
 }
@@ -1489,7 +1451,6 @@ body {
   border-color: rgba(var(--accent-rgb),.1) !important;
 }
 
-/* ── Event Cards & Badge Elements ────────────────────────────────────── */
 .event-card-top {
   display: flex;
   align-items: flex-start;
@@ -1599,7 +1560,6 @@ body {
   background: rgba(var(--accent-rgb), 0.1);
 }
 
-/* Global Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -1618,7 +1578,6 @@ body {
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* ── Mobile Layout & Responsive Breakpoints ────────────────────────── */
 @media (max-width: 860px) {
   .app-grid {
     grid-template:
@@ -1875,12 +1834,10 @@ body {
   }
 }
 
-/* Ensure [hidden] always wins over component display rules */
 [hidden] {
   display: none !important;
 }
 
-/* ── Event Replay HUD Controls ──────────────────────────────────────── */
 .event-replay-title {
   font-family: var(--font-display);
   font-size: 0.9rem;
@@ -1951,7 +1908,6 @@ body {
   margin-bottom: 12px;
 }
 
-/* ── Event Replay Controls ───────────────────────────────────────────── */
 .btn-era-ctrl {
   flex: 1;
   padding: 6px 10px;
@@ -1981,7 +1937,6 @@ body {
   background: rgba(var(--accent-rgb), 0.2);
 }
 
-/* ── Event Replay Floating Info Labels ──────────────────────────────── */
 .era-labels {
   position: absolute;
   inset: 0;
@@ -2012,7 +1967,6 @@ body {
   stroke: rgba(250, 204, 21, 0.7);
 }
 
-/* Overlay info panel cards */
 .era-lp {
   position: absolute;
   min-width: 150px;
@@ -2081,7 +2035,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Event Information Card (eic) ───────────────────────────────────── */
 .eic {
   margin-top: 14px;
   border-radius: var(--radius-sm);
@@ -2135,7 +2088,6 @@ body {
   color: var(--text-muted);
 }
 
-/* ── Modal Panels & Overlay Dialogs ─────────────────────────────────── */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2146,7 +2098,6 @@ body {
   justify-content: center;
   padding: 20px;
 }
-
 
 @keyframes ap-fade-in {
   from { opacity: 0; }
@@ -2253,7 +2204,6 @@ body {
   color: var(--accent);
 }
 
-/* Stat & Metric Grids */
 .ap-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2339,7 +2289,6 @@ body {
   margin-left: 4px;
 }
 
-/* Firebase & Realtime Features */
 .ap-firebase-row {
   display: flex;
   align-items: center;
@@ -2395,7 +2344,6 @@ body {
   color: var(--text-muted);
 }
 
-/* Country List Component */
 .ap-country-heading {
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -2461,7 +2409,6 @@ body {
   text-align: right;
 }
 
-/* Firebase Rules & Monospace Code Blocks */
 .ap-rules-hint {
   background: rgba(250, 204, 21, 0.05);
   border: 1px solid rgba(250, 204, 21, 0.2);
@@ -2489,7 +2436,6 @@ body {
   overflow-x: auto;
 }
 
-/* ── Analytics Note Component ────────────────────────────────────────── */
 .ap-note-text {
   margin: 0 0 10px;
   font-size: 0.75rem;
@@ -2516,7 +2462,6 @@ body {
   text-decoration: none;
 }
 
-/* ── Tools Section ───────────────────────────────────────────────────── */
 .ap-tools {
   display: flex;
   flex-wrap: wrap;
@@ -2552,7 +2497,6 @@ body {
   border-color: var(--danger);
 }
 
-/* ── Panel Footer ────────────────────────────────────────────────────── */
 .ap-footer {
   display: flex;
   align-items: center;
@@ -2572,7 +2516,6 @@ body {
   opacity: 0.6;
 }
 
-/* ── Header Icon Controls (Kessler & Help Buttons) ───────────────────── */
 .kessler-header-btn,
 .help-header-btn {
   display: inline-flex;
@@ -2600,7 +2543,6 @@ body {
   color: var(--accent);
 }
 
-/* ── Interactive Product Tour Overlay ────────────────────────────────── */
 .tour-root {
   position: fixed;
   inset: 0;
@@ -2636,7 +2578,6 @@ body {
   transition: top 0.22s ease, left 0.22s ease, width 0.22s ease, height 0.22s ease;
   z-index: 2;
 }
-
 
 .tour-target--lit {
   outline: none;
@@ -2826,7 +2767,6 @@ body {
   cursor: not-allowed;
 }
 
-/* ── Kessler Syndrome Future-Projection Panel ───────────────────────── */
 .kessler-panel {
   width: min(760px, 100%);
 }
@@ -2967,7 +2907,6 @@ body {
 .kp-swatch--meo { background: #a78bfa; }
 .kp-swatch--geo { background: #f472b6; }
 
-/* ── Custom Range Sliders ─────────────────────────────────────────────── */
 .kp-slider-row {
   margin-bottom: 14px;
 }
@@ -3053,8 +2992,6 @@ body {
   cursor: pointer;
 }
 
-
-/* ── Animation & Control Scrubbers ────────────────────────────────────── */
 .kp-scrub-row {
   display: flex;
   align-items: center;
@@ -3095,7 +3032,6 @@ body {
   cursor: not-allowed;
 }
 
-/* ── Data Visualization Canvases ─────────────────────────────────────── */
 .kp-chart-canvas,
 .kp-density-canvas {
   display: block;
@@ -3108,7 +3044,6 @@ body {
   position: relative;
 }
 
-/* ── Status Narrative & Disclaimer Callouts ──────────────────────────── */
 .kp-narrative {
   font-size: 0.82rem;
   line-height: 1.55;
@@ -3147,7 +3082,6 @@ body {
   line-height: 1.4;
 }
 
-/* ── Media Queries & Responsive Overrides ────────────────────────────── */
 @media (min-width: 640px) {
   .kp-presets {
     display: flex;

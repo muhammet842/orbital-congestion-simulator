@@ -1,4 +1,4 @@
-// Application bootstrap
+
 import './style.css';
 import { loadTleDataset, createTrackedObjects, computeStats } from './data/tleLoader';
 import { getState, initState } from './state/appState';
@@ -37,18 +37,17 @@ async function main(): Promise<void> {
     initRightPanel(rightPanel);
     initTimeControls(timeBar);
 
-
     const sceneManager = new SceneManager(sceneContainer);
     sceneManager.initOrbitalMeshes(objects);
     sceneManager.start();
 
-    // Deep linking
+    
     initDeepLink(objects);
 
-    // Future Projection panel
+    
     initKesslerPanel();
 
-    // First-visit walkthrough
+    
     initHowToGuide();
 
     if (import.meta.env.DEV) {

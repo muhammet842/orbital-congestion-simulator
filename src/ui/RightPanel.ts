@@ -1,4 +1,4 @@
-// Right panel: satellite detail, conjunction verify view, or historical event replay HUD.
+
 import {
   getDistanceAtTime,
   getRelativeVelocityAtTime,
@@ -29,8 +29,6 @@ import { getHistoricalEvent } from './EventCards';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
 import { isRecentlyLaunched } from '../data/newLaunches';
 
-// Compute the 3-D separation in km between two collision objects at T-5min,
-// mirroring the same back-tracking geometry as EventReplayVisuals.
 function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): number {
   if (!event.approachB) return 0;
   const { collisionGeo, approachA, approachB } = event;
@@ -587,7 +585,7 @@ function refreshEventReplayHUD(container: HTMLElement, eventId: string, collisio
     playBtn.textContent = eventReplay.playing ? '⏸' : '▶';
   }
 
-  // Distance decreases from initialSep → 0 at impact, using the same linear model as EventReplayVisuals
+  
   if (distEl) {
     const event = getHistoricalEvent(eventId);
     if (event?.approachB) {

@@ -1,6 +1,5 @@
 import { getState, subscribe } from '../state/appState';
 
-/** Must match the max-width used for `.app-grid`'s mobile layout in style.css. */
 export const MOBILE_BREAKPOINT_PX = 860;
 
 export function createLayout(root: HTMLElement): {
@@ -31,7 +30,7 @@ export function createLayout(root: HTMLElement): {
         <div class="header-actions" id="header-actions">
           <a
             class="header-github"
-            href="https://github.com/muhammet842/orbital-congestion-simulator"
+            href="https:
             target="_blank"
             rel="noopener noreferrer"
             title="View source on GitHub"
@@ -106,7 +105,7 @@ function setupMobilePanelToggles(
     if (e.key === 'Escape') closePanels();
   });
 
-  // On mobile, auto-open the right panel when the user selects a satellite
+  
   let lastSelectedIndex: number | null = null;
   subscribe(() => {
     const { selectedIndex } = getState();
@@ -132,7 +131,6 @@ export function isMobileLayout(): boolean {
   );
 }
 
-// Open/close mobile drawers for the how-to guide tour
 export function setTourPanel(side: 'left' | 'right' | null): void {
   const leftPanel = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');

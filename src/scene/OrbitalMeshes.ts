@@ -92,9 +92,7 @@ export class OrbitalMeshes {
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
       showOnlyRecentLaunches?: boolean;
       categoryFilter?: ObjectCategory | 'all';
-      /** Real-world km between the two conjunction-highlighted objects right
-       *  now — caps their model scale so it never visually dwarfs a genuine
-       *  multi-km near-miss (see CONJUNCTION_SIZE_FRACTION_OF_SEPARATION). */
+      
       conjunctionLiveDistanceKm?: number | null;
     },
   ): void {

@@ -15,12 +15,10 @@ interface NamePhotoRule {
   photo: CuratedPhoto;
 }
 
-/** Wikimedia thumbs above source resolution return 400 — use 330px (Wikipedia default). */
 const THUMB = (path: string, width = 330) => {
   const filename = path.split('/').pop()!;
-  const thumbFile =
-    filename.endsWith('.webp') ? `${width}px-${filename}.png` : `${width}px-${filename}`;
-  return `https://upload.wikimedia.org/wikipedia/commons/thumb/${path}/${thumbFile}`;
+  const thumbFile = filename.endsWith('.webp') ? `${width}px-${filename}.png` : `${width}px-${filename}`;
+  return `/images/satellites/thumbs/${thumbFile}`;
 };
 
 const LOCAL = (filename: string): string => `/images/satellites/${filename}`;
@@ -30,7 +28,6 @@ const LOCAL_FALLBACK: CuratedPhoto = {
   credit: 'Generic satellite render',
 };
 
-/** Local artist impressions — one file per Turkish spacecraft. */
 const PHOTO_GOKTURK1: CuratedPhoto = {
   url: LOCAL('gokturk-1.png'),
   credit: 'Telespazio / TAI (artist impression)',
@@ -61,7 +58,6 @@ const PHOTO_TURKSAT_6A: CuratedPhoto = {
   credit: 'TAI / Türksat A.Ş. (artist impression)',
 };
 
-/** Direct URLs for well-known spacecraft (Wikimedia Commons / NASA). */
 const NORAD_PHOTOS = new Map<number, CuratedPhoto>([
   [
     25544,
@@ -193,10 +189,6 @@ function getNamePhotoRule(obj: TrackedObject): CuratedPhoto | null {
   return null;
 }
 
-/**
- * Resolve a curated render for the selected spacecraft (not debris).
- * Unknown objects get a generic silhouette — never another satellite's photo.
- */
 export function resolveObjectPhoto(obj: TrackedObject): ObjectPhoto | null {
   if (obj.category === 'debris') return null;
 
@@ -224,7 +216,6 @@ function renderPhotoFigure(photo: ObjectPhoto, alt: string): string {
   `;
 }
 
-/** Load photo into panel; ignores stale responses when selection changes quickly. */
 export async function loadObjectPhotoInto(
   container: HTMLElement,
   obj: TrackedObject,

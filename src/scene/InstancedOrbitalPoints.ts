@@ -38,7 +38,6 @@ function includesKind(category: ObjectCategory, kind: OrbitalPointKind): boolean
   return category === 'active' || category === 'stations';
 }
 
-/** Instanced spheres for spacecraft or debris — one draw call per kind. */
 export class InstancedOrbitalPoints {
   readonly mesh: InstancedMesh;
   readonly kind: OrbitalPointKind;
@@ -109,8 +108,8 @@ export class InstancedOrbitalPoints {
         continue;
       }
 
-      // Debris has no GLTF stand-in — keep the instanced sphere so sat-vs-debris
-      // close approaches show both objects, not only the satellite model.
+      
+      
 
       if (
         !isSelected &&

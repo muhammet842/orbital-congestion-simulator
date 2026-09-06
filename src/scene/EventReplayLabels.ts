@@ -1,10 +1,9 @@
 import type { PerspectiveCamera, Vector3, WebGLRenderer } from 'three';
 import type { EventType } from '../ui/EventCards';
 
-const GM = 398600;           // km³ s⁻²
+const GM = 398600;           
 const EARTH_RADIUS_KM = 6371;
 
-/** Project a Three.js scene-space Vector3 to canvas pixel coordinates. */
 function projectToScreen(
   pos: Vector3,
   camera: PerspectiveCamera,
@@ -16,17 +15,15 @@ function projectToScreen(
   return {
     x: (ndc.x + 1) * 0.5 * w,
     y: (1 - ndc.y) * 0.5 * h,
-    // z < 1 means in front of the far clip plane; z > 0 means in front of camera
+    
     visible: ndc.z > 0 && ndc.z < 1,
   };
 }
 
-/** Altitude above Earth surface from a scene-space position (1 unit = 6371 km). */
 function altKmFromScenePos(pos: Vector3): number {
   return Math.max(0, (pos.length() - 1) * EARTH_RADIUS_KM);
 }
 
-/** Circular orbital speed at given altitude. */
 function orbitalVelocityKmS(altKm: number): number {
   return Math.sqrt(GM / (EARTH_RADIUS_KM + altKm));
 }
@@ -78,12 +75,12 @@ export class EventReplayLabels {
     this.root.className = 'era-labels';
     this.root.hidden = true;
 
-    // Full-viewport SVG overlay for the leader lines
-    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svgNS = 'http://www.w3.org/2000/svg';
+    this.svg = document.createElementNS(svgNS, 'svg');
     this.svg.classList.add('era-labels__svg');
 
-    this.lineA = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    this.lineB = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    this.lineA = document.createElementNS(svgNS, 'line');
+    this.lineB = document.createElementNS(svgNS, 'line');
     this.lineA.classList.add('era-labels__leader', 'era-labels__leader--a');
     this.lineB.classList.add('era-labels__leader', 'era-labels__leader--b');
     this.svg.append(this.lineA, this.lineB);
@@ -97,16 +94,7 @@ export class EventReplayLabels {
     container.appendChild(this.root);
   }
 
-  /**
-   * Recompute screen positions and refresh panel content.
-   *
-   * @param posA      Current scene position of object A (satellite).
-   * @param posB      Current scene position of object B (satellite or missile).
-   * @param nameA     Display name for object A.
-   * @param nameB     Display name for object B, or null for ASAT missiles.
-   * @param eventType  Visual category of the event (collision | asat | docking | breakup).
-   * @param impactFlash  0..1 flash intensity — panels are hidden at full flash.
-   */
+  
   update(
     posA: Vector3 | null,
     posB: Vector3 | null,
@@ -136,29 +124,29 @@ export class EventReplayLabels {
     this.panelA.innerHTML = buildPanelHTML(nameA, meta.iconA, meta.typeA, altA, velA);
     this.panelA.hidden = false;
 
-    // --- Position panel A to upper-left of its dot ---
+    
     const W = this.panelA.offsetWidth  || 170;
     const H = this.panelA.offsetHeight || 90;
-    const LEAD = 28; // px gap between panel edge and dot
+    const LEAD = 28; 
 
     const pAX = screenA.x - W - LEAD;
     const pAY = screenA.y - H - LEAD;
     this.panelA.style.left = `${pAX}px`;
     this.panelA.style.top  = `${pAY}px`;
 
-    // Leader line A: from panel bottom-right corner → dot
+    
     const anchorAX = pAX + W;
     const anchorAY = pAY + H;
     this.setLine(this.lineA, anchorAX, anchorAY, screenA.x, screenA.y);
 
-    // --- Panel B ---
+    
     if (posB) {
       const screenB = projectToScreen(posB, camera, renderer);
       if (screenB.visible) {
         const altB = altKmFromScenePos(posB);
         const type   = meta.typeB;
         const icon   = meta.iconB;
-        // ASAT interceptors travel faster than orbital speed (~9 km/s)
+        
         const velB   = eventType === 'asat'
           ? Math.min(9.5, orbitalVelocityKmS(altB) * 1.2)
           : orbitalVelocityKmS(altB);
@@ -169,13 +157,13 @@ export class EventReplayLabels {
 
         const HB = this.panelB.offsetHeight || 90;
 
-        // Panel B: upper-right of its dot
+        
         const pBX = screenB.x + LEAD;
         const pBY = screenB.y - HB - LEAD;
         this.panelB.style.left = `${pBX}px`;
         this.panelB.style.top  = `${pBY}px`;
 
-        // Leader line B: from panel bottom-left corner → dot
+        
         const anchorBX = pBX;
         const anchorBY = pBY + HB;
         this.setLine(this.lineB, anchorBX, anchorBY, screenB.x, screenB.y);

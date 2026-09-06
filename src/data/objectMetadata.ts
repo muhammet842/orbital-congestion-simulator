@@ -1,9 +1,4 @@
-/**
- * Name/NORAD heuristics that fill country + owner when SATCAT join is missing.
- * Prefer NORAD overrides (e.g. ISS 25544) over regex so catalog quirks like
- * ISS (NAUKA) / separate modules stay intentional. Keep TURKISH_NORAD_IDS in
- * sync with scripts/fetch-tle.mjs PRIORITY_NORAD_IDS.
- */
+
 import type { ObjectCategory } from '../types';
 
 export const TURKISH_NORAD_IDS = new Set([
@@ -13,7 +8,7 @@ export const TURKISH_NORAD_IDS = new Set([
   47306,
   50212,
   60233,
-  98268, // RAFS (Rubidium Atomic Frequency Standard) — no public TLE yet, see fetch-tle.mjs
+  98268, 
 ]);
 
 interface MetadataRule {
@@ -22,12 +17,6 @@ interface MetadataRule {
   owner: string;
 }
 
-/**
- * Name / NORAD heuristics used only when tle.json has no country/owner.
- * Prefer SATCAT OWNER enrichment written by `scripts/fetch-tle.mjs`
- * (see `scripts/enrichFromSatcat.mjs`); these rules are the fallback.
- */
-/** Most specific patterns first — first match wins. */
 const NAME_RULES: MetadataRule[] = [
   { pattern: /GOKTURK|GÖKTÜRK/i, country: 'Türkiye 🇹🇷', owner: 'TSK / TAI' },
   { pattern: /IMECE|İMECE/i, country: 'Türkiye 🇹🇷', owner: 'TÜBİTAK UZAY' },
@@ -97,7 +86,7 @@ const FEATURED_OVERRIDES = new Map<number, { country: string; owner: string }>([
   [47306, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
   [50212, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
   [60233, { country: 'Türkiye 🇹🇷', owner: 'Türksat A.Ş.' }],
-  // Amateur radio cubesat (OM9MAR); origin Slovakia — SatNOGS / IARU.
+  
   [69920, { country: 'Slovakia 🇸🇰', owner: 'Amateur radio (OM9MAR)' }],
 ]);
 

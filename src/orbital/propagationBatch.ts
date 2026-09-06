@@ -1,7 +1,6 @@
 import { propagateObject, type PropagationResult } from './propagator';
 import type { TrackedObject } from '../types';
 
-/** Quantize sim time so high speed multipliers reuse SGP4 results across frames. */
 export function quantizeSimulationTimeMs(simTimeMs: number, speed: number): number {
   if (speed <= 1) return simTimeMs;
   if (speed <= 10) return Math.floor(simTimeMs / 250) * 250;
@@ -18,7 +17,6 @@ export function getDebrisUpdateStride(speed: number): number {
 let cachedTickMs = NaN;
 let cachedResults: (PropagationResult | null)[] = [];
 
-/** Propagate all objects once per quantized sim-time tick (shared by debris + GLTF paths). */
 export function getPropagationResults(
   objects: TrackedObject[],
   simTime: Date,

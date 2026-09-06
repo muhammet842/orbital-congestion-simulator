@@ -15,11 +15,12 @@ export class ConjunctionLabels {
     this.root.className = 'conjunction-labels';
     this.root.hidden = true;
 
-    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const svgNS = 'http://www.w3.org/2000/svg';
+    this.svg = document.createElementNS(svgNS, 'svg');
     this.svg.classList.add('conjunction-labels__svg');
 
-    this.lineA = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    this.lineB = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    this.lineA = document.createElementNS(svgNS, 'line');
+    this.lineB = document.createElementNS(svgNS, 'line');
     this.lineA.classList.add('conjunction-labels__leader', 'conjunction-labels__leader--a');
     this.lineB.classList.add('conjunction-labels__leader', 'conjunction-labels__leader--b');
     this.svg.append(this.lineA, this.lineB);

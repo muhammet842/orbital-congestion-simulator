@@ -1,6 +1,5 @@
-// UI tour (header "?" reopens).
-// Completion flag: localStorage `orbital-help-seen-v3`.
-// Steps may open mobile drawers via setTourPanel; keep selectors in sync with Layout.
+
+
 import { closeKesslerPanel, openKesslerPanel } from './KesslerPanel';
 import { setTourPanel } from './Layout';
 
@@ -64,7 +63,7 @@ function markGuideSeen(): void {
   try {
     localStorage.setItem(LS_HELP_SEEN, '1');
   } catch {
-    /* ignore */
+    
   }
 }
 

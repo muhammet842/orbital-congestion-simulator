@@ -37,17 +37,17 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     description:
       'First accidental collision between two intact satellites. Iridium 33 (active, 789 km, 86.4°) and Cosmos 2251 (defunct, 789 km, 74.0°) collided at 16:56:00 UTC over northern Siberia, creating ~2,000 trackable debris fragments.',
     debrisCount: '~2000',
-    // Verified impact time (NASA/JSC Orbital Debris Program Office)
+    
     collisionTimeUtc: '2009-02-10T16:56:00Z',
     altitudeKm: 789,
-    // Verified collision location: Taymyr Peninsula, northern Siberia
-    // (Kelso 2009, CelesTrak collision analysis)
+    
+    
     collisionGeo: { latDeg: 72.2, lonDeg: 101.8, altKm: 789 },
-    // Iridium 33 was descending (came from near the North Pole heading SSE).
-    // Cosmos 2251 was ascending (came from SW Siberia heading NNE).
-    // Crossing angle: |168.2° − 63.7°| ≈ 104.5° ≈ the measured 102.2°.
-    // This config makes the trails clearly show two distinct polar-orbit arcs
-    // crossing rather than one nearly-horizontal path.
+    
+    
+    
+    
+    
     approachA: { inclinationDeg: 86.4, ascending: false },
     approachB: { inclinationDeg: 74.0, ascending: true },
     info: {
@@ -76,13 +76,13 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     description:
       'Chinese SC-19/KT-2 ASAT missile destroyed FY-1C weather satellite (865 km, 98.8° sun-synchronous orbit) on 2007-01-11 at 22:28 UTC, generating the largest debris cloud in history with ~3,000 trackable fragments.',
     debrisCount: '~3000',
-    // Verified impact time (Johnson 2007; CelesTrak debris analysis)
+    
     collisionTimeUtc: '2007-01-11T22:28:00Z',
     altitudeKm: 865,
-    // Verified interception coordinates over eastern China / Taiwan Strait region
-    // (Satellite was in ascending pass over Fujian Province at impact)
+    
+    
     collisionGeo: { latDeg: 28.4, lonDeg: 118.5, altKm: 865 },
-    // FY-1C in retrograde SSO, ascending at the interception latitude
+    
     approachA: { inclinationDeg: 98.8, ascending: true },
     approachB: null,
     info: {
@@ -106,13 +106,13 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     description:
       'Russian Nudol (PL-19) ASAT missile destroyed Cosmos 1408 reconnaissance satellite (465 km, 82.6°) at 02:45 UTC on 15 Nov 2021, forcing ISS crew to shelter. The resulting debris field threatened active spacecraft for years.',
     debrisCount: '~1500',
-    // Verified impact time (US Space Command public statement)
+    
     collisionTimeUtc: '2021-11-15T02:45:00Z',
     altitudeKm: 465,
-    // Verified impact coordinates over Novaya Zemlya / Kara Sea region, Russia
-    // (Based on orbital track and published altitude; Pardini & Anselmo 2022)
+    
+    
     collisionGeo: { latDeg: 73.1, lonDeg: 76.5, altKm: 465 },
-    // Cosmos 1408 ascending northward at the time of interception
+    
     approachA: { inclinationDeg: 82.6, ascending: true },
     approachB: null,
     info: {
@@ -129,7 +129,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     objectB: null,
   },
 
-  // ── USA-193 / Operation Burnt Frost ────────────────────────────────────
+  
   {
     id: 'usa-193-burnt-frost',
     title: 'USA-193 — Operation Burnt Frost',
@@ -141,7 +141,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     collisionTimeUtc: '2008-02-21T03:26:00Z',
     altitudeKm: 247,
     collisionGeo: { latDeg: 19.3, lonDeg: -161.2, altKm: 247 },
-    // USA-193 was descending (coming south after passing high lat) at intercept
+    
     approachA: { inclinationDeg: 58.5, ascending: false },
     approachB: null,
     info: {
@@ -158,7 +158,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     objectB: null,
   },
 
-  // ── Cerise & Ariane 3 debris ───────────────────────────────────────────
+  
   {
     id: 'cerise-ariane-debris',
     title: 'Cerise ↔ Ariane 3 Debris',
@@ -170,9 +170,9 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     collisionTimeUtc: '1996-07-24T11:40:00Z',
     altitudeKm: 700,
     collisionGeo: { latDeg: 35.2, lonDeg: -12.4, altKm: 700 },
-    // Cerise in retrograde SSO, ascending northward at collision latitude
+    
     approachA: { inclinationDeg: 98.6, ascending: true },
-    // Ariane debris from a different SSO pass — descending (heading south) for head-on crossing
+    
     approachB: { inclinationDeg: 98.6, ascending: false },
     info: {
       title: 'First Confirmed Debris-on-Satellite Collision',
@@ -193,7 +193,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     },
   },
 
-  // ── Yunhai 1-02 & SL-16 / Zenit-2 debris ──────────────────────────────
+  
   {
     id: 'yunhai-1-02',
     title: 'Yunhai 1-02 ↔ SL-16 Debris',
@@ -204,11 +204,11 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     debrisCount: '~37',
     collisionTimeUtc: '2021-03-18T07:41:00Z',
     altitudeKm: 780,
-    // KeepTrack / NASA ODQN: ~780 km above Tromsø, Norway
+    
     collisionGeo: { latDeg: 69.65, lonDeg: 18.96, altKm: 780 },
-    // Yunhai in retrograde SSO, descending over northern Norway
+    
     approachA: { inclinationDeg: 98.54, ascending: false },
-    // Zenit-2 / Cosmos 2333 family debris at ~71°, opposite heading for a high-speed crossing
+    
     approachB: { inclinationDeg: 71.0, ascending: true },
     info: {
       title: 'The First Accidental Collision Since 2009',
@@ -229,7 +229,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     },
   },
 
-  // ── Kosmos 2499 breakup ────────────────────────────────────────────────
+  
   {
     id: 'kosmos-2499-breakup',
     title: 'Kosmos 2499 — Mysterious Breakup',
@@ -241,7 +241,7 @@ export const HISTORICAL_EVENTS: HistoricalEvent[] = [
     collisionTimeUtc: '2023-01-03T10:00:00Z',
     altitudeKm: 1150,
     collisionGeo: { latDeg: 78.4, lonDeg: 120.2, altKm: 1150 },
-    // Ascending toward its orbital peak at the high northern latitude
+    
     approachA: { inclinationDeg: 64.9, ascending: true },
     approachB: null,
     info: {
@@ -340,7 +340,6 @@ export function initEventCards(container: HTMLElement): void {
       btn.setAttribute('aria-expanded', String(id === selectedEventId));
     });
   });
-
 
 }
 

@@ -10,7 +10,6 @@ const DEFAULT_POSITION = new Vector3(0, 0, 4.5);
 const DEFAULT_TARGET = new Vector3(0, 0, 0);
 const TRACKING_SMOOTHING = 10;
 
-/** Camera distance from Earth center, scaled by orbital altitude. */
 function globeCameraRadiusFromAltitude(altitudeKm: number): number {
   const orbitRadiusScene = 1 + Math.max(0, altitudeKm) / EARTH_RADIUS_KM;
   return orbitRadiusScene * 1.35 + 1.55;
@@ -76,7 +75,7 @@ export class CameraFly {
     this.globalSnapshot = null;
   }
 
-  /** One-time smooth zoom when a conjunction card is first selected. */
+  
   flyToConjunctionPair(
     camera: PerspectiveCamera,
     controls: OrbitControls,
@@ -99,10 +98,7 @@ export class CameraFly {
     this.trackingInitialized = false;
   }
 
-  /**
-   * Rotate around Earth at global zoom so the sub-satellite ground point faces
-   * the camera — Earth stays centered like the default globe view.
-   */
+  
   frameSelectedOnGlobe(
     camera: PerspectiveCamera,
     controls: OrbitControls,
@@ -165,11 +161,7 @@ export class CameraFly {
     this.trackingInitialized = false;
   }
 
-  /**
-   * Pan target + camera together so the pair stays centered while preserving
-   * the user's zoom and orbit angle. Dolly is intentional left to the user
-   * (scroll / pinch) for precise close-approach inspection.
-   */
+  
   followConjunctionMidpoint(
     camera: PerspectiveCamera,
     controls: OrbitControls,

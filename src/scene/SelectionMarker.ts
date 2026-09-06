@@ -112,7 +112,7 @@ export class SelectionMarker {
     this.nadir.set(subSat.nadirWorld.x, subSat.nadirWorld.y, subSat.nadirWorld.z);
     this.group.visible = true;
 
-    // Satellite position is shown by instanced points / GLTF — only draw the ground link.
+    
     this.dot.visible = false;
     this.ring.visible = false;
     this.nadirDot.position.copy(this.nadir);

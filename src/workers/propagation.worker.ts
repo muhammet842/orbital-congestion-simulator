@@ -1,30 +1,4 @@
-/**
- * Propagation Web Worker
- *
- * Runs all SGP4 computations off the main thread.
- *
- * Message protocol
- * ────────────────
- * Main → Worker  { type: 'init',      objects: InitObject[] }
- * Worker → Main  { type: 'ready',     count: number }
- *
- * Main → Worker  { type: 'propagate', tickMs: number }
- * Worker → Main  { type: 'results',   tickMs: number, data: Float64Array }
- *                 (data is TRANSFERRED — zero-copy, main thread owns it)
- *
- * Buffer layout  (STRIDE = 10 Float64 values per object)
- * ──────────────
- *  [0]  pos.x  (ECI km)
- *  [1]  pos.y  (ECI km)
- *  [2]  pos.z  (ECI km)
- *  [3]  vel.x  (ECI km/s)
- *  [4]  vel.y  (ECI km/s)
- *  [5]  vel.z  (ECI km/s)
- *  [6]  altitudeKm
- *  [7]  velocityKmS
- *  [8]  inclinationDeg
- *  [9]  layerIndex  (0=LEO  1=MEO  2=GEO  3=HEO  -1=failed)
- */
+
 
 import {
   twoline2satrec,
@@ -35,14 +9,12 @@ import {
   type SatRec,
 } from 'satellite.js';
 
-// ── Inline orbit classifier to avoid importing classify.ts which pulls in
-//    browser-only transitive dependencies (objectMetadata, etc.) ────────────
 function classifyLayer(altKm: number, ecco: number): number {
-  if (ecco > 0.25) return 3; // HEO
-  if (altKm < 2000) return 0; // LEO
-  if (altKm < 35786 * 0.9) return 1; // MEO
-  if (Math.abs(altKm - 35786) < 500) return 2; // GEO
-  return 3; // HEO
+  if (ecco > 0.25) return 3; 
+  if (altKm < 2000) return 0; 
+  if (altKm < 35786 * 0.9) return 1; 
+  if (Math.abs(altKm - 35786) < 500) return 2; 
+  return 3; 
 }
 
 const STRIDE = 10;
@@ -57,7 +29,7 @@ type WorkerInMessage =
   | { type: 'propagate'; tickMs: number };
 
 let satrecs: SatRec[] = [];
-// Two alternating buffers — one is being filled while the other is in transit.
+
 let bufA = new Float64Array(0);
 let bufB = new Float64Array(0);
 let useBufA = true;
@@ -110,15 +82,15 @@ self.onmessage = (e: MessageEvent<WorkerInMessage>) => {
       buf[base + 9] = classifyLayer(altKm, ecco);
     }
 
-    // Transfer ownership to the main thread (zero-copy)
+    
     const transfer = buf.buffer;
     (self as unknown as Worker).postMessage(
       { type: 'results', tickMs: msg.tickMs, data: buf },
       [transfer],
     );
 
-    // The transferred buffer is now owned by main thread — allocate a fresh one
-    // for the next cycle.
+    
+    
     if (useBufA) {
       bufA = new Float64Array(satrecs.length * STRIDE);
     } else {

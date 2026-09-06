@@ -1,15 +1,7 @@
-/**
- * Shared domain types for the catalog and UI.
- *
- * TleRecord  — raw JSON from public/data/tle.json
- * TrackedObject — satrec + derived layer/color/altitude after tleLoader
- * firstSeenAt — when THIS app’s automated fetch first saw the NORAD id
- *               (not SATCAT launch date; drives “New to this catalog”)
- */
+
 export type OrbitLayer = 'LEO' | 'MEO' | 'GEO' | 'HEO';
 export type ObjectCategory = 'stations' | 'active' | 'debris';
 
-/** Visual grouping for color-by-function mode (derived from TLE name + category). */
 export type ObjectFunctionGroup = 'starlink' | 'debris' | 'station' | 'active';
 
 export interface TleRecord {
@@ -20,8 +12,7 @@ export interface TleRecord {
   category: ObjectCategory;
   country?: string;
   owner?: string;
-  /** ISO timestamp of the first automated fetch that observed this NORAD ID.
-   *  Absent for objects that were already known before this field existed. */
+  
   firstSeenAt?: string;
 }
 
@@ -39,9 +30,9 @@ export interface TrackedObject extends TleRecord {
   layer: OrbitLayer;
   color: [number, number, number];
   functionGroup: ObjectFunctionGroup;
-  /** Mean orbital altitude in km, derived from TLE mean motion (fast, no propagation). */
+  
   meanAltitudeKm: number;
-  /** Orbital inclination in degrees from TLE. */
+  
   inclinationDeg: number;
 }
 
@@ -61,10 +52,7 @@ export interface ObjectSnapshot {
 export interface ConjunctionEvent {
   objectA: string;
   objectB: string;
-  /** NORAD catalog IDs — the only reliable identity, since debris fields
-   *  routinely contain many objects sharing the exact same display name
-   *  (e.g. dozens of "FENGYUN 1C DEB" fragments). Never re-resolve a stored
-   *  alert back to live indices by name alone. */
+  
   noradIdA: number;
   noradIdB: number;
   indexA: number;

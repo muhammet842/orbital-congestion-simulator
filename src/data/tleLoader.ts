@@ -1,4 +1,4 @@
-// Load and enrich the static TLE catalog
+
 import { twoline2satrec } from 'satellite.js';
 import { getCategoryColor, inferFunctionGroup } from '../orbital/classify';
 import { propagateObject } from '../orbital/propagator';
@@ -6,7 +6,7 @@ import { enrichRecord } from './objectMetadata';
 import type { TleDataset, TrackedObject, ObjectCategory } from '../types';
 
 export async function loadTleDataset(): Promise<TleDataset> {
-  // Always revalidate with the server
+  
   const response = await fetch('/data/tle.json', { cache: 'no-cache' });
   if (!response.ok) {
     throw new Error('Orbital data not found. Run: npm run fetch-tle');
@@ -31,10 +31,10 @@ export function createTrackedObjects(dataset: TleDataset, date = new Date()): Tr
         continue;
       }
 
-      // Derive mean altitude and inclination directly from satrec (no propagation needed).
-      // satrec.no is mean motion in rad/min; satrec.inclo is inclination in radians.
+      
+      
       const GM_KM3_S2 = 398600.4418;
-      const nRadS = satrec.no / 60; // rad/s
+      const nRadS = satrec.no / 60; 
       const semiMajorKm = Math.cbrt(GM_KM3_S2 / (nRadS * nRadS));
       const meanAltitudeKm = Math.max(0, semiMajorKm - 6371);
       const inclinationDeg = satrec.inclo * (180 / Math.PI);
