@@ -463,9 +463,9 @@ function renderStats(container: HTMLElement): void {
     : 0;
 
   const tleStaleHtml = tleAgeDays > 7
-    ? `<div class="tle-stale-banner tle-stale-banner--critical">⚠ Orbital data is ${Math.floor(tleAgeDays)} days old — accuracy may be reduced</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--critical">Orbital data is ${Math.floor(tleAgeDays)} days old — accuracy may be reduced</div>`
     : tleAgeDays > 3
-    ? `<div class="tle-stale-banner tle-stale-banner--warn">⚠ Orbital data is ${Math.floor(tleAgeDays)} days old</div>`
+    ? `<div class="tle-stale-banner tle-stale-banner--warn">Orbital data is ${Math.floor(tleAgeDays)} days old</div>`
     : '';
 
   const liveEl = container.querySelector('#live-stats')!;
