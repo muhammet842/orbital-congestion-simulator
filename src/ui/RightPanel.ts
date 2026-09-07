@@ -454,30 +454,10 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
   const eType = event.eventType ?? 'collision';
   const meta  = REPLAY_PANEL_META[eType] ?? REPLAY_PANEL_META.collision;
 
-  const objectBHtml = (() => {
-    if (event.objectB) {
-      return `<div class="era-sat era-sat--b" title="${escapeHtml(event.objectB.name)}">
-                <span class="era-dot era-dot--b"></span>
-                <span class="era-label">${escapeHtml(event.objectB.name)}</span>
-              </div>`;
-    }
-    if (eType === 'asat') {
-      return `<div class="era-sat era-sat--missile"><span class="era-dot era-dot--b"></span><span class="era-label">Missile</span></div>`;
-    }
-    return '';
-  })();
 
   detailEl.innerHTML = `
     <h2 class="panel-heading panel-heading--alert">${escapeHtml(meta.heading)}</h2>
     <div class="event-replay-title">${escapeHtml(event.title)}</div>
-
-    <div class="event-replay-approach">
-      <div class="era-sat era-sat--a" title="${escapeHtml(event.objectA.name)}">
-        <span class="era-dot era-dot--a"></span>
-        <span class="era-label">${escapeHtml(event.objectA.name)}</span>
-      </div>
-      ${objectBHtml}
-    </div>
 
     <dl class="detail-list era-stats">
       <div class="detail-row"><dt>Sim Time</dt><dd data-field="era-simtime">—</dd></div>

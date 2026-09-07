@@ -88,7 +88,6 @@ function applyUrl(): void {
       }
     }
   }
-
   
   const { selectedIndex, selectedEventId, eventReplay } = getState();
   if (eventReplay || selectedEventId) clearHistoricalEventSelection();
@@ -97,17 +96,11 @@ function applyUrl(): void {
 
 export function initDeepLink(objects: TrackedObject[]): void {
   buildLookup(objects);
-
-  
-  
-  
   
   lastWrittenSearch = window.location.search;
   applyUrl();
 
-  
   subscribe(() => onStateChange(objects));
-
   
   window.addEventListener('popstate', () => {
     suppressNextUrlWrite = true;

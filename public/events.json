@@ -1,7 +1,7 @@
 [
   {
     "id": "iridium-cosmos",
-    "title": "Iridium 33 ↔ Cosmos 2251",
+    "title": "Iridium 33 - Cosmos 2251",
     "date": "2009-02-10",
     "eventType": "collision",
     "description": "First accidental collision between two intact satellites. Iridium 33 (active, 789 km, 86.4°) and Cosmos 2251 (defunct, 789 km, 74.0°) collided at 16:56:00 UTC over northern Siberia, creating ~2,000 trackable debris fragments.",
@@ -69,7 +69,7 @@
   },
   {
     "id": "cerise-ariane-debris",
-    "title": "Cerise ↔ Ariane 3 Debris",
+    "title": "Cerise - Ariane 3 Debris",
     "date": "1996-07-24",
     "eventType": "collision",
     "description": "First confirmed collision between a tracked satellite and a catalogued debris object. French military microsatellite Cerise (SSO, 700 km, 98.6°) was struck by a fragment of the Ariane 3 H-10 upper stage on 24 July 1996 at 11:40 UTC over the Atlantic, severing its gravity-gradient stabilisation boom.",
@@ -85,7 +85,7 @@
   },
   {
     "id": "yunhai-1-02",
-    "title": "Yunhai 1-02 ↔ SL-16 Debris",
+    "title": "Yunhai 1-02 - SL-16 Debris",
     "date": "2021-03-18",
     "eventType": "collision",
     "description": "First accidental catalogued collision since Iridium–Cosmos. China's Yunhai 1-02 meteorological satellite (SSO, 780 km, 98.5°) was struck by a 1996 Zenit-2 (SL-16) mission fragment (1996-051Q) on 18 Mar 2021 at 07:41 UTC over northern Norway, producing ~37 trackable pieces.",

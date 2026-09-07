@@ -62,15 +62,9 @@ export function getGmstRad(date: Date): number {
 
 export function getDayNightState(date: Date): DayNightState {
   const utcDecimalHours = getUtcDecimalHours(date);
-
-  
-  
-  
   
   const earthRotationY = getGmstRad(date);
 
-  
-  
   const sunEci = getSunEci(date);
   const sunScene = {
     x: sunEci.x,

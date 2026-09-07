@@ -2,11 +2,6 @@ import { resolveSatcatOwner } from './satcatOwnerMap.mjs';
 
 export const SATCAT_CSV_URL = 'https://celestrak.org/pub/satcat.csv';
 
-/**
- * Minimal CSV splitter that respects double-quoted fields.
- * @param {string} line
- * @returns {string[]}
- */
 export function splitCsvLine(line) {
   const fields = [];
   let cur = '';
@@ -37,11 +32,6 @@ export function splitCsvLine(line) {
   return fields;
 }
 
-/**
- * Build NORAD → SATCAT OWNER lookup from the official CSV dump.
- * @param {string} csvText
- * @returns {Map<number, string>}
- */
 export function parseSatcatOwnerByNorad(csvText) {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) return new Map();
@@ -65,15 +55,6 @@ export function parseSatcatOwnerByNorad(csvText) {
   return map;
 }
 
-/**
- * Attach country (and sometimes owner) from SATCAT onto objects in `seen`.
- * Country-code owners only set `country` so name heuristics can still supply
- * operator names (SpaceX, Türksat, …). Org codes set both.
- *
- * @param {Map<number, object>} seen
- * @param {Map<number, string>} ownerByNorad
- * @returns {{ matched: number, unmatched: number, withOwner: number }}
- */
 export function applySatcatOwners(seen, ownerByNorad) {
   let matched = 0;
   let unmatched = 0;
@@ -97,7 +78,6 @@ export function applySatcatOwners(seen, ownerByNorad) {
       obj.owner = resolved.owner;
       withOwner++;
     } else {
-      // Drop stale owner from fallback/previous so heuristics can refill.
       delete obj.owner;
     }
     matched++;
@@ -106,11 +86,6 @@ export function applySatcatOwners(seen, ownerByNorad) {
   return { matched, unmatched, withOwner };
 }
 
-/**
- * @param {typeof fetch} [fetchImpl]
- * @param {{ headers?: Record<string, string> }} [opts]
- * @returns {Promise<Map<number, string>>}
- */
 export async function fetchSatcatOwnerMap(fetchImpl = fetch, opts = {}) {
   const response = await fetchImpl(SATCAT_CSV_URL, {
     headers: {

@@ -4,7 +4,6 @@ const STATION_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle', category: 'stations' },
 ];
 
-/** MEO/GEO and regional highlights — fetched before bulk LEO constellations. */
 const ACTIVE_GROUP_SOURCES = [
   'geo',
   'gps-ops',
@@ -35,7 +34,6 @@ const ACTIVE_GROUP_SOURCES = [
   'radar',
 ];
 
-/** Keep in sync with src/data/objectMetadata.ts TURKISH_NORAD_IDS (+ iconic MEO/GEO). */
 const PRIORITY_NORAD_IDS = [
   41875, // GÖKTÜRK-1
   39030, // GÖKTÜRK-2
@@ -49,7 +47,6 @@ const PRIORITY_NORAD_IDS = [
   98268,
 ];
 
-/** Prevent one mega-constellation from filling the entire spacecraft budget. */
 const GROUP_CAPS = {
   starlink: 4500,
   oneweb: 600,
@@ -63,7 +60,6 @@ const DEBRIS_SOURCES = [
   { url: 'https://celestrak.org/NORAD/elements/gp.php?GROUP=analyst&FORMAT=tle', category: 'debris' },
 ];
 
-/** Trackable fragments whose name contains DEB — fills leftover debris budget after named clouds. */
 const DEBRIS_NAME_FILL = {
   url: 'https://celestrak.org/NORAD/elements/gp.php?NAME=DEB&FORMAT=tle',
   category: 'debris',
@@ -209,7 +205,7 @@ async function loadFallbackDataset() {
         return data.objects;
       }
     } catch {
-      // try next fallback
+
     }
   }
   return null;
@@ -356,7 +352,6 @@ async function main() {
     try {
       const objects = await fetchActiveGroup(group);
       const cap = GROUP_CAPS[group] ?? Infinity;
-      // Keep the newest catalog entries when a group exceeds its cap.
       const newestFirst = [...objects].sort((a, b) => b.noradId - a.noradId);
       let added = 0;
       for (const obj of newestFirst) {
@@ -427,9 +422,7 @@ async function main() {
     }
   }
 
-  // Join CelesTrak SATCAT OWNER → country (and org owner when applicable).
-  // One CSV download covers the full catalog; name heuristics remain the
-  // runtime fallback in objectMetadata.ts when a field is still missing.
+
   console.log('Enriching country/owner from SATCAT…');
   try {
     await sleep(FETCH_DELAY_MS);
@@ -469,10 +462,6 @@ async function main() {
   const stations = counts.stations ?? 0;
   const active = counts.active ?? 0;
   const debris = counts.debris ?? 0;
-  // CelesTrak outages / 403 bursts used to write a half-empty catalog (e.g.
-  // ~3.5k objects and zero stations) and the Actions bot would ship it to
-  // production. Refuse catastrophically thin results so the previous good
-  // tle.json stays on disk and CI fails closed.
   const MIN_TOTAL = 8_000;
   const MIN_STATIONS = 5;
   const MIN_ACTIVE = 3_000;
@@ -497,9 +486,6 @@ async function main() {
 
   const outPath = fileURLToPath(OUTPUT_PATH);
   await mkdir(dirname(outPath), { recursive: true });
-  // Compact (no indentation): this file is fetched by the browser, not
-  // hand-edited, and pretty-printing ~12k objects adds ~500 KB of pure
-  // whitespace for zero benefit.
   await writeFile(outPath, JSON.stringify(dataset));
 
   const spacecraftTotal = stations + active;
