@@ -7,16 +7,16 @@ Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-con
 
 ### Core Features
 
-* **Real-Time 3D Globe Visualization**
+* Real-Time 3D Globe Visualization
   Renders thousands of tracked objects in low Earth orbit and beyond using custom WebGL shaders and Three.js scene management.
 
-* **Orbital Mechanics & Propagation**
+* Orbital Mechanics & Propagation
   Calculates precise object coordinates on the fly using Simplified General Perturbations (SGP4) models powered by satellite.js and CelesTrak TLE datasets.
 
-* **Dynamic Filtering & Search**
+* Dynamic Filtering & Search
   Instantly isolate objects by orbit types (LEO, MEO, GEO, HEO) or operational categories (Active Satellites, Space Debris, Space Stations). Includes instant search by object name or NORAD catalog ID.
 
-* **Conjunction Detection & Historical Replays**
+* Conjunction Detection & Historical Replays
   Identifies close approaches between orbiting bodies and includes interactive time-line replays for notable historical space events and collisions.
 
 
