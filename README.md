@@ -4,7 +4,6 @@ Orbital Congestion Simulator is an interactive, browser-based 3D visualization e
 
 Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-congestion-simulator.vercel.app)
 
----
 
 ### Core Features
 
@@ -20,7 +19,6 @@ Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-con
 * **Conjunction Detection & Historical Replays**
   Identifies close approaches between orbiting bodies and includes interactive time-line replays for notable historical space events and collisions.
 
----
 
 ### Tech Stack
 
@@ -29,7 +27,6 @@ Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-con
 * **Orbital Physics:** satellite.js (SGP4/SDP4 propagation)
 * **Data Source:** CelesTrak Two-Line Element (TLE) Sets
 
----
 
 ### Getting Started
 
@@ -50,7 +47,6 @@ Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-con
 3. Start the development server:
    npm run dev
 
----
 
 ### Available Scripts
 
@@ -59,7 +55,6 @@ Live Demo: [https://orbital-congestion-simulator.vercel.app](https://orbital-con
 * npm run preview — Serves the built production files locally for testing.
 * npm run fetch-tle — Fetches and updates the local TLE cache directly from CelesTrak.
 
----
 
 ### License
 
