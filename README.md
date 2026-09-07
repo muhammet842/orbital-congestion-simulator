@@ -20,12 +20,12 @@ You can rewind or fast forward the animation from the progress bat at the bottom
 
 ## Setup
 
-Run `npm install` to install dependencies, then `npm run dev` to start the local server.
+Run npm install to install dependencies, then npm run dev to start the local server.
 
 Other commands:
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run fetch-tle` - Fetch fresh TLE data
+- npm run build - Build for production
+- npm run preview - Preview production build
+- npm run fetch-tle - Fetch fresh TLE data
 
 ## Tech Stack
 
