@@ -24,9 +24,7 @@ import { getDayNightState } from './dayNight';
 import { Earth } from './Earth';
 import { LeoShell } from './LeoShell';
 import { OrbitalMeshes } from './OrbitalMeshes';
-import { OrbitTrail } from './OrbitTrail';
 import { SatelliteFootprint } from './SatelliteFootprint';
-import { SatelliteGroundTrack } from './SatelliteGroundTrack';
 import { getSubSatelliteScenePoints } from '../orbital/coordinates';
 import { SelectionMarker } from './SelectionMarker';
 import { EARTH_RADIUS_KM, type TrackedObject } from '../types';
@@ -47,7 +45,7 @@ import {
 } from '../state/appState';
 import { EventReplayVisuals } from './EventReplayVisuals';
 import { EventReplayLabels } from './EventReplayLabels';
-import { getHistoricalEvent } from '../ui/EventCards';
+import { getHistoricalEvent } from '../ui';
 
 export class SceneManager {
   readonly renderer: WebGLRenderer;
@@ -60,9 +58,7 @@ export class SceneManager {
   private orbitalMeshes: OrbitalMeshes | null = null;
   private propWorker: PropagationWorkerBridge;
   private selectionMarker: SelectionMarker;
-  private orbitTrail: OrbitTrail;
   private satelliteFootprint: SatelliteFootprint;
-  private groundTrack: SatelliteGroundTrack;
   private conjunctionVerification: ConjunctionVerification;
   private conjunctionLabels: ConjunctionLabels;
   private cameraFly: CameraFly;
@@ -160,14 +156,8 @@ export class SceneManager {
     this.selectionMarker = new SelectionMarker();
     this.scene.add(this.selectionMarker.group);
 
-    this.orbitTrail = new OrbitTrail();
-    this.scene.add(this.orbitTrail.group);
-
     this.satelliteFootprint = new SatelliteFootprint();
     this.scene.add(this.satelliteFootprint.group);
-
-    this.groundTrack = new SatelliteGroundTrack();
-    this.groundTrack.attachToEarth(this.earth.mesh);
 
     this.conjunctionVerification = new ConjunctionVerification();
     this.scene.add(this.conjunctionVerification.group);
@@ -265,9 +255,6 @@ export class SceneManager {
             
             this.satelliteFootprint.update(null, objects, new Date());
             this.selectionMarker.update(null, objects, new Date());
-            this.orbitTrail.update(false, null, objects, new Date());
-            this.groundTrack.clear();
-
             
             if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
             this.leoShell.setVisible(false);
@@ -572,7 +559,6 @@ export class SceneManager {
           colorByFunction: currentState.colorByFunction,
           altitudeFilter: currentState.altitudeFilter,
           inclinationFilter: currentState.inclinationFilter,
-          showOnlyRecentLaunches: currentState.showOnlyRecentLaunches,
           categoryFilter: currentState.categoryFilter,
           conjunctionLiveDistanceKm,
         },
@@ -591,22 +577,6 @@ export class SceneManager {
 
     this.selectionMarker.update(
       selectionIndexForOverlays,
-      currentState.objects,
-      simTime,
-    );
-
-    this.orbitTrail.update(
-      currentState.showOrbitTrail,
-      selectionIndexForOverlays,
-      currentState.objects,
-      simTime,
-    );
-
-    
-    this.groundTrack.update(
-      !currentState.eventReplay && !currentState.selectedConjunction && currentState.showGroundTrack
-        ? currentState.selectedIndex
-        : null,
       currentState.objects,
       simTime,
     );

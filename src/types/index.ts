@@ -12,8 +12,6 @@ export interface TleRecord {
   category: ObjectCategory;
   country?: string;
   owner?: string;
-  
-  firstSeenAt?: string;
 }
 
 export interface TleDataset {

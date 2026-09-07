@@ -1,54 +1,41 @@
 # Orbital Congestion Simulator
 
-A lightweight, real-time 3D orbital space debris and satellite tracking simulator built with Three.js and SGP4 TLE propagation.
+A small browser-based view of satellites and debris in low Earth orbit. The globe uses Three.js, while satellite positions are calculated from TLE data with `satellite.js`.
 
-> **Live Demo:** [https://orbital-congestion-simulator.vercel.app](https://orbital-congestion-simulator.vercel.app)
+Live demo: https://orbital-congestion-simulator.vercel.app
 
----
+## What it does
 
-## Overview
+- Shows a 3D Earth with thousands of tracked objects.
+- Filters objects by orbit layer, type, altitude, and inclination.
+- Lets you search by name or NORAD ID.
+- Displays basic details for a selected object.
+- Finds close approaches between objects.
+- Includes a small set of historical event replays.
 
-Earth's orbit is becoming increasingly congested. **Orbital Congestion Simulator** renders thousands of active satellites and space debris fragments in real-time, accurately propagating their paths using CelesTrak Two-Line Element (TLE) data and the SGP4 orbital model.
+## Run locally
 
-The application allows users to explore various orbital layers, filter objects by function or type, inspect individual satellite telemetry, and replay major historical orbital collision events.
+Requirements: Node.js 18 or newer and npm.
 
----
+```bash
+npm install
+npm run dev
+```
 
-## Key Features
+Open the local URL printed by Vite.
 
-- **Interactive 3D Globe**: Real-time WebGL rendering of Earth with day/night atmospheric shaders and dynamic object rendering via Three.js.
-- **SGP4 Orbital Propagation**: Computes precise satellite positions and velocity using `satellite.js` fed by static CelesTrak TLE snapshots.
-- **Orbital Layers & Filters**: Dynamic filtering by altitude (LEO, MEO, GEO, HEO) and object category (Active Satellites, Space Stations, Debris).
-- **Color by Function**: Instant visual separation of Starlink constellations, space stations, active payloads, and space junk.
-- **Object Details & Telemetry**: Click any object to inspect its altitude, velocity, inclination, NORAD ID, country of origin, and projected ground track.
-- **Close Approach Detection**: Real-time screening for close encounters and conjunction risks between orbiting objects.
-- **Historical Collision Replays**: Interactive replay mode for landmark orbital events (e.g., Iridium 33 vs. Cosmos 2251 collision).
-- **Kessler Future Projection**: Integrated what-if simulation panel for orbital density and chain-reaction collision risk modeling.
+## Other commands
 
----
+```bash
+npm run build
+npm run preview
+npm run fetch-tle
+```
 
-## Tech Stack
+## Main technologies
 
-| Component | Technology |
-| :--- | :--- |
-| **Framework & Build** | Vite + TypeScript |
-| **3D Graphics** | Three.js (WebGL) |
-| **Orbital Mechanics** | `satellite.js` (SGP4/SDP4 models) + Web Workers |
-| **Data Source** | CelesTrak TLE & SATCAT catalog |
-| **Deployment** | Vercel |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js (v18 or higher)
-- npm
-
-### Local Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/muhammet842/orbital-congestion-simulator.git](https://github.com/muhammet842/orbital-congestion-simulator.git)
-   cd orbital-congestion-simulator
+- Vite
+- TypeScript
+- Three.js
+- satellite.js
+- CelesTrak TLE data

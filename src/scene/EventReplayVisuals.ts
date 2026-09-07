@@ -15,8 +15,7 @@ import {
 } from 'three';
 import { eciToScene } from '../orbital/coordinates';
 import { getGmstRad } from './dayNight';
-import type { HistoricalEvent } from '../ui/EventCards';
-import type { EventType } from '../ui/EventCards';
+import type { HistoricalEvent, EventType } from '../ui';
 import { EVENT_REPLAY_REWIND_MS } from '../state/appState';
 
 const DOT_RADIUS = 0.005;

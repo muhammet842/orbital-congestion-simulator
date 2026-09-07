@@ -8,7 +8,7 @@ import {
   selectHistoricalEvent,
   clearHistoricalEventSelection,
 } from '../state/appState';
-import { getHistoricalEvent } from '../ui/EventCards';
+import { getHistoricalEvent } from '../ui';
 import type { TrackedObject } from '../types';
 
 function getParam(key: string): string | null {

@@ -1,16 +1,17 @@
 
 import './style.css';
 import { loadTleDataset, createTrackedObjects, computeStats } from './data/tleLoader';
-import { getState, initState } from './state/appState';
+import { initState } from './state/appState';
 import { SceneManager } from './scene/SceneManager';
-import { createLayout } from './ui/Layout';
-import { initLeftPanel } from './ui/LeftPanel';
-import { initRightPanel } from './ui/RightPanel';
-import { initTimeControls } from './ui/TimeControls';
+import {
+  createLayout,
+  initLeftPanel,
+  initRightPanel,
+  initTimeControls,
+  loadHistoricalEvents,
+} from './ui';
 import { initDeepLink } from './routing/deepLink';
-import { initKesslerPanel } from './ui/KesslerPanel';
-import { initHowToGuide } from './ui/HowToGuide';
-import { findConjunctions } from './orbital/conjunction';
+
 async function main(): Promise<void> {
   const app = document.querySelector<HTMLDivElement>('#app');
   if (!app) return;
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
     showLoading(app, 'Loading catalog...');
 
     const dataset = await loadTleDataset();
+    await loadHistoricalEvents();
 
     if (dataset.objects.length === 0) {
       showError(app, 'No satellites found in the catalog.');
@@ -41,19 +43,7 @@ async function main(): Promise<void> {
     sceneManager.initOrbitalMeshes(objects);
     sceneManager.start();
 
-    
     initDeepLink(objects);
-
-    
-    initKesslerPanel();
-
-    
-    initHowToGuide();
-
-    if (import.meta.env.DEV) {
-      (window as unknown as Record<string, unknown>).__debugConjunctions = (isoTime?: string) =>
-        findConjunctions(getState().objects, isoTime ? new Date(isoTime) : new Date());
-    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to load simulator data.';
     showError(app, message);

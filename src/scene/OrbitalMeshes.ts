@@ -90,7 +90,6 @@ export class OrbitalMeshes {
       colorByFunction?: boolean;
       altitudeFilter?: { minKm: number; maxKm: number } | null;
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
-      showOnlyRecentLaunches?: boolean;
       categoryFilter?: ObjectCategory | 'all';
       
       conjunctionLiveDistanceKm?: number | null;
@@ -99,7 +98,6 @@ export class OrbitalMeshes {
     const colorByFunction = options?.colorByFunction ?? false;
     const altitudeFilter = options?.altitudeFilter ?? null;
     const inclinationFilter = options?.inclinationFilter ?? null;
-    const showOnlyRecentLaunches = options?.showOnlyRecentLaunches ?? false;
     const categoryFilter = options?.categoryFilter ?? 'all';
     const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
     const highlightSet = new Set(conjunctionHighlight ?? []);
@@ -116,13 +114,13 @@ export class OrbitalMeshes {
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
+        categoryFilter, conjunctionLiveDistanceKm,
       );
       this.debrisPoints.updatePositions(
         objects, propagations, selectedIndex, conjunctionHighlight,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        showOnlyRecentLaunches, categoryFilter, conjunctionLiveDistanceKm,
+        categoryFilter, conjunctionLiveDistanceKm,
       );
     }
 

@@ -24,14 +24,8 @@ import {
   subscribe,
   toggleLayerFilter,
   setColorByFunction,
-  setShowOnlyRecentLaunches,
-  setAltitudeFilter,
-  setInclinationFilter,
-  resetAdvancedFilters,
 } from '../state/appState';
-import { initEventCards } from './EventCards';
-
-import { isRecentlyLaunched, hasAnyRecentlyLaunched } from '../data/newLaunches';
+import { initEventCards } from '../ui';
 
 const LAYERS: OrbitLayer[] = ['LEO', 'MEO', 'GEO', 'HEO'];
 const CATEGORY_FILTERS: Array<ObjectCategory | 'all'> = ['all', 'active', 'stations', 'debris'];
@@ -47,7 +41,6 @@ const SORT_MODES: ConjunctionSortMode[] = ['time', 'criticality'];
 function matchesMedia(query: string): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia(query).matches;
 }
-
 function listItemHeight(): number {
   return matchesMedia('(pointer: coarse)')
     ? LIST_ITEM_HEIGHT_COARSE
@@ -64,8 +57,7 @@ let displayedConjunctions: ReturnType<typeof selectConjunctionAlertsForDisplay> 
 
 export function initLeftPanel(container: HTMLElement): void {
   container.innerHTML = `
-    <div id="tour-region-search" class="tour-region">
-      <h2 class="panel-heading">Search Objects</h2>
+    <div>
       <div class="search-wrap">
         <input
           type="search"
@@ -91,8 +83,6 @@ export function initLeftPanel(container: HTMLElement): void {
       <h2 class="panel-heading">Display Options</h2>
       <div class="display-options" id="display-options"></div>
 
-      <h2 class="panel-heading">Advanced Filters</h2>
-      <div class="advanced-filters" id="advanced-filters"></div>
     </div>
 
     <h2 class="panel-heading">Object Categories</h2>
@@ -101,7 +91,7 @@ export function initLeftPanel(container: HTMLElement): void {
     <h2 class="panel-heading">Live Stats</h2>
     <dl class="stats-list" id="live-stats"></dl>
 
-    <div id="tour-region-approaches" class="tour-region">
+    <div>
       <h2 class="panel-heading panel-heading--alert">Close Approach Alerts (Next 24h)</h2>
       <p class="panel-lede">These satellites are predicted to come within 3 km of each other. Click any alert to watch the approach.</p>
       <div class="conjunction-filters" id="conjunction-filters"></div>
@@ -117,7 +107,6 @@ export function initLeftPanel(container: HTMLElement): void {
   renderConjunctionFilters(container);
   renderConjunctions(container);
   initEventCards(container);
-  initAdvancedFilters(container);
 
   container.addEventListener('change', (e) => {
     const input = (e.target as HTMLElement).closest<HTMLInputElement>(
@@ -169,8 +158,6 @@ export function initLeftPanel(container: HTMLElement): void {
       Object.entries(state.layerFilters).join(','),
       state.categoryFilter,
       state.colorByFunction,
-      state.showOnlyRecentLaunches,
-      hasAnyRecentlyLaunched(state.objects),
     ].join('|');
     if (filterUiKey !== lastFilterUiKey) {
       renderLayerFilters(container);
@@ -187,7 +174,6 @@ export function initLeftPanel(container: HTMLElement): void {
       state.objects.length,
       state.filteredIndices.length,
       state.categoryFilter,
-      state.showOnlyRecentLaunches,
       Object.entries(state.layerFilters).join(','),
       state.altitudeFilter?.minKm,
       state.altitudeFilter?.maxKm,
@@ -270,13 +256,8 @@ function renderObjectList(container: HTMLElement): void {
   const viewport = container.querySelector('#object-list-viewport') as HTMLElement;
   const spacer = container.querySelector('#object-list-spacer') as HTMLElement;
   const itemsEl = container.querySelector('#object-list-items') as HTMLElement;
-  const metaEl = container.querySelector('#object-list-meta') as HTMLElement;
 
   const total = indices.length;
-  const n = total.toLocaleString();
-  metaEl.textContent = state.searchQuery.trim()
-    ? `${n} ${total === 1 ? 'match' : 'matches'}`
-    : `${n} objects · A–Z`;
 
   const itemHeight = listItemHeight();
   spacer.style.height = `${total * itemHeight}px`;
@@ -294,12 +275,9 @@ function renderListItem(state: ReturnType<typeof getState>, index: number): stri
   const obj = state.objects[index];
   const selected = state.selectedIndex === index;
   const name = escapeHtml(obj.name.trim() || `NORAD ${obj.noradId}`);
-  const newBadge = isRecentlyLaunched(obj)
-    ? `<span class="new-launch-badge" title="Launched within the last 30 days">NEW</span>`
-    : '';
   return `
     <button type="button" class="object-list-item${selected ? ' object-list-item--selected' : ''}" data-index="${index}">
-      <span class="object-list-name">${name}${newBadge}</span>
+      <span class="object-list-name">${name}</span>
       <span class="object-list-norad">${obj.noradId}</span>
     </button>
   `;
@@ -382,8 +360,7 @@ function renderCategoryFilters(container: HTMLElement): void {
 
 function renderDisplayOptions(container: HTMLElement): void {
   const optionsEl = container.querySelector('#display-options')!;
-  const showRecentToggle = hasAnyRecentlyLaunched(getState().objects);
-  const { colorByFunction, showOnlyRecentLaunches } = getState();
+  const { colorByFunction } = getState();
 
   optionsEl.innerHTML = `
     <button
@@ -397,25 +374,6 @@ function renderDisplayOptions(container: HTMLElement): void {
         <span class="muted">Starlink · Stations · Active · Debris</span>
       </span>
     </button>
-    ${
-      showRecentToggle
-        ? `
-    <button
-      type="button"
-      class="filter-toggle-card${showOnlyRecentLaunches ? ' filter-toggle-card--on' : ''}"
-      id="show-recent-launches"
-      aria-pressed="${showOnlyRecentLaunches}"
-      title="Launched within the last 30 days"
-    >
-      <span class="new-launch-badge" aria-hidden="true">NEW</span>
-      <span class="filter-toggle-copy">
-        <strong>Recent Launches</strong>
-        <span class="muted">Show only objects launched in the last 30 days</span>
-      </span>
-    </button>
-    `
-        : ''
-    }
   `;
 
   const colorBtn = optionsEl.querySelector('#color-by-function') as HTMLButtonElement;
@@ -423,14 +381,6 @@ function renderDisplayOptions(container: HTMLElement): void {
     setColorByFunction(!getState().colorByFunction);
   });
 
-  const recentBtn = optionsEl.querySelector('#show-recent-launches') as HTMLButtonElement | null;
-  recentBtn?.addEventListener('click', () => {
-    setShowOnlyRecentLaunches(!getState().showOnlyRecentLaunches);
-  });
-
-  if (!showRecentToggle && getState().showOnlyRecentLaunches) {
-    setShowOnlyRecentLaunches(false);
-  }
 }
 
 function renderStats(container: HTMLElement): void {
@@ -458,23 +408,12 @@ function renderStats(container: HTMLElement): void {
       })
     : '—';
 
-  const tleAgeDays = stats.fetchedAt
-    ? (Date.now() - new Date(stats.fetchedAt).getTime()) / 86_400_000
-    : 0;
-
-  const tleStaleHtml = tleAgeDays > 7
-    ? `<div class="tle-stale-banner tle-stale-banner--critical">Orbital data is ${Math.floor(tleAgeDays)} days old — accuracy may be reduced</div>`
-    : tleAgeDays > 3
-    ? `<div class="tle-stale-banner tle-stale-banner--warn">Orbital data is ${Math.floor(tleAgeDays)} days old</div>`
-    : '';
-
   const liveEl = container.querySelector('#live-stats')!;
   const timeLabel = isLive ? 'UTC Time' : 'Sim Time';
   const visibleCount = state.filteredIndices.length;
   const closeApproachTotal = state.conjunctions.length + state.conjunctionHiddenCount;
 
   liveEl.innerHTML = `
-    ${tleStaleHtml}
     <div class="stat-row"><dt>${timeLabel}</dt><dd id="live-stat-time">${formatUtcDateTime(simTime)}</dd></div>
     <div class="stat-row"><dt>Total Objects</dt><dd>${stats.total.toLocaleString()}</dd></div>
     <div class="stat-row"><dt>Visible</dt><dd>${visibleCount.toLocaleString()}</dd></div>
@@ -681,180 +620,3 @@ function formatTimeUntil(ms: number): string {
   return `${s}s`;
 }
 
-const ALT_MIN_DEFAULT  =     0;
-const ALT_MAX_DEFAULT  = 36000;
-const INCL_MIN_DEFAULT =     0;
-const INCL_MAX_DEFAULT =   180;
-
-function buildAdvancedFiltersHTML(
-  altMin: number, altMax: number,
-  inclMin: number, inclMax: number,
-  shown: number, hasFilter: boolean,
-): string {
-  const altPctMin  = (altMin  / ALT_MAX_DEFAULT)  * 100;
-  const altPctMax  = (altMax  / ALT_MAX_DEFAULT)  * 100;
-  const inclPctMin = (inclMin / INCL_MAX_DEFAULT) * 100;
-  const inclPctMax = (inclMax / INCL_MAX_DEFAULT) * 100;
-
-  return `
-    <div class="af-group">
-      <div class="af-label-row">
-        <span class="af-label">Altitude</span>
-        <span class="af-values" id="af-alt-values">${altMin.toLocaleString()} km — ${altMax.toLocaleString()} km</span>
-      </div>
-      <div class="dual-range">
-        <div class="dual-range-track">
-          <div class="dual-range-fill" id="af-alt-fill"
-               style="left:${altPctMin.toFixed(1)}%;width:${(altPctMax - altPctMin).toFixed(1)}%"></div>
-        </div>
-        <input type="range" class="dr-input dr-min" id="af-alt-min"
-               min="${ALT_MIN_DEFAULT}" max="${ALT_MAX_DEFAULT}" step="50" value="${altMin}">
-        <input type="range" class="dr-input dr-max" id="af-alt-max"
-               min="${ALT_MIN_DEFAULT}" max="${ALT_MAX_DEFAULT}" step="50" value="${altMax}">
-      </div>
-    </div>
-
-    <div class="af-group">
-      <div class="af-label-row">
-        <span class="af-label">Inclination</span>
-        <span class="af-values" id="af-incl-values">${inclMin}° — ${inclMax}°</span>
-      </div>
-      <div class="dual-range">
-        <div class="dual-range-track">
-          <div class="dual-range-fill" id="af-incl-fill"
-               style="left:${inclPctMin.toFixed(1)}%;width:${(inclPctMax - inclPctMin).toFixed(1)}%"></div>
-        </div>
-        <input type="range" class="dr-input dr-min" id="af-incl-min"
-               min="${INCL_MIN_DEFAULT}" max="${INCL_MAX_DEFAULT}" step="1" value="${inclMin}">
-        <input type="range" class="dr-input dr-max" id="af-incl-max"
-               min="${INCL_MIN_DEFAULT}" max="${INCL_MAX_DEFAULT}" step="1" value="${inclMax}">
-      </div>
-    </div>
-
-    <div class="af-footer">
-      <span class="af-count muted" id="af-count">${shown.toLocaleString()} objects shown</span>
-      <button type="button" id="af-reset"
-              class="btn-af-reset${hasFilter ? '' : ' btn-af-reset--dim'}"
-              ${hasFilter ? '' : 'disabled'}>Reset</button>
-    </div>
-  `;
-}
-
-function updateAdvancedFiltersDisplay(container: HTMLElement): void {
-  const el = container.querySelector('#advanced-filters');
-  if (!el) return;
-
-  const state = getState();
-  const af   = state.altitudeFilter;
-  const incf = state.inclinationFilter;
-
-  const altMin  = af?.minKm    ?? ALT_MIN_DEFAULT;
-  const altMax  = af?.maxKm    ?? ALT_MAX_DEFAULT;
-  const inclMin = incf?.minDeg ?? INCL_MIN_DEFAULT;
-  const inclMax = incf?.maxDeg ?? INCL_MAX_DEFAULT;
-
-  
-  const altValEl = el.querySelector('#af-alt-values');
-  if (altValEl) altValEl.textContent = `${altMin.toLocaleString()} km — ${altMax.toLocaleString()} km`;
-  const inclValEl = el.querySelector('#af-incl-values');
-  if (inclValEl) inclValEl.textContent = `${inclMin}° — ${inclMax}°`;
-
-  
-  const altPctMin  = (altMin  / ALT_MAX_DEFAULT)  * 100;
-  const altPctMax  = (altMax  / ALT_MAX_DEFAULT)  * 100;
-  const altFill = el.querySelector<HTMLElement>('#af-alt-fill');
-  if (altFill) {
-    altFill.style.left  = `${altPctMin.toFixed(1)}%`;
-    altFill.style.width = `${(altPctMax - altPctMin).toFixed(1)}%`;
-  }
-
-  const inclPctMin = (inclMin / INCL_MAX_DEFAULT) * 100;
-  const inclPctMax = (inclMax / INCL_MAX_DEFAULT) * 100;
-  const inclFill = el.querySelector<HTMLElement>('#af-incl-fill');
-  if (inclFill) {
-    inclFill.style.left  = `${inclPctMin.toFixed(1)}%`;
-    inclFill.style.width = `${(inclPctMax - inclPctMin).toFixed(1)}%`;
-  }
-
-  
-  const altMinEl  = el.querySelector<HTMLInputElement>('#af-alt-min');
-  const altMaxEl  = el.querySelector<HTMLInputElement>('#af-alt-max');
-  const inclMinEl = el.querySelector<HTMLInputElement>('#af-incl-min');
-  const inclMaxEl = el.querySelector<HTMLInputElement>('#af-incl-max');
-  if (altMinEl  && document.activeElement !== altMinEl)  altMinEl.value  = String(altMin);
-  if (altMaxEl  && document.activeElement !== altMaxEl)  altMaxEl.value  = String(altMax);
-  if (inclMinEl && document.activeElement !== inclMinEl) inclMinEl.value = String(inclMin);
-  if (inclMaxEl && document.activeElement !== inclMaxEl) inclMaxEl.value = String(inclMax);
-
-  
-  const countEl = el.querySelector('#af-count');
-  if (countEl) countEl.textContent = `${state.filteredIndices.length.toLocaleString()} objects shown`;
-
-  
-  const hasFilter = af !== null || incf !== null;
-  const resetBtn  = el.querySelector<HTMLButtonElement>('#af-reset');
-  if (resetBtn) {
-    resetBtn.disabled = !hasFilter;
-    resetBtn.classList.toggle('btn-af-reset--dim', !hasFilter);
-  }
-}
-
-function renderAdvancedFilters(container: HTMLElement): void {
-  const el = container.querySelector('#advanced-filters');
-  if (!el) return;
-  const state = getState();
-  const af   = state.altitudeFilter;
-  const incf = state.inclinationFilter;
-  el.innerHTML = buildAdvancedFiltersHTML(
-    af?.minKm    ?? ALT_MIN_DEFAULT, af?.maxKm    ?? ALT_MAX_DEFAULT,
-    incf?.minDeg ?? INCL_MIN_DEFAULT, incf?.maxDeg ?? INCL_MAX_DEFAULT,
-    state.filteredIndices.length, af !== null || incf !== null,
-  );
-}
-
-function initAdvancedFilters(container: HTMLElement): void {
-  renderAdvancedFilters(container);
-
-  container.addEventListener('input', (e) => {
-    const target = e.target as HTMLInputElement;
-    const id = target.id;
-    if (!['af-alt-min', 'af-alt-max', 'af-incl-min', 'af-incl-max'].includes(id)) return;
-
-    const el = container.querySelector('#advanced-filters')!;
-
-    if (id === 'af-alt-min' || id === 'af-alt-max') {
-      const minEl = el.querySelector<HTMLInputElement>('#af-alt-min')!;
-      const maxEl = el.querySelector<HTMLInputElement>('#af-alt-max')!;
-      let minVal = Number(minEl.value);
-      let maxVal = Number(maxEl.value);
-      if (minVal > maxVal) {
-        if (id === 'af-alt-min') { minVal = maxVal; minEl.value = String(minVal); }
-        else                     { maxVal = minVal; maxEl.value = String(maxVal); }
-      }
-      const isDefault = minVal === ALT_MIN_DEFAULT && maxVal === ALT_MAX_DEFAULT;
-      setAltitudeFilter(isDefault ? null : { minKm: minVal, maxKm: maxVal });
-    }
-
-    if (id === 'af-incl-min' || id === 'af-incl-max') {
-      const minEl = el.querySelector<HTMLInputElement>('#af-incl-min')!;
-      const maxEl = el.querySelector<HTMLInputElement>('#af-incl-max')!;
-      let minVal = Number(minEl.value);
-      let maxVal = Number(maxEl.value);
-      if (minVal > maxVal) {
-        if (id === 'af-incl-min') { minVal = maxVal; minEl.value = String(minVal); }
-        else                      { maxVal = minVal; maxEl.value = String(maxVal); }
-      }
-      const isDefault = minVal === INCL_MIN_DEFAULT && maxVal === INCL_MAX_DEFAULT;
-      setInclinationFilter(isDefault ? null : { minDeg: minVal, maxDeg: maxVal });
-    }
-  });
-
-  container.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).id === 'af-reset') {
-      resetAdvancedFilters();
-    }
-  });
-
-  
-  subscribe(() => updateAdvancedFiltersDisplay(container));
-}

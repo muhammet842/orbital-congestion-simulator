@@ -1,5 +1,5 @@
 import type { PerspectiveCamera, Vector3, WebGLRenderer } from 'three';
-import type { EventType } from '../ui/EventCards';
+import type { EventType } from '../ui';
 
 const GM = 398600;           
 const EARTH_RADIUS_KM = 6371;
@@ -28,23 +28,21 @@ function orbitalVelocityKmS(altKm: number): number {
   return Math.sqrt(GM / (EARTH_RADIUS_KM + altKm));
 }
 
-const EVENT_TYPE_META: Record<EventType, { typeA: string; typeB: string; iconA: string; iconB: string }> = {
-  collision: { typeA: 'Satellite', typeB: 'Satellite',    iconA: '🛰', iconB: '🛰' },
-  asat:      { typeA: 'Satellite', typeB: 'Interceptor',  iconA: '🛰', iconB: '⚡' },
-  docking:   { typeA: 'Spacecraft', typeB: 'Target',      iconA: '🚀', iconB: '🛰' },
-  breakup:   { typeA: 'Satellite', typeB: '',             iconA: '🛰', iconB: '' },
+const EVENT_TYPE_META: Record<EventType, { typeA: string; typeB: string }> = {
+  collision: { typeA: 'Satellite', typeB: 'Satellite' },
+  asat:      { typeA: 'Satellite', typeB: 'Interceptor' },
+  docking:   { typeA: 'Spacecraft', typeB: 'Target' },
+  breakup:   { typeA: 'Satellite', typeB: '' },
 };
 
 function buildPanelHTML(
   name: string,
-  icon: string,
   type: string,
   altKm: number,
   velKmS: number,
 ): string {
   return `
     <div class="era-lp__header">
-      <span class="era-lp__icon">${icon}</span>
       <span class="era-lp__name">${name}</span>
     </div>
     <div class="era-lp__row">
@@ -121,7 +119,7 @@ export class EventReplayLabels {
     const meta = EVENT_TYPE_META[eventType] ?? EVENT_TYPE_META.collision;
     const altA = altKmFromScenePos(posA);
     const velA = orbitalVelocityKmS(altA);
-    this.panelA.innerHTML = buildPanelHTML(nameA, meta.iconA, meta.typeA, altA, velA);
+    this.panelA.innerHTML = buildPanelHTML(nameA, meta.typeA, altA, velA);
     this.panelA.hidden = false;
 
     
@@ -145,14 +143,13 @@ export class EventReplayLabels {
       if (screenB.visible) {
         const altB = altKmFromScenePos(posB);
         const type   = meta.typeB;
-        const icon   = meta.iconB;
         
         const velB   = eventType === 'asat'
           ? Math.min(9.5, orbitalVelocityKmS(altB) * 1.2)
           : orbitalVelocityKmS(altB);
         const label  = nameB ?? (eventType === 'asat' ? 'ASAT MISSILE' : 'OBJECT B');
 
-        this.panelB.innerHTML = buildPanelHTML(label, icon, type, altB, velB);
+        this.panelB.innerHTML = buildPanelHTML(label, type, altB, velB);
         this.panelB.hidden = false;
 
         const HB = this.panelB.offsetHeight || 90;

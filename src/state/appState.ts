@@ -9,7 +9,6 @@ import {
   normalizeConjunctionAlert,
 } from '../orbital/conjunction';
 import type { AppStats, ConjunctionEvent, ObjectCategory, OrbitLayer, TimeMode, TimeState, TrackedObject } from '../types';
-import { isRecentlyLaunched } from '../data/newLaunches';
 
 export const EVENT_REPLAY_REWIND_MS = 5 * 60 * 1000;
 
@@ -58,8 +57,6 @@ export interface AppState {
   
   inclinationFilter: { minDeg: number; maxDeg: number } | null;
   
-  showOnlyRecentLaunches: boolean;
-  
   categoryFilter: ObjectCategory | 'all';
   time: TimeState;
   stats: AppStats;
@@ -67,8 +64,6 @@ export interface AppState {
   conjunctionHiddenCount: number;
   
   conjunctionSortMode: ConjunctionSortMode;
-  showOrbitTrail: boolean;
-  showGroundTrack: boolean;
   colorByFunction: boolean;
 }
 
@@ -97,7 +92,6 @@ let state: AppState = {
   layerFilters: { ...defaultLayerFilters },
   altitudeFilter: null,
   inclinationFilter: null,
-  showOnlyRecentLaunches: false,
   categoryFilter: 'all',
   time: {
     mode: 'live',
@@ -115,8 +109,6 @@ let state: AppState = {
   conjunctions: [],
   conjunctionHiddenCount: 0,
   conjunctionSortMode: 'time',
-  showOrbitTrail: false,
-  showGroundTrack: true,
   colorByFunction: true,
 };
 
@@ -202,12 +194,11 @@ export function setState(partial: Partial<AppState>): void {
     partial.searchQuery !== undefined ||
     partial.altitudeFilter !== undefined ||
     partial.inclinationFilter !== undefined ||
-    partial.showOnlyRecentLaunches !== undefined ||
     partial.categoryFilter !== undefined
   ) {
     state.filteredIndices = computeFilteredIndices(
       state.objects, state.layerFilters, state.searchQuery,
-      state.altitudeFilter, state.inclinationFilter, state.showOnlyRecentLaunches,
+      state.altitudeFilter, state.inclinationFilter,
       state.categoryFilter,
     );
   }
@@ -226,11 +217,9 @@ export function computeFilteredIndices(
   searchQuery = '',
   altitudeFilter: { minKm: number; maxKm: number } | null = null,
   inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
-  showOnlyRecentLaunches = false,
   categoryFilter: ObjectCategory | 'all' = 'all',
 ): number[] {
   const q = searchQuery.trim().toLowerCase();
-  const now = Date.now();
   const indices: number[] = [];
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
@@ -239,7 +228,6 @@ export function computeFilteredIndices(
     if (q && !objectMatchesQuery(obj, q)) continue;
     if (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) continue;
     if (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) continue;
-    if (showOnlyRecentLaunches && !isRecentlyLaunched(obj, now)) continue;
     indices.push(i);
   }
   return indices;
@@ -315,8 +303,6 @@ export function selectHistoricalEvent(eventId: string): void {
     selectedConjunctionSessionKey: null,
     verificationTime: null,
     eventReplay: null,
-    showOrbitTrail: false,
-    showGroundTrack: true,
     ...(wasVerifying ? { time: restoreGlobalLiveTime() } : {}),
   });
 }
@@ -410,8 +396,6 @@ export function selectConjunctionFromAlert(alert: ConjunctionEvent): void {
     },
     selectedIndex: null,
     selectedEventId: null,
-    showOrbitTrail: false,
-    showGroundTrack: true,
   });
 }
 
@@ -473,22 +457,9 @@ export function advanceVerificationTime(deltaMs: number): void {
   state.verificationTime.currentMs = nextMs;
 }
 
-export function setShowOrbitTrail(show: boolean): void {
-  setState({ showOrbitTrail: show });
-}
-
-export function setShowGroundTrack(show: boolean): void {
-  setState({ showGroundTrack: show });
-}
-
 export function setColorByFunction(enabled: boolean): void {
   if (state.colorByFunction === enabled) return;
   setState({ colorByFunction: enabled });
-}
-
-export function setShowOnlyRecentLaunches(enabled: boolean): void {
-  if (state.showOnlyRecentLaunches === enabled) return;
-  setState({ showOnlyRecentLaunches: enabled });
 }
 
 export function setCategoryFilter(filter: ObjectCategory | 'all'): void {
@@ -547,7 +518,7 @@ export function initState(
     ...state,
     objects,
     filteredIndices: computeFilteredIndices(
-      objects, state.layerFilters, '', null, null, false, 'all',
+      objects, state.layerFilters, '', null, null, 'all',
     ),
     stats,
     selectedIndex: null,
@@ -560,13 +531,10 @@ export function initState(
     searchQuery: '',
     altitudeFilter: null,
     inclinationFilter: null,
-    showOnlyRecentLaunches: false,
     categoryFilter: 'all',
     conjunctions: [],
     conjunctionHiddenCount: 0,
     conjunctionSortMode: 'time',
-    showOrbitTrail: false,
-    showGroundTrack: true,
     colorByFunction: true,
     time: {
       mode: 'live',

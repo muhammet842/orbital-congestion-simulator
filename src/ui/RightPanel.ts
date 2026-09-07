@@ -15,8 +15,6 @@ import {
   getSimulationTime,
   getState,
   exitConjunctionView,
-  setShowOrbitTrail,
-  setShowGroundTrack,
   setEventReplayPartial,
   stopEventReplay,
   subscribe,
@@ -24,10 +22,9 @@ import {
   EVENT_REPLAY_SCRUB_STEP_MS,
   getEventReplayWindowMs,
 } from '../state/appState';
-import type { HistoricalEvent } from './EventCards';
-import { getHistoricalEvent } from './EventCards';
+import type { HistoricalEvent } from '../ui';
+import { getHistoricalEvent } from '../ui';
 import { loadObjectPhotoInto } from '../data/objectPhotos';
-import { isRecentlyLaunched } from '../data/newLaunches';
 
 function computeInitialSeparationKm(event: HistoricalEvent, _startMs: number): number {
   if (!event.approachB) return 0;
@@ -100,7 +97,7 @@ export function initRightPanel(container: HTMLElement): void {
 
   const maybeRender = (): void => {
     const state = getState();
-    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.showOrbitTrail}|${state.showGroundTrack}|${state.eventReplay?.eventId ?? ''}`;
+    const key = `${state.selectedIndex}|${state.selectedEventId}|${state.selectedConjunctionSessionKey}|${state.conjunctionRevision}|${state.eventReplay?.eventId ?? ''}`;
     if (key === renderKey) return;
     renderKey = key;
     render(container);
@@ -110,22 +107,6 @@ export function initRightPanel(container: HTMLElement): void {
   subscribe(maybeRender);
 
   container.addEventListener('click', (e) => {
-    const trailBtn = (e.target as HTMLElement).closest('#btn-orbit-trail');
-    if (trailBtn) {
-      e.preventDefault();
-      const { showOrbitTrail } = getState();
-      setShowOrbitTrail(!showOrbitTrail);
-      return;
-    }
-
-    const gtBtn = (e.target as HTMLElement).closest('#btn-ground-track');
-    if (gtBtn) {
-      e.preventDefault();
-      const { showGroundTrack } = getState();
-      setShowGroundTrack(!showGroundTrack);
-      return;
-    }
-
     const exitBtn = (e.target as HTMLElement).closest('#btn-exit-conjunction');
     if (exitBtn) {
       e.preventDefault();
@@ -351,10 +332,6 @@ function render(container: HTMLElement): void {
     propagation,
   );
 
-  const newBadge = isRecentlyLaunched(obj)
-    ? `<span class="new-launch-badge" title="Launched within the last 30 days">NEW</span>`
-    : '';
-
   const categoryLabel: Record<string, string> = {
     active: 'Active Satellite',
     debris: 'Debris',
@@ -364,7 +341,7 @@ function render(container: HTMLElement): void {
   detailEl.innerHTML = `
     <div class="detail-header">
       <div class="norad-id">NORAD ${snapshot.noradId}</div>
-      <div class="object-name">${escapeHtml(snapshot.name)}${newBadge}</div>
+      <div class="object-name">${escapeHtml(snapshot.name)}</div>
     </div>
     <dl class="detail-list detail-list--meta">
       <div class="detail-row"><dt>Country</dt><dd>${escapeHtml(snapshot.country)}</dd></div>
@@ -378,12 +355,6 @@ function render(container: HTMLElement): void {
       <div class="detail-row"><dt>Type</dt><dd>${categoryLabel[snapshot.category] ?? snapshot.category}</dd></div>
       <div class="detail-row"><dt>Inclination</dt><dd>${snapshot.inclinationDeg.toFixed(1)}°</dd></div>
     </dl>
-    <button type="button" id="btn-orbit-trail" class="btn-orbit-trail${state.showOrbitTrail ? ' active' : ''}">
-      ${state.showOrbitTrail ? 'Hide Orbit Trail' : 'Show Orbit Trail'}
-    </button>
-    <button type="button" id="btn-ground-track" class="btn-orbit-trail${state.showGroundTrack ? ' active' : ''}">
-      ${state.showGroundTrack ? 'Hide Ground Track' : 'Show Ground Track'}
-    </button>
   `;
 
   if (obj.category !== 'debris') {
@@ -432,20 +403,11 @@ function renderConjunctionDetail(detailEl: Element, conjunction: ConjunctionEven
 
 function buildInfoCard(event: ReturnType<typeof getHistoricalEvent>): string {
   if (!event?.info) return '';
-  const eType = event.eventType ?? 'collision';
   return `
-    <div class="eic eic--${escapeHtml(eType)}">
-      <div class="eic__title">
-        <span class="eic__badge">${escapeHtml(event.info.title)}</span>
-      </div>
-      <div class="eic__section">
-        <h4 class="eic__heading">Why it happened</h4>
-        <p class="eic__text">${escapeHtml(event.info.reason)}</p>
-      </div>
-      <div class="eic__section">
-        <h4 class="eic__heading">Outcome</h4>
-        <p class="eic__text">${escapeHtml(event.info.outcome)}</p>
-      </div>
+    <div class="event-info">
+      <h3 class="event-info-title">${escapeHtml(event.info.title)}</h3>
+      <p><strong>Why it happened</strong><br>${escapeHtml(event.info.reason)}</p>
+      <p><strong>Outcome</strong><br>${escapeHtml(event.info.outcome)}</p>
     </div>
   `;
 }
@@ -525,13 +487,6 @@ function renderEventReplayPanel(detailEl: Element, eventId: string): void {
         : ''
       }
     </dl>
-
-    <div class="era-controls">
-      <button type="button" id="btn-replay-back" class="btn-era-ctrl" title="Back 5 seconds">⏮</button>
-      <button type="button" id="btn-replay-restart" class="btn-era-ctrl" title="Restart">↺</button>
-      <button type="button" id="btn-replay-play" class="btn-era-ctrl btn-era-play" data-field="era-play-btn">⏸</button>
-      <button type="button" id="btn-replay-fwd" class="btn-era-ctrl" title="Forward 5 seconds">⏭</button>
-    </div>
 
     <button type="button" id="btn-replay-exit" class="btn-exit-conjunction">
       ← Back to Globe

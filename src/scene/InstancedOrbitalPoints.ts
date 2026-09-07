@@ -17,7 +17,6 @@ import {
 import type { PropagationResult } from '../orbital/propagator';
 import type { ObjectCategory, TrackedObject, OrbitLayer } from '../types';
 import { matchesSearchQuery } from '../state/appState';
-import { isRecentlyLaunched } from '../data/newLaunches';
 import { conjunctionModelScale } from './conjunctionScale';
 
 const scaleMatrix = new Matrix4();
@@ -73,14 +72,12 @@ export class InstancedOrbitalPoints {
     colorByFunction: boolean,
     altitudeFilter: { minKm: number; maxKm: number } | null = null,
     inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
-    showOnlyRecentLaunches = false,
     categoryFilter: ObjectCategory | 'all' = 'all',
     conjunctionLiveDistanceKm: number | null = null,
   ): void {
     const highlightSet = new Set(conjunctionHighlight ?? []);
     const conjunctionFocus = highlightSet.size === 2;
     this.matrixDirty = false;
-    const nowMs = Date.now();
 
     for (let i = 0; i < this.count; i++) {
       const obj = objects[i];
@@ -119,8 +116,7 @@ export class InstancedOrbitalPoints {
           (categoryFilter !== 'all' && obj.category !== categoryFilter) ||
           !matchesSearch(obj, searchQuery) ||
           (altitudeFilter && (obj.meanAltitudeKm < altitudeFilter.minKm || obj.meanAltitudeKm > altitudeFilter.maxKm)) ||
-          (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg)) ||
-          (showOnlyRecentLaunches && !isRecentlyLaunched(obj, nowMs))
+          (inclinationFilter && (obj.inclinationDeg < inclinationFilter.minDeg || obj.inclinationDeg > inclinationFilter.maxDeg))
         )
       ) {
         this.matrix.makeScale(0, 0, 0);

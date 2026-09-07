@@ -1,4 +1,3 @@
-import { applyFirstSeenAt } from './applyFirstSeenAt.mjs';
 import { applySatcatOwners, fetchSatcatOwnerMap } from './enrichFromSatcat.mjs';
 
 const STATION_SOURCES = [
@@ -47,12 +46,7 @@ const PRIORITY_NORAD_IDS = [
   20580, // Hubble
   40367, // GOES-16
   25994, // GPS IIF
-  98268, // RAFS (Rubidium Atomic Frequency Standard) — TUA/TÜBİTAK 6U CubeSat,
-         // Transporter-17 rideshare (2026-07-07). Temporary catalog number;
-         // no public TLE/SupGP exists yet as of 2026-07-20 (normal for a
-         // small rideshare payload — SSN correlation across a dense
-         // multi-payload deployment can take weeks). Keeping this here so
-         // it's picked up — and flagged "NEW" — the moment data appears.
+  98268,
 ];
 
 /** Prevent one mega-constellation from filling the entire spacecraft budget. */
@@ -199,35 +193,6 @@ function activePriority(name) {
   if (/ONEWEB/i.test(name)) return 1;
   if (/PLANET|SPIRE|KUIPER/i.test(name)) return 2;
   return 3;
-}
-
-/**
- * Loads the *currently published* dataset
- * purely to carry forward `firstSeenAt` timestamps. Returns a Map from
- * noradId to its previously-recorded `firstSeenAt` (only for objects that
- * already had one) plus the full set of previously-known NORAD IDs, so a
- * freshly-appearing ID can be distinguished from one that was simply
- * dropped-and-re-added by a re-ordering of the fetch groups.
- */
-async function loadPreviousFirstSeenMap() {
-  const { readFile } = await import('node:fs/promises');
-  const { fileURLToPath } = await import('node:url');
-
-  try {
-    const raw = await readFile(fileURLToPath(OUTPUT_PATH), 'utf8');
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data.objects)) return { known: new Set(), firstSeenAt: new Map() };
-
-    const known = new Set();
-    const firstSeenAt = new Map();
-    for (const obj of data.objects) {
-      known.add(obj.noradId);
-      if (obj.firstSeenAt) firstSeenAt.set(obj.noradId, obj.firstSeenAt);
-    }
-    return { known, firstSeenAt };
-  } catch {
-    return { known: new Set(), firstSeenAt: new Map() };
-  }
 }
 
 async function loadFallbackDataset() {
@@ -391,14 +356,7 @@ async function main() {
     try {
       const objects = await fetchActiveGroup(group);
       const cap = GROUP_CAPS[group] ?? Infinity;
-      // Celestrak returns each group roughly ordered by catalog number
-      // (oldest first). For a capped, fast-growing constellation like
-      // Starlink — currently ~10,800 objects against a 4,500 cap — taking
-      // them in that order means we'd only ever keep satellites from
-      // 2019-2021 and would *never* see this week's launches, silently
-      // breaking "new launch" detection for the group that launches most
-      // often. Sort newest-first so a cap (or the global MAX_SATELLITES
-      // budget) always drops the *oldest* objects, not the newest.
+      // Keep the newest catalog entries when a group exceeds its cap.
       const newestFirst = [...objects].sort((a, b) => b.noradId - a.noradId);
       let added = 0;
       for (const obj of newestFirst) {
@@ -439,9 +397,7 @@ async function main() {
   if (debrisCount(seen) < MAX_DEBRIS) {
     try {
       const objects = await fetchSource(DEBRIS_NAME_FILL);
-      // Same newest-first rule as Starlink: CelesTrak returns oldest catalog
-      // numbers first, so taking that order would fill the cap with 1960s
-      // fragments and hide recent LEO breakups.
+      // Keep newer debris entries when the debris cap is reached.
       const newestFirst = [...objects].sort((a, b) => b.noradId - a.noradId);
       let added = 0;
       for (const obj of newestFirst) {
@@ -470,24 +426,6 @@ async function main() {
       console.log(`  fallback debris: +${added} (${debrisCount(seen)}/${MAX_DEBRIS})`);
     }
   }
-
-  const fetchedAt = new Date().toISOString();
-  const previous = await loadPreviousFirstSeenMap();
-  const { newlyLaunchedCount, skippedReason, droppedCorrupt, rejectedStaleLaunch } = applyFirstSeenAt(
-    seen,
-    previous,
-    fetchedAt,
-  );
-  if (droppedCorrupt > 0) {
-    console.log(`  dropped ${droppedCorrupt} bulk-corrupt firstSeenAt stamp(s) from previous catalog`);
-  }
-  if (rejectedStaleLaunch > 0) {
-    console.log(`  rejected ${rejectedStaleLaunch} stale-launch false NEW stamp(s) (TLE launch year too old)`);
-  }
-  if (skippedReason) {
-    console.log(`  new-launch stamping skipped (${skippedReason})`);
-  }
-  console.log(`  new since last fetch: ${newlyLaunchedCount} object(s)`);
 
   // Join CelesTrak SATCAT OWNER → country (and org owner when applicable).
   // One CSV download covers the full catalog; name heuristics remain the
