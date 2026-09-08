@@ -8,7 +8,6 @@ import {
   initLeftPanel,
   initRightPanel,
   initTimeControls,
-  loadHistoricalEvents,
 } from './ui';
 import { initDeepLink } from './routing/deepLink';
 
@@ -22,7 +21,6 @@ async function main(): Promise<void> {
     showLoading(app, 'Loading catalog...');
 
     const dataset = await loadTleDataset();
-    await loadHistoricalEvents();
 
     if (dataset.objects.length === 0) {
       showError(app, 'No satellites found in the catalog.');

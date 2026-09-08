@@ -5,20 +5,17 @@ import {
   subscribe,
   selectObject,
   clearObjectSelection,
-  selectHistoricalEvent,
-  clearHistoricalEventSelection,
 } from '../state/appState';
-import { getHistoricalEvent } from '../ui';
 import type { TrackedObject } from '../types';
 
 function getParam(key: string): string | null {
   return new URLSearchParams(window.location.search).get(key);
 }
 
-function buildSearch(key: string | null, value: string | null): string {
-  if (!key || !value) return '';
+function buildSearch(value: string | null): string {
+  if (!value) return '';
   const p = new URLSearchParams();
-  p.set(key, value);
+  p.set('object', value);
   return '?' + p.toString();
 }
 
@@ -49,18 +46,12 @@ function onStateChange(objects: TrackedObject[]): void {
     return;
   }
 
-  const { selectedIndex, selectedEventId } = getState();
-
-  if (selectedEventId) {
-    
-    writeUrl(buildSearch('event', selectedEventId), true);
-    return;
-  }
+  const { selectedIndex } = getState();
 
   if (selectedIndex != null) {
     const obj = objects[selectedIndex];
     if (obj) {
-      writeUrl(buildSearch('object', String(obj.noradId)), true);
+      writeUrl(buildSearch(String(obj.noradId)), true);
       return;
     }
   }
@@ -70,13 +61,7 @@ function onStateChange(objects: TrackedObject[]): void {
 }
 
 function applyUrl(): void {
-  const eventId = getParam('event');
   const noradStr = getParam('object');
-
-  if (eventId && getHistoricalEvent(eventId)) {
-    selectHistoricalEvent(eventId);
-    return;
-  }
 
   if (noradStr) {
     const norad = parseInt(noradStr, 10);
@@ -89,9 +74,7 @@ function applyUrl(): void {
     }
   }
   
-  const { selectedIndex, selectedEventId, eventReplay } = getState();
-  if (eventReplay || selectedEventId) clearHistoricalEventSelection();
-  if (selectedIndex != null) clearObjectSelection();
+  if (getState().selectedIndex != null) clearObjectSelection();
 }
 
 export function initDeepLink(objects: TrackedObject[]): void {

@@ -1,4 +1,3 @@
-
 import {
   AmbientLight,
   Color,
@@ -11,41 +10,20 @@ import {
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { getUpcomingConjunctions, conjunctionSessionKey } from '../orbital/conjunction';
 import { getDebrisUpdateStride, getPropagationResults } from '../orbital/propagationBatch';
 import { PropagationWorkerBridge } from '../orbital/PropagationWorkerBridge';
-import { eciToScene } from '../orbital/coordinates';
+import { getSubSatelliteScenePoints } from '../orbital/coordinates';
 import { propagateObject } from '../orbital/propagator';
-import { getVisualConjunctionLayout, PAIR_FOCUS_MAX_DISTANCE, PAIR_FOCUS_NEAR, PAIR_INSPECT_MIN_DISTANCE, GLOBE_CAMERA_NEAR } from '../orbital/visualConjunction';
-import { CameraFly } from './CameraFly';
-import { ConjunctionVerification } from './ConjunctionVerification';
-import { ConjunctionLabels } from './ConjunctionLabels';
 import { getDayNightState } from './dayNight';
 import { Earth } from './Earth';
-import { LeoShell } from './LeoShell';
 import { OrbitalMeshes } from './OrbitalMeshes';
 import { SatelliteFootprint } from './SatelliteFootprint';
-import { getSubSatelliteScenePoints } from '../orbital/coordinates';
 import { SelectionMarker } from './SelectionMarker';
-import { EARTH_RADIUS_KM, type TrackedObject } from '../types';
-import {
-  getState,
-  getSimulationTime,
-  matchesSearchQuery,
-  selectObject,
-  clearObjectSelection,
-  setConjunctions,
-  advanceSimulationTime,
-  advanceVerificationTime,
-  advanceEventReplayTime,
-  startEventReplay,
-  stopEventReplay,
-  setEventReplayPartial,
-  subscribe,
-} from '../state/appState';
-import { EventReplayVisuals } from './EventReplayVisuals';
-import { EventReplayLabels } from './EventReplayLabels';
-import { getHistoricalEvent } from '../ui';
+import { CameraFly } from './CameraFly';
+import { matchesSearchQuery, selectObject, clearObjectSelection, getSimulationTime, getState, advanceSimulationTime, subscribe } from '../state/appState';
+import type { TrackedObject } from '../types';
+
+const GLOBE_CAMERA_NEAR = 0.001;
 
 export class SceneManager {
   readonly renderer: WebGLRenderer;
@@ -54,69 +32,35 @@ export class SceneManager {
   readonly controls: OrbitControls;
   readonly earth: Earth;
   readonly sunLight: DirectionalLight;
-  private leoShell: LeoShell;
   private orbitalMeshes: OrbitalMeshes | null = null;
-  private propWorker: PropagationWorkerBridge;
-  private selectionMarker: SelectionMarker;
-  private satelliteFootprint: SatelliteFootprint;
-  private conjunctionVerification: ConjunctionVerification;
-  private conjunctionLabels: ConjunctionLabels;
-  private cameraFly: CameraFly;
-  private eventReplayVisuals: EventReplayVisuals;
-  private eventReplayLabels!: EventReplayLabels;
-  private lastEventReplayId: string | null = null;
-  private _eventReplayStarted = false;
-  private raycaster = new Raycaster();
-  private pointer = new Vector2();
+  private readonly propWorker: PropagationWorkerBridge;
+  private readonly selectionMarker: SelectionMarker;
+  private readonly satelliteFootprint: SatelliteFootprint;
+  private readonly cameraFly: CameraFly;
+  private readonly raycaster = new Raycaster();
+  private readonly pointer = new Vector2();
   private lastFrameTime = performance.now();
   private animationId = 0;
-  private canvasContainer: HTMLElement;
-  private debugMode: boolean;
+  private readonly canvasContainer: HTMLElement;
+  private readonly debugMode: boolean;
   private fpsElement: HTMLElement | null = null;
   private fpsFrames = 0;
   private fpsLastUpdate = performance.now();
-  private lastConjunctionSessionKey: string | null = null;
-  private lastConjunctionRevision = -1;
   private debrisFrameCounter = 0;
   private lastFramedSelectionIndex: number | null = null;
   private clickAnchor: { x: number; y: number } | null = null;
   private pointerDragged = false;
   private readonly clickDragThresholdPx = 5;
-  private readonly onPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return;
-    this.clickAnchor = { x: event.clientX, y: event.clientY };
-    this.pointerDragged = false;
-    window.addEventListener('pointermove', this.onPointerMove);
-    window.addEventListener('pointerup', this.onPointerUp);
-    window.addEventListener('pointercancel', this.onPointerUp);
-  };
-  private readonly onPointerMove = (event: PointerEvent): void => {
-    if (!this.clickAnchor || this.pointerDragged) return;
-    const dx = event.clientX - this.clickAnchor.x;
-    const dy = event.clientY - this.clickAnchor.y;
-    if (Math.hypot(dx, dy) > this.clickDragThresholdPx) {
-      this.pointerDragged = true;
-    }
-  };
-  private readonly onPointerUp = (): void => {
-    window.removeEventListener('pointermove', this.onPointerMove);
-    window.removeEventListener('pointerup', this.onPointerUp);
-    window.removeEventListener('pointercancel', this.onPointerUp);
-  };
 
   constructor(container: HTMLElement) {
     this.canvasContainer = container;
     this.debugMode = new URLSearchParams(window.location.search).has('debug');
-
     this.scene = new Scene();
     this.scene.background = new Color('#050510');
-
     this.camera = new PerspectiveCamera(45, 1, GLOBE_CAMERA_NEAR, 1000);
     this.camera.position.set(0, 0, 4.5);
-
     this.renderer = new WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.sortObjects = true;
     container.appendChild(this.renderer.domElement);
 
     if (this.debugMode) {
@@ -129,56 +73,40 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
-    this.controls.target.set(0, 0, 0);
-    
     this.controls.enablePan = false;
     this.controls.screenSpacePanning = false;
-    this.applyOrbitDistanceLimits(false);
+    this.controls.target.set(0, 0, 0);
+    this.controls.minDistance = 1.35;
+    this.controls.maxDistance = 10;
 
-    const ambientLight = new AmbientLight(0x1a2040, 0.28);
-    this.scene.add(ambientLight);
-
-    const fillLight = new HemisphereLight(0x3a5080, 0x0a0812, 0.14);
-    this.scene.add(fillLight);
-
+    this.scene.add(new AmbientLight(0x1a2040, 0.28));
+    this.scene.add(new HemisphereLight(0x3a5080, 0x0a0812, 0.14));
     this.sunLight = new DirectionalLight(0xfff4e8, 2.6);
     this.sunLight.target.position.set(0, 0, 0);
-    this.scene.add(this.sunLight);
-    this.scene.add(this.sunLight.target);
+    this.scene.add(this.sunLight, this.sunLight.target);
 
     this.earth = new Earth();
-    this.earth.mesh.renderOrder = 0;
     this.scene.add(this.earth.mesh);
-
-    this.leoShell = new LeoShell();
-    this.scene.add(this.leoShell.group);
-
     this.selectionMarker = new SelectionMarker();
     this.scene.add(this.selectionMarker.group);
-
     this.satelliteFootprint = new SatelliteFootprint();
     this.scene.add(this.satelliteFootprint.group);
-
-    this.conjunctionVerification = new ConjunctionVerification();
-    this.scene.add(this.conjunctionVerification.group);
-
-    this.conjunctionLabels = new ConjunctionLabels(container);
-
     this.cameraFly = new CameraFly();
-
-    this.eventReplayVisuals = new EventReplayVisuals();
-    this.scene.add(this.eventReplayVisuals.group);
-
-    this.eventReplayLabels = new EventReplayLabels(container);
-
     this.propWorker = new PropagationWorkerBridge();
 
-    this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
-    this.renderer.domElement.addEventListener('click', (e) => this.onClick(e));
+    this.renderer.domElement.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      this.clickAnchor = { x: event.clientX, y: event.clientY };
+      this.pointerDragged = false;
+    });
+    window.addEventListener('pointermove', (event) => {
+      if (!this.clickAnchor || this.pointerDragged) return;
+      if (Math.hypot(event.clientX - this.clickAnchor.x, event.clientY - this.clickAnchor.y) > this.clickDragThresholdPx) this.pointerDragged = true;
+    });
+    window.addEventListener('pointerup', () => { this.clickAnchor = null; });
+    this.renderer.domElement.addEventListener('click', (event) => this.onClick(event));
     window.addEventListener('resize', () => this.onResize());
-
     subscribe(() => this.onStateChange());
-
     this.onResize();
     this.applyDayNight(getSimulationTime());
   }
@@ -190,7 +118,7 @@ export class SceneManager {
   }
 
   start(): void {
-    const loop = (now: number) => {
+    const loop = (now: number): void => {
       this.animationId = requestAnimationFrame(loop);
       this.tick(now);
     };
@@ -201,182 +129,13 @@ export class SceneManager {
     cancelAnimationFrame(this.animationId);
   }
 
-  
-  private keepEarthCenteredOrbit(): void {
-    const state = getState();
-    if (state.selectedConjunction || state.eventReplay || state.verificationTime) return;
-    if (this.cameraFly.isActive()) return;
-    if (this.controls.target.lengthSq() > 1e-8) {
-      this.controls.target.set(0, 0, 0);
-    }
-  }
-
-  
-  private applyOrbitDistanceLimits(conjunctionFocus: boolean): void {
-    if (conjunctionFocus) {
-      this.controls.minDistance = PAIR_INSPECT_MIN_DISTANCE;
-      this.controls.maxDistance = PAIR_FOCUS_MAX_DISTANCE;
-      if (this.camera.near !== PAIR_FOCUS_NEAR) {
-        this.camera.near = PAIR_FOCUS_NEAR;
-        this.camera.updateProjectionMatrix();
-      }
-      return;
-    }
-    this.controls.minDistance = 1.35;
-    this.controls.maxDistance = 10;
-    if (this.camera.near !== GLOBE_CAMERA_NEAR) {
-      this.camera.near = GLOBE_CAMERA_NEAR;
-      this.camera.updateProjectionMatrix();
-    }
-  }
-
   private onStateChange(): void {
-    const { selectedConjunction, selectedIndex, selectedEventId, objects, conjunctionRevision } = getState();
-
-    
-    if (selectedEventId && !selectedConjunction) {
-      const event = getHistoricalEvent(selectedEventId);
-      if (event && event.collisionTimeUtc && event.objectA) {
-        const collisionTimeMs = new Date(event.collisionTimeUtc).getTime();
-
-        if (this.lastEventReplayId !== selectedEventId) {
-          const comingFromReplay = this.lastEventReplayId != null;
-          this.lastEventReplayId = selectedEventId;
-          startEventReplay(selectedEventId, collisionTimeMs);
-          this.eventReplayVisuals.setup(event, collisionTimeMs);
-          this._eventReplayStarted = comingFromReplay;
-
-          if (!comingFromReplay) {
-            this.cameraFly.captureGlobalView(this.camera, this.controls);
-            
-            this.applyOrbitDistanceLimits(true);
-            this.canvasContainer.classList.add('scene-container--conjunction-focus');
-
-            
-            this.satelliteFootprint.update(null, objects, new Date());
-            this.selectionMarker.update(null, objects, new Date());
-            
-            if (this.orbitalMeshes) this.orbitalMeshes.group.visible = false;
-            this.leoShell.setVisible(false);
-          }
-        } else if (!getState().eventReplay) {
-          
-          this._eventReplayStarted = true;
-          startEventReplay(selectedEventId, collisionTimeMs);
-        }
-
-        this.applyOrbitDistanceLimits(true);
-        this.canvasContainer.classList.add('scene-container--conjunction-focus');
-        this.earth.mesh.visible = true;
-        return;
-      }
-    }
-
-    
-    const { eventReplay } = getState();
-    if (this.lastEventReplayId && (!selectedEventId || !eventReplay)) {
-      this.lastEventReplayId = null;
-      this._eventReplayStarted = false;
-      this.eventReplayVisuals.dispose();
-      this.eventReplayLabels.hide();
-      
-      if (eventReplay) stopEventReplay();
-      
-      if (this.orbitalMeshes) this.orbitalMeshes.group.visible = true;
-      this.leoShell.setVisible(true);
-      this.applyOrbitDistanceLimits(false);
-      this.canvasContainer.classList.remove('scene-container--conjunction-focus');
-      this.cameraFly.flyToGlobalView(this.camera, this.controls);
-    }
-
-    if (selectedConjunction) {
-      const sessionKey = conjunctionSessionKey(selectedConjunction);
-      const sessionChanged =
-        sessionKey !== this.lastConjunctionSessionKey ||
-        conjunctionRevision !== this.lastConjunctionRevision;
-
-      if (sessionChanged) {
-        this.conjunctionVerification.disposeVisuals();
-        this.conjunctionLabels.reset();
-
-        if (this.lastConjunctionSessionKey === null) {
-          this.cameraFly.captureGlobalView(this.camera, this.controls);
-        }
-
-        this.lastConjunctionSessionKey = sessionKey;
-        this.lastConjunctionRevision = conjunctionRevision;
-        this.lastFrameTime = performance.now();
-        this.conjunctionVerification.rebuildForEvent(selectedConjunction, objects);
-        
-        this.applyOrbitDistanceLimits(true);
-
-        const flyTime = getSimulationTime();
-        const propA = propagateObject(objects[selectedConjunction.indexA]?.satrec, flyTime);
-        const propB = propagateObject(objects[selectedConjunction.indexB]?.satrec, flyTime);
-        if (propA && propB) {
-          const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
-          const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-          const dx = propA.positionEci.x - propB.positionEci.x;
-          const dy = propA.positionEci.y - propB.positionEci.y;
-          const dz = propA.positionEci.z - propB.positionEci.z;
-          const liveKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          const layout = getVisualConjunctionLayout(posA, posB, liveKm);
-
-          this.conjunctionVerification.update(selectedConjunction, objects, flyTime);
-
-          this.controls.target.copy(layout.visualMid);
-          this.controls.update();
-          this.cameraFly.flyToConjunctionPair(
-            this.camera,
-            this.controls,
-            posA,
-            posB,
-            liveKm,
-          );
-        }
-      }
-
-      this.applyOrbitDistanceLimits(true);
-      this.canvasContainer.classList.add('scene-container--conjunction-focus');
-      this.leoShell.setVisible(false);
-      this.earth.mesh.visible = true;
-      return;
-    }
-
-    if (this.lastConjunctionSessionKey) {
-      this.conjunctionVerification.disposeVisuals();
-      this.conjunctionLabels.reset();
-      this.applyOrbitDistanceLimits(false);
-      this.cameraFly.flyToGlobalView(this.camera, this.controls);
-    }
-
-    this.earth.mesh.visible = true;
-
-    this.lastConjunctionSessionKey = null;
-    this.lastConjunctionRevision = -1;
-    this.canvasContainer.classList.remove('scene-container--conjunction-focus');
-    this.leoShell.setVisible(true);
-
-    if (
-      selectedIndex != null &&
-      selectedIndex !== this.lastFramedSelectionIndex &&
-      !this.cameraFly.isActive()
-    ) {
-      const obj = objects[selectedIndex];
-      const propagation = obj ? propagateObject(obj.satrec, getSimulationTime()) : null;
-      const subSat = propagation
-        ? getSubSatelliteScenePoints(propagation.positionEci, propagation.altitudeKm)
-        : null;
-
-      if (propagation && subSat) {
-        this.cameraFly.frameSelectedOnGlobe(
-          this.camera,
-          this.controls,
-          subSat.nadirWorld,
-          propagation.altitudeKm,
-        );
-      }
-
+    const { selectedIndex, objects } = getState();
+    if (selectedIndex != null && selectedIndex !== this.lastFramedSelectionIndex && !this.cameraFly.isActive()) {
+      const object = objects[selectedIndex];
+      const propagation = object ? propagateObject(object.satrec, getSimulationTime()) : null;
+      const subSatellite = propagation ? getSubSatelliteScenePoints(propagation.positionEci, propagation.altitudeKm) : null;
+      if (propagation && subSatellite) this.cameraFly.frameSelectedOnGlobe(this.camera, this.controls, subSatellite.nadirWorld, propagation.altitudeKm);
       this.lastFramedSelectionIndex = selectedIndex;
     } else if (selectedIndex == null) {
       this.lastFramedSelectionIndex = null;
@@ -391,11 +150,9 @@ export class SceneManager {
 
   private updateFps(now: number): void {
     if (!this.fpsElement) return;
-
     this.fpsFrames++;
     if (now - this.fpsLastUpdate >= 1000) {
-      const fps = Math.round((this.fpsFrames * 1000) / (now - this.fpsLastUpdate));
-      this.fpsElement.textContent = `FPS: ${fps}`;
+      this.fpsElement.textContent = `FPS: ${Math.round((this.fpsFrames * 1000) / (now - this.fpsLastUpdate))}`;
       this.fpsFrames = 0;
       this.fpsLastUpdate = now;
     }
@@ -405,151 +162,24 @@ export class SceneManager {
     const state = getState();
     const deltaMs = now - this.lastFrameTime;
     this.lastFrameTime = now;
-
-    if (state.verificationTime?.playing && !this.cameraFly.isActive()) {
-      
-      advanceVerificationTime(deltaMs);
-    } else if (state.eventReplay?.playing) {
-      advanceEventReplayTime(deltaMs);
-    } else if (state.time.mode === 'historical' && state.time.playing) {
-      advanceSimulationTime(
-        new Date(state.time.current.getTime() + deltaMs * state.time.speed),
-      );
+    if (state.time.mode === 'historical' && state.time.playing) {
+      advanceSimulationTime(new Date(state.time.current.getTime() + deltaMs * state.time.speed));
     }
 
     const currentState = getState();
     const simTime = getSimulationTime();
-
-    
-    if (currentState.eventReplay) {
-      
-      this.applyDayNight(simTime);
-
-      const flying = this.cameraFly.update(this.camera, this.controls, now);
-
-      const replayResult = this.eventReplayVisuals.tick(
-        simTime,
-        currentState.eventReplay.collisionTimeMs,
-      );
-
-      
-      if (replayResult && currentState.eventReplay.playing) {
-        const msToImpact = currentState.eventReplay.collisionTimeMs - currentState.eventReplay.currentMs;
-        if (msToImpact <= 0) {
-          setEventReplayPartial({ playing: false });
-        }
-      }
-
-      
-      if (replayResult && !this._eventReplayStarted && !this.cameraFly.isActive()) {
-        this._eventReplayStarted = true;
-        const collisionScene = this.eventReplayVisuals.getCollisionScene();
-        const posA = replayResult.posA;
-        const posB = replayResult.posB ?? collisionScene;
-        if (posB) {
-          const sepKm = Math.max(
-            this.eventReplayVisuals.getInitialSeparationKm(),
-            posA.distanceTo(posB) * EARTH_RADIUS_KM,
-            0.5,
-          );
-          const layout = getVisualConjunctionLayout(posA, posB, sepKm);
-          this.controls.target.copy(layout.visualMid);
-          this.controls.update();
-          this.cameraFly.flyToConjunctionPair(
-            this.camera,
-            this.controls,
-            posA,
-            posB,
-            sepKm,
-          );
-        }
-      }
-
-      
-      if (this._eventReplayStarted && !this.cameraFly.isActive() && replayResult) {
-        const posA = replayResult.posA;
-        const posB = replayResult.posB ?? this.eventReplayVisuals.getCollisionScene();
-        if (posB) {
-          const sepKm = Math.max(posA.distanceTo(posB) * EARTH_RADIUS_KM, 0.1);
-          this.cameraFly.followConjunctionMidpoint(
-            this.camera,
-            this.controls,
-            posA,
-            posB,
-            sepKm,
-            deltaMs,
-          );
-        }
-      }
-
-      if (!flying && !this.cameraFly.isActive()) {
-        this.controls.update();
-      }
-      this.camera.updateMatrixWorld();
-
-      
-      if (replayResult) {
-        const event = getHistoricalEvent(currentState.eventReplay.eventId);
-        const names = this.eventReplayVisuals.getNames();
-        this.eventReplayLabels.update(
-          replayResult.posA,
-          replayResult.posB,
-          names?.nameA ?? 'OBJECT A',
-          names?.nameB ?? null,
-          (event?.eventType ?? 'collision'),   
-          this.camera,
-          this.renderer,
-          replayResult.impactFlash,
-        );
-      } else {
-        this.eventReplayLabels.hide();
-      }
-
-      this.renderer.render(this.scene, this.camera);
-      this.updateFps(now);
-      return; 
-    }
-
-    this.eventReplayLabels.hide();
-    this._eventReplayStarted = false;
-
-    
-    const timeSpeed =
-      currentState.verificationTime?.speed ??
-      (currentState.time.mode === 'historical' ? currentState.time.speed : 1);
-    const conjunctionHighlightIndices = currentState.selectedConjunction
-      ? [currentState.selectedConjunction.indexA, currentState.selectedConjunction.indexB]
-      : null;
-
+    const timeSpeed = currentState.time.mode === 'historical' ? currentState.time.speed : 1;
     this.applyDayNight(simTime);
-
-    
     this.propWorker.request(simTime.getTime());
-    const propagations =
-      this.propWorker.getLatestResults() ??
-      getPropagationResults(currentState.objects, simTime, timeSpeed);
+    const propagations = this.propWorker.getLatestResults() ?? getPropagationResults(currentState.objects, simTime, timeSpeed);
     const debrisStride = getDebrisUpdateStride(timeSpeed);
     const skipPointsUpdate = this.debrisFrameCounter++ % debrisStride !== 0;
-
-    
-    let conjunctionLiveDistanceKm: number | null = null;
-    if (currentState.selectedConjunction) {
-      const propA = propagations[currentState.selectedConjunction.indexA];
-      const propB = propagations[currentState.selectedConjunction.indexB];
-      if (propA && propB) {
-        const dx = propA.positionEci.x - propB.positionEci.x;
-        const dy = propA.positionEci.y - propB.positionEci.y;
-        const dz = propA.positionEci.z - propB.positionEci.z;
-        conjunctionLiveDistanceKm = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      }
-    }
 
     if (this.orbitalMeshes) {
       this.orbitalMeshes.updatePositions(
         currentState.objects,
         propagations,
         currentState.selectedIndex,
-        conjunctionHighlightIndices,
         currentState.layerFilters,
         currentState.searchQuery,
         this.camera.position,
@@ -560,139 +190,40 @@ export class SceneManager {
           altitudeFilter: currentState.altitudeFilter,
           inclinationFilter: currentState.inclinationFilter,
           categoryFilter: currentState.categoryFilter,
-          conjunctionLiveDistanceKm,
         },
       );
     }
 
-    const footprintIndex =
-      currentState.selectedConjunction || !this.earth.mesh.visible
-        ? null
-        : currentState.selectedIndex;
-
-    this.satelliteFootprint.update(footprintIndex, currentState.objects, simTime);
-
-    
-    const selectionIndexForOverlays = currentState.selectedConjunction ? null : currentState.selectedIndex;
-
-    this.selectionMarker.update(
-      selectionIndexForOverlays,
-      currentState.objects,
-      simTime,
-    );
-
+    this.satelliteFootprint.update(currentState.selectedIndex, currentState.objects, simTime);
+    this.selectionMarker.update(currentState.selectedIndex, currentState.objects, simTime);
     const flying = this.cameraFly.update(this.camera, this.controls, now);
-
-    if (currentState.selectedConjunction && !flying) {
-      const conj = currentState.selectedConjunction;
-      const objA = currentState.objects[conj.indexA];
-      const objB = currentState.objects[conj.indexB];
-      if (objA && objB) {
-        const propA = propagateObject(objA.satrec, simTime);
-        const propB = propagateObject(objB.satrec, simTime);
-        if (propA && propB) {
-          const posA = eciToScene(propA.positionEci.x, propA.positionEci.y, propA.positionEci.z);
-          const posB = eciToScene(propB.positionEci.x, propB.positionEci.y, propB.positionEci.z);
-          
-          const liveKm = conjunctionLiveDistanceKm ?? conj.distanceKm;
-          this.cameraFly.followConjunctionMidpoint(
-            this.camera,
-            this.controls,
-            posA,
-            posB,
-            liveKm,
-            deltaMs,
-          );
-        }
-      }
-    }
-
     if (!flying) {
       this.controls.update();
-      this.keepEarthCenteredOrbit();
+      if (this.controls.target.lengthSq() > 1e-8) this.controls.target.set(0, 0, 0);
     }
-
     this.camera.updateMatrixWorld();
-
-    this.conjunctionVerification.update(
-      currentState.selectedConjunction,
-      currentState.objects,
-      simTime,
-    );
-
-    this.conjunctionLabels.update(
-      currentState.selectedConjunction,
-      currentState.objects,
-      simTime,
-      this.camera,
-      this.renderer,
-    );
-
-    if (!currentState.selectedConjunction) {
-      
-      getUpcomingConjunctions(currentState.objects, simTime, (fresh) => {
-        setConjunctions(fresh);
-      });
-    }
-
     this.renderer.render(this.scene, this.camera);
     this.updateFps(now);
   }
 
   private onClick(event: MouseEvent): void {
-    if (!this.orbitalMeshes) return;
-
-    if (this.pointerDragged) {
+    if (!this.orbitalMeshes || this.pointerDragged) {
       this.pointerDragged = false;
-      this.clickAnchor = null;
       return;
     }
-
-    this.clickAnchor = null;
-
-    const focusState = getState();
-    if (
-      focusState.eventReplay ||
-      focusState.selectedEventId ||
-      focusState.selectedConjunction ||
-      focusState.verificationTime
-    ) {
-      
-      return;
-    }
-
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    this.camera.updateMatrixWorld();
-    const objectIndex = this.orbitalMeshes.pickObjectIndex(
-      this.raycaster,
-      this.camera,
-      this.pointer,
-      rect.width,
-      rect.height,
-    );
-
-    if (objectIndex != null) {
-      const state = getState();
-      const obj = state.objects[objectIndex];
-      if (!obj) return;
-
-      const propagation = propagateObject(obj.satrec, getSimulationTime());
-      if (
-        propagation &&
-        state.layerFilters[propagation.layer] &&
-        (state.categoryFilter === 'all' || obj.category === state.categoryFilter) &&
-        matchesSearchQuery(obj, state.searchQuery)
-      ) {
-        selectObject(objectIndex);
-      }
+    const objectIndex = this.orbitalMeshes.pickObjectIndex(this.raycaster, this.camera, this.pointer, rect.width, rect.height);
+    if (objectIndex == null) {
+      clearObjectSelection();
       return;
     }
-
-    clearObjectSelection();
+    const state = getState();
+    const object = state.objects[objectIndex];
+    const propagation = object ? propagateObject(object.satrec, getSimulationTime()) : null;
+    if (object && propagation && state.layerFilters[propagation.layer] && (state.categoryFilter === 'all' || object.category === state.categoryFilter) && matchesSearchQuery(object, state.searchQuery)) selectObject(objectIndex);
   }
 
   private onResize(): void {

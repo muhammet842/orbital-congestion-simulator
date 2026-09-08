@@ -10,10 +10,6 @@ There are some filteres that lets you see the orbit more clearly and also you ca
 
 You can also see the telemetry data like velocity, inclination and owner countries of the satellites and debrisses from the left panel.
 
-You can watch the close approaches satellites will lead in 24 hours.
-
-At the bottom of the left panel, there are real historical event cards which show you real historical collusions between satellites.
-
 It's also a real-time animation like where are morning or night onto Earth.
 
 You can rewind or fast forward the animation from the progress bat at the bottom.

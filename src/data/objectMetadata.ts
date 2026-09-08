@@ -114,13 +114,13 @@ export function inferMetadata(
 
   if (category === 'debris') {
     if (/COSMOS\s*2251|COSMOS-2251/i.test(name)) {
-      return { country: 'Russia', owner: 'Roscosmos (collision debris)' };
+      return { country: 'Russia', owner: 'Roscosmos' };
     }
     if (/FENGYUN|FY-1C/i.test(name)) {
       return { country: 'China', owner: 'CNSA (ASAT debris)' };
     }
     if (/IRIDIUM\s*33|IRIDIUM-33/i.test(name)) {
-      return { country: 'USA', owner: 'Iridium / collision debris' };
+      return { country: 'USA', owner: 'Iridium' };
     }
     if (/COSMOS|SL-/i.test(name)) return { country: 'Russia', owner: 'Roscosmos (debris)' };
     if (/FENGYUN|SHIYAN|CZ-/i.test(name)) return { country: 'China', owner: 'CNSA (debris)' };

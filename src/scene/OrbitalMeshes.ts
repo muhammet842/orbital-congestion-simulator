@@ -24,10 +24,8 @@ import { matchesSearchQuery } from '../state/appState';
 import { InstancedOrbitalPoints } from './InstancedOrbitalPoints';
 import { resolveModelKey } from './modelResolver';
 import { satelliteModelLoader } from './SatelliteModelLoader';
-import { conjunctionModelScale } from './conjunctionScale';
 import { pickClosestScreenIndex, type ScreenPickCandidate } from './screenPick';
 
-export { conjunctionModelScale };
 
 const SELECTED_SCALE = 3;
 const scratchVel = new Vector3();
@@ -41,8 +39,7 @@ function matchesSearch(obj: TrackedObject, searchQuery: string): boolean {
   return matchesSearchQuery(obj, searchQuery);
 }
 
-function usesSelectedDetail(obj: TrackedObject, conjunctionFocus = false): boolean {
-  if (conjunctionFocus) return true;
+function usesSelectedDetail(obj: TrackedObject): boolean {
   return obj.category === 'active' || obj.category === 'stations';
 }
 
@@ -66,7 +63,7 @@ export class OrbitalMeshes {
 
   static create(objects: TrackedObject[]): OrbitalMeshes {
     const meshes = new OrbitalMeshes(objects);
-    meshes.updatePositions(objects, objects.map((obj) => propagateObject(obj.satrec, new Date())), null, null, {
+    meshes.updatePositions(objects, objects.map((obj) => propagateObject(obj.satrec, new Date())), null, {
       LEO: true,
       MEO: true,
       GEO: true,
@@ -80,7 +77,6 @@ export class OrbitalMeshes {
     objects: TrackedObject[],
     propagations: (PropagationResult | null)[],
     selectedIndex: number | null,
-    conjunctionHighlight: number[] | null,
     layerFilters: Record<OrbitLayer, boolean>,
     searchQuery: string,
     cameraPosition: { x: number; y: number; z: number },
@@ -92,42 +88,35 @@ export class OrbitalMeshes {
       inclinationFilter?: { minDeg: number; maxDeg: number } | null;
       categoryFilter?: ObjectCategory | 'all';
       
-      conjunctionLiveDistanceKm?: number | null;
     },
   ): void {
     const colorByFunction = options?.colorByFunction ?? false;
     const altitudeFilter = options?.altitudeFilter ?? null;
     const inclinationFilter = options?.inclinationFilter ?? null;
     const categoryFilter = options?.categoryFilter ?? 'all';
-    const conjunctionLiveDistanceKm = options?.conjunctionLiveDistanceKm ?? null;
-    const highlightSet = new Set(conjunctionHighlight ?? []);
-    const conjunctionFocus = highlightSet.size === 2;
     const detailIndices = this.resolveDetailIndices(
       objects,
       selectedIndex,
-      conjunctionFocus,
-      highlightSet,
     );
 
-    if (!options?.skipPointsUpdate || conjunctionFocus) {
+    if (!options?.skipPointsUpdate) {
       this.spacecraftPoints.updatePositions(
-        objects, propagations, selectedIndex, conjunctionHighlight,
+        objects, propagations, selectedIndex,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        categoryFilter, conjunctionLiveDistanceKm,
+        categoryFilter,
       );
       this.debrisPoints.updatePositions(
-        objects, propagations, selectedIndex, conjunctionHighlight,
+        objects, propagations, selectedIndex,
         layerFilters, searchQuery, cameraPosition, pulseTimeMs,
         detailIndices, colorByFunction, altitudeFilter, inclinationFilter,
-        categoryFilter, conjunctionLiveDistanceKm,
+        categoryFilter,
       );
     }
 
     this.syncDetailWrappers(
       objects, propagations, detailIndices, layerFilters, searchQuery,
-      conjunctionFocus, highlightSet, selectedIndex, cameraPosition, pulseTimeMs,
-      colorByFunction, conjunctionLiveDistanceKm, categoryFilter,
+      selectedIndex, cameraPosition, pulseTimeMs, colorByFunction, categoryFilter,
     );
 
     const nextVisible: Object3D[] = [];
@@ -212,18 +201,8 @@ export class OrbitalMeshes {
   private resolveDetailIndices(
     objects: TrackedObject[],
     selectedIndex: number | null,
-    conjunctionFocus: boolean,
-    highlightSet: Set<number>,
   ): Set<number> {
     const indices = new Set<number>();
-
-    if (conjunctionFocus) {
-      for (const index of highlightSet) {
-        const obj = objects[index];
-        if (obj) indices.add(index);
-      }
-      return indices;
-    }
 
     if (selectedIndex != null) {
       const obj = objects[selectedIndex];
@@ -239,13 +218,10 @@ export class OrbitalMeshes {
     detailIndices: Set<number>,
     layerFilters: Record<OrbitLayer, boolean>,
     searchQuery: string,
-    conjunctionFocus: boolean,
-    highlightSet: Set<number>,
     selectedIndex: number | null,
     cameraPosition: { x: number; y: number; z: number },
     pulseTimeMs: number,
     colorByFunction: boolean,
-    conjunctionLiveDistanceKm: number | null,
     categoryFilter: ObjectCategory | 'all' = 'all',
   ): void {
     for (const [index, wrapper] of this.detailWrappers) {
@@ -257,14 +233,11 @@ export class OrbitalMeshes {
 
     for (const index of detailIndices) {
       const obj = objects[index];
-      if (!obj || !usesSelectedDetail(obj, conjunctionFocus)) continue;
+      if (!obj || !usesSelectedDetail(obj)) continue;
 
       const isSelected = index === selectedIndex;
-      const isConjunction = highlightSet.has(index);
       const hide =
-        (conjunctionFocus && !isConjunction) ||
         (!isSelected &&
-          !isConjunction &&
           (
             !layerFilters[obj.layer] ||
             (categoryFilter !== 'all' && obj.category !== categoryFilter) ||
@@ -273,8 +246,7 @@ export class OrbitalMeshes {
 
       let wrapper = this.detailWrappers.get(index);
       if (!wrapper) {
-        const modelKey =
-          conjunctionFocus && obj.category === 'debris' ? 'sat_leo' : resolveModelKey(obj);
+        const modelKey = resolveModelKey(obj);
         satelliteModelLoader.ensureLoaded(modelKey);
         const created = satelliteModelLoader.clone(modelKey);
         created.userData.objectIndex = index;
@@ -292,7 +264,6 @@ export class OrbitalMeshes {
 
       if (
         !isSelected &&
-        !isConjunction &&
         (!layerFilters[result.layer] || !isFacingCamera(result, cameraPosition))
       ) {
         wrapper.visible = false;
@@ -312,16 +283,13 @@ export class OrbitalMeshes {
       scratchVel.set(vel.x, vel.y, vel.z);
 
       let scaleMul = isSelected ? SELECTED_SCALE : getCategoryScale(obj.category, obj.country);
-      if (isConjunction) {
-        scaleMul = conjunctionModelScale(conjunctionLiveDistanceKm);
-      }
-      scaleMul *= isConjunction ? 1 : getCategoryPulse(obj.category, pulseTimeMs, obj.country);
+      scaleMul *= getCategoryPulse(obj.category, pulseTimeMs, obj.country);
 
       const baseScale = (wrapper.userData.baseScale as number) ?? 1;
       wrapper.position.set(scenePos.x, scenePos.y, scenePos.z);
       orientAlongVelocity(wrapper, scratchVel);
       wrapper.scale.setScalar(baseScale * scaleMul);
-      applyTint(wrapper, obj, result.layer, isSelected, isConjunction, pulseTimeMs, colorByFunction);
+      applyTint(wrapper, obj, result.layer, isSelected, pulseTimeMs, colorByFunction);
       wrapper.visible = true;
     }
   }
@@ -345,19 +313,15 @@ function applyTint(
   obj: TrackedObject,
   layer: OrbitLayer,
   isSelected: boolean,
-  isConjunction: boolean,
   pulseTimeMs: number,
   colorByFunction: boolean,
 ): void {
-  const tintKey = `${colorByFunction ? 1 : 0}:${isSelected ? 1 : 0}:${isConjunction ? 1 : 0}:${Math.floor(pulseTimeMs / 120)}:${layer}:${obj.functionGroup}`;
+  const tintKey = `${colorByFunction ? 1 : 0}:${isSelected ? 1 : 0}:${Math.floor(pulseTimeMs / 120)}:${layer}:${obj.functionGroup}`;
   if (wrapper.userData.tintKey === tintKey) return;
   wrapper.userData.tintKey = tintKey;
 
   if (isSelected) {
     tintColor.setRGB(1, 1, 1);
-  } else if (isConjunction) {
-    const pulse = 0.88 + 0.12 * Math.sin(pulseTimeMs * 0.005);
-    tintColor.setRGB(1 * pulse, 0.9 * pulse, 0.2 * pulse);
   } else if (colorByFunction) {
     const [r, g, b] = getFunctionGroupColor(obj.functionGroup);
     const pulse = getFunctionGroupPulse(obj.functionGroup, pulseTimeMs);

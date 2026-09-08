@@ -1,26 +1,11 @@
-
-
 import {
-  getVerificationWindowMs,
-  VERIFY_SCRUB_STEP_MS,
-} from '../orbital/conjunction';
-import {
-  EVENT_REPLAY_SCRUB_STEP_MS,
   enterHistoricalMode,
   enterLiveMode,
   formatUtcDateTime,
-  getEventReplayState,
-  getEventReplayWindowMs,
   getSimulationTime,
   getState,
-  getVerificationTimeState,
-  isConjunctionVerificationActive,
-  isEventReplayActive,
-  isVerificationPlaying,
   jumpToNow,
-  setEventReplayPartial,
   setTimePartial,
-  setVerificationPartial,
   subscribe,
 } from '../state/appState';
 
@@ -42,10 +27,10 @@ export function initTimeControls(container: HTMLElement): void {
         <div class="time-display" id="time-display"></div>
         <div class="time-mode-btns">
           <button type="button" id="btn-now" class="btn-now" title="Jump to current time">Now</button>
-          <button type="button" id="btn-live" class="btn-live active" title="Switch to live mode">● LIVE</button>
+          <button type="button" id="btn-live" class="btn-live active" title="Switch to live mode">Live</button>
         </div>
         <div class="speed-controls">
-          <span class="speed-label">Speed</span>
+          <span class="speed-label">Playback</span>
           <div id="speed-buttons" class="speed-buttons"></div>
         </div>
       </div>
@@ -59,111 +44,32 @@ export function initTimeControls(container: HTMLElement): void {
   const liveBtn = container.querySelector('#btn-live') as HTMLButtonElement;
   const slider = container.querySelector('#time-slider') as HTMLInputElement;
   const speedButtons = container.querySelector('#speed-buttons')!;
-  const speedLabel = container.querySelector('.speed-label');
+  const display = container.querySelector('#time-display')!;
 
   speedButtons.innerHTML = SPEEDS.map(
-    (s) => `<button type="button" class="speed-btn" data-speed="${s}">${s}x</button>`,
+    (speed) => `<button type="button" class="speed-btn" data-speed="${speed}">${speed}x</button>`,
   ).join('');
 
-  nowBtn.textContent = 'Now';
-  nowBtn.title = 'Jump to current time';
-  liveBtn.title = 'Switch to live mode';
-  playBtn.title = 'Play / Pause';
-  if (speedLabel) speedLabel.textContent = 'Speed';
-
   let anchorTime = Date.now();
-  
   let sliderDragging = false;
 
   playBtn.addEventListener('click', () => {
-    if (isConjunctionVerificationActive()) {
-      const vt = getVerificationTimeState();
-      if (!vt) return;
-      const { startMs, endMs } = getVerificationWindowMs(
-        vt.cpaTimeMs,
-        vt.relativeVelocityKmS ?? 0,
-      );
-      if (!vt.playing && vt.currentMs >= endMs - 1) {
-        setVerificationPartial({ currentMs: startMs, playing: true });
-        return;
-      }
-      setVerificationPartial({ playing: !vt.playing });
-      return;
-    }
-    if (isEventReplayActive()) {
-      const er = getEventReplayState();
-      if (er) setEventReplayPartial({ playing: !er.playing });
-      return;
-    }
-    const { playing } = getState().time;
-    setTimePartial({ playing: !playing });
+    setTimePartial({ playing: !getState().time.playing });
   });
 
-  rewindBtn.addEventListener('click', () => {
-    if (isConjunctionVerificationActive()) {
-      const vt = getVerificationTimeState();
-      if (!vt) return;
-      setVerificationPartial({
-        currentMs: vt.currentMs - VERIFY_SCRUB_STEP_MS,
-        playing: false,
-      });
-      const next = getVerificationTimeState();
-      if (next) syncVerificationSlider(slider, next);
-      return;
-    }
-    if (isEventReplayActive()) {
-      const er = getEventReplayState();
-      if (!er) return;
-      setEventReplayPartial({
-        currentMs: er.currentMs - EVENT_REPLAY_SCRUB_STEP_MS,
-        playing: false,
-      });
-      const next = getEventReplayState();
-      if (next) syncEventReplaySlider(slider, next.collisionTimeMs, next.currentMs);
-      return;
-    }
+  const moveTime = (hours: number): void => {
     const { time } = getState();
     const base = time.mode === 'live' ? Date.now() : time.current.getTime();
     enterHistoricalMode({
-      current: new Date(base - 3600_000),
+      current: new Date(base + hours * 3600_000),
       playing: time.playing,
     });
     anchorTime = getState().time.current.getTime();
     slider.value = '0';
-  });
+  };
 
-  forwardBtn.addEventListener('click', () => {
-    if (isConjunctionVerificationActive()) {
-      const vt = getVerificationTimeState();
-      if (!vt) return;
-      setVerificationPartial({
-        currentMs: vt.currentMs + VERIFY_SCRUB_STEP_MS,
-        playing: false,
-      });
-      const next = getVerificationTimeState();
-      if (next) syncVerificationSlider(slider, next);
-      return;
-    }
-    if (isEventReplayActive()) {
-      const er = getEventReplayState();
-      if (!er) return;
-      setEventReplayPartial({
-        currentMs: er.currentMs + EVENT_REPLAY_SCRUB_STEP_MS,
-        playing: false,
-      });
-      const next = getEventReplayState();
-      if (next) syncEventReplaySlider(slider, next.collisionTimeMs, next.currentMs);
-      return;
-    }
-    const { time } = getState();
-    const base = time.mode === 'live' ? Date.now() : time.current.getTime();
-    enterHistoricalMode({
-      current: new Date(base + 3600_000),
-      playing: time.playing,
-    });
-    anchorTime = getState().time.current.getTime();
-    slider.value = '0';
-  });
+  rewindBtn.addEventListener('click', () => moveTime(-1));
+  forwardBtn.addEventListener('click', () => moveTime(1));
 
   liveBtn.addEventListener('click', () => {
     enterLiveMode();
@@ -172,224 +78,61 @@ export function initTimeControls(container: HTMLElement): void {
   });
 
   nowBtn.addEventListener('click', () => {
-    if (isConjunctionVerificationActive() || isEventReplayActive()) return;
     jumpToNow();
     anchorTime = Date.now();
     slider.value = '0';
   });
 
-  slider.addEventListener('pointerdown', () => {
-    sliderDragging = true;
-  });
-  const endSliderDrag = (): void => {
-    sliderDragging = false;
-  };
+  slider.addEventListener('pointerdown', () => { sliderDragging = true; });
+  const endSliderDrag = (): void => { sliderDragging = false; };
   slider.addEventListener('pointerup', endSliderDrag);
   slider.addEventListener('pointercancel', endSliderDrag);
 
   slider.addEventListener('input', () => {
-    if (isConjunctionVerificationActive()) {
-      const vt = getVerificationTimeState();
-      if (!vt) return;
-      const { startMs, endMs } = getVerificationWindowMs(
-        vt.cpaTimeMs,
-        vt.relativeVelocityKmS ?? 0,
-      );
-      
-      const t = (parseFloat(slider.value) + 100) / 200;
-      const currentMs = startMs + t * (endMs - startMs);
-      setVerificationPartial({ currentMs, playing: false });
-      return;
-    }
-
-    if (isEventReplayActive()) {
-      const er = getEventReplayState();
-      if (!er) return;
-      const { startMs, endMs } = getEventReplayWindowMs(er.collisionTimeMs);
-      const t = (parseFloat(slider.value) + 100) / 200;
-      const currentMs = startMs + t * (endMs - startMs);
-      setEventReplayPartial({ currentMs, playing: false });
-      return;
-    }
-
     const { time } = getState();
+    if (time.mode === 'live') anchorTime = Date.now();
     const offset = (parseFloat(slider.value) / 100) * SLIDER_RANGE_MS;
-
-    if (time.mode === 'live') {
-      anchorTime = Date.now();
-    }
-
-    enterHistoricalMode({
-      current: new Date(anchorTime + offset),
-      playing: time.playing,
-    });
+    enterHistoricalMode({ current: new Date(anchorTime + offset), playing: time.playing });
   });
 
-  speedButtons.querySelectorAll('.speed-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const speed = parseInt((btn as HTMLButtonElement).dataset.speed!, 10);
+  speedButtons.querySelectorAll('.speed-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const speed = parseInt((button as HTMLButtonElement).dataset.speed!, 10);
       const { time } = getState();
-
-      if (isConjunctionVerificationActive()) {
-        const vt = getVerificationTimeState();
-        if (vt) {
-          const { startMs, endMs } = getVerificationWindowMs(
-            vt.cpaTimeMs,
-            vt.relativeVelocityKmS ?? 0,
-          );
-          if (vt.currentMs >= endMs - 1) {
-            setVerificationPartial({ speed, currentMs: startMs, playing: true });
-            return;
-          }
-        }
-        setVerificationPartial({ speed, playing: true });
-        return;
-      }
-
-      if (isEventReplayActive()) {
-        setEventReplayPartial({ speed, playing: true });
-        return;
-      }
-
-      if (time.mode === 'live') {
-        if (speed === 1) return;
-        enterHistoricalMode({
-          current: new Date(),
-          speed,
-          playing: time.playing,
-        });
+      if (time.mode === 'live' && speed !== 1) {
+        enterHistoricalMode({ current: new Date(), speed, playing: time.playing });
         anchorTime = Date.now();
         slider.value = '0';
-        return;
+      } else if (time.mode === 'historical') {
+        enterHistoricalMode({ speed, playing: time.playing });
       }
-
-      enterHistoricalMode({ speed, playing: time.playing });
     });
   });
-
-  let wasVerifying = false;
-  let wasReplaying = false;
 
   subscribe(() => {
     const { time } = getState();
-    const verifying = isConjunctionVerificationActive();
-    const replaying = isEventReplayActive();
-    const vt = getVerificationTimeState();
-    const er = getEventReplayState();
-    const focused = verifying || replaying;
-    const isLive =
-      (time.mode === 'live' && !focused) ||
-      (verifying && isVerificationPlaying() && (vt?.speed ?? 1) === 1) ||
-      (replaying && !!er?.playing && (er.speed ?? 1) === 1);
-
-    if ((wasVerifying || wasReplaying) && !focused) {
-      anchorTime = Date.now();
-      slider.value = '0';
-    }
-    if (!wasVerifying && verifying && vt) {
-      syncVerificationSlider(slider, vt);
-    }
-    if (!wasReplaying && replaying && er) {
-      syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
-    }
-    wasVerifying = verifying;
-    wasReplaying = replaying;
-
-    const playing = verifying ? vt?.playing : replaying ? er?.playing : time.playing;
-    playBtn.textContent = playing ? '⏸' : '▶';
-
+    const isLive = time.mode === 'live';
+    playBtn.textContent = time.playing ? '⏸' : '▶';
     liveBtn.classList.toggle('active', isLive);
-    liveBtn.textContent = verifying
-      ? 'VERIFY'
-      : replaying
-        ? 'REPLAY'
-        : isLive
-          ? '● LIVE'
-          : 'LIVE';
-
-    rewindBtn.title = focused ? 'Back 5s' : 'Back 1 hour';
-    forwardBtn.title = focused ? 'Forward 5s' : 'Forward 1 hour';
-    slider.title = verifying
-      ? 'Scrub within the close-approach window (approach → T+15s)'
-      : replaying
-        ? 'Scrub within the event replay window (T−5m → IMPACT)'
-        : 'Scrub simulation time (±7 days)';
-
-    speedButtons.querySelectorAll('.speed-btn').forEach((btn) => {
-      const speed = parseInt((btn as HTMLButtonElement).dataset.speed!, 10);
-      const el = btn as HTMLButtonElement;
-      const activeSpeed = verifying
-        ? vt?.speed ?? 1
-        : replaying
-          ? er?.speed ?? 1
-          : time.mode === 'live'
-            ? 1
-            : time.speed;
-      el.classList.toggle('active', speed === activeSpeed);
+    liveBtn.textContent = isLive ? 'Live' : 'Historical';
+    slider.classList.toggle('time-slider--live', isLive);
+    speedButtons.querySelectorAll('.speed-btn').forEach((button) => {
+      const speed = parseInt((button as HTMLButtonElement).dataset.speed!, 10);
+      button.classList.toggle('active', speed === (isLive ? 1 : time.speed));
     });
-
-    slider.classList.toggle('time-slider--live', time.mode === 'live' && !focused);
-    slider.classList.toggle('time-slider--verify', verifying || replaying);
   });
 
-  const display = container.querySelector('#time-display')!;
   const refreshTimeDisplay = (): void => {
     const { time } = getState();
-    const verifying = isConjunctionVerificationActive();
-    const replaying = isEventReplayActive();
-    const vt = getVerificationTimeState();
-    const er = getEventReplayState();
-    const focused = verifying || replaying;
-    const isLive = time.mode === 'live' && !focused;
-    const displayTime = focused || time.mode === 'historical'
-      ? getSimulationTime()
-      : new Date();
-    display.textContent = formatUtcDateTime(displayTime);
+    const isLive = time.mode === 'live';
+    display.textContent = formatUtcDateTime(isLive ? new Date() : getSimulationTime());
     display.classList.toggle('time-display--live', isLive);
-    display.classList.toggle('time-display--verify', focused);
-
-    if (!sliderDragging) {
-      if (verifying && vt) {
-        syncVerificationSlider(slider, vt);
-      } else if (replaying && er) {
-        syncEventReplaySlider(slider, er.collisionTimeMs, er.currentMs);
-      }
+    if (!sliderDragging && !isLive) {
+      const offset = getSimulationTime().getTime() - anchorTime;
+      const value = Math.max(-100, Math.min(100, (offset / SLIDER_RANGE_MS) * 100));
+      slider.value = String(Math.round(value));
     }
-
     requestAnimationFrame(refreshTimeDisplay);
   };
   requestAnimationFrame(refreshTimeDisplay);
-}
-
-function syncVerificationSlider(
-  slider: HTMLInputElement,
-  vt: { cpaTimeMs: number; currentMs: number; relativeVelocityKmS?: number },
-): void {
-  const { startMs, endMs } = getVerificationWindowMs(
-    vt.cpaTimeMs,
-    vt.relativeVelocityKmS ?? 0,
-  );
-  syncWindowSlider(slider, startMs, endMs, vt.currentMs);
-}
-
-function syncEventReplaySlider(
-  slider: HTMLInputElement,
-  collisionTimeMs: number,
-  currentMs: number,
-): void {
-  const { startMs, endMs } = getEventReplayWindowMs(collisionTimeMs);
-  syncWindowSlider(slider, startMs, endMs, currentMs);
-}
-
-function syncWindowSlider(
-  slider: HTMLInputElement,
-  startMs: number,
-  endMs: number,
-  currentMs: number,
-): void {
-  const span = Math.max(1, endMs - startMs);
-  const clamped = Math.min(endMs, Math.max(startMs, currentMs));
-  const t = (clamped - startMs) / span;
-  const next = String(Math.round(t * 200 - 100));
-  if (slider.value !== next) slider.value = next;
 }

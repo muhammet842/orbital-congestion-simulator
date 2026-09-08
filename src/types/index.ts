@@ -47,20 +47,6 @@ export interface ObjectSnapshot {
   positionEci: { x: number; y: number; z: number };
 }
 
-export interface ConjunctionEvent {
-  objectA: string;
-  objectB: string;
-  
-  noradIdA: number;
-  noradIdB: number;
-  indexA: number;
-  indexB: number;
-  distanceKm: number;
-  relativeVelocityKmS: number;
-  time: Date;
-  midpointScene: { x: number; y: number; z: number };
-}
-
 export type TimeMode = 'live' | 'historical';
 
 export interface TimeState {

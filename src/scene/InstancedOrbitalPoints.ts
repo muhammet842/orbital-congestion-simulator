@@ -17,7 +17,6 @@ import {
 import type { PropagationResult } from '../orbital/propagator';
 import type { ObjectCategory, TrackedObject, OrbitLayer } from '../types';
 import { matchesSearchQuery } from '../state/appState';
-import { conjunctionModelScale } from './conjunctionScale';
 
 const scaleMatrix = new Matrix4();
 
@@ -63,7 +62,6 @@ export class InstancedOrbitalPoints {
     objects: TrackedObject[],
     propagations: (PropagationResult | null)[],
     selectedIndex: number | null,
-    conjunctionHighlight: number[] | null,
     layerFilters: Record<OrbitLayer, boolean>,
     searchQuery: string,
     cameraPosition: { x: number; y: number; z: number },
@@ -73,16 +71,12 @@ export class InstancedOrbitalPoints {
     altitudeFilter: { minKm: number; maxKm: number } | null = null,
     inclinationFilter: { minDeg: number; maxDeg: number } | null = null,
     categoryFilter: ObjectCategory | 'all' = 'all',
-    conjunctionLiveDistanceKm: number | null = null,
   ): void {
-    const highlightSet = new Set(conjunctionHighlight ?? []);
-    const conjunctionFocus = highlightSet.size === 2;
     this.matrixDirty = false;
 
     for (let i = 0; i < this.count; i++) {
       const obj = objects[i];
       const isSelected = i === selectedIndex;
-      const isConjunction = highlightSet.has(i);
 
       if (!includesKind(obj.category, this.kind)) {
         this.matrix.makeScale(0, 0, 0);
@@ -98,19 +92,8 @@ export class InstancedOrbitalPoints {
         continue;
       }
 
-      if (conjunctionFocus && !isConjunction) {
-        this.matrix.makeScale(0, 0, 0);
-        this.mesh.setMatrixAt(i, this.matrix);
-        this.matrixDirty = true;
-        continue;
-      }
-
-      
-      
-
       if (
         !isSelected &&
-        !isConjunction &&
         (
           !layerFilters[obj.layer] ||
           (categoryFilter !== 'all' && obj.category !== categoryFilter) ||
@@ -135,7 +118,6 @@ export class InstancedOrbitalPoints {
 
       if (
         !isSelected &&
-        !isConjunction &&
         (!layerFilters[result.layer] || !isFacingCamera(result, cameraPosition))
       ) {
         this.matrix.makeScale(0, 0, 0);
@@ -151,8 +133,7 @@ export class InstancedOrbitalPoints {
       );
 
       let scale = isSelected ? 3 : getCategoryScale(obj.category, obj.country);
-      if (isConjunction) scale = conjunctionModelScale(conjunctionLiveDistanceKm);
-      scale *= isConjunction ? 1 : getCategoryPulse(obj.category, pulseTimeMs, obj.country);
+      scale *= getCategoryPulse(obj.category, pulseTimeMs, obj.country);
 
       this.matrix.makeTranslation(scenePos.x, scenePos.y, scenePos.z);
       if (scale !== 1) {
@@ -164,9 +145,6 @@ export class InstancedOrbitalPoints {
 
       if (isSelected) {
         this.mesh.setColorAt(i, this.instanceColor.setRGB(1, 1, 1));
-      } else if (isConjunction) {
-        const pulse = 0.88 + 0.12 * Math.sin(pulseTimeMs * 0.005);
-        this.mesh.setColorAt(i, this.instanceColor.setRGB(1 * pulse, 0.9 * pulse, 0.2 * pulse));
       } else if (colorByFunction) {
         const [r, g, b] = getFunctionGroupColor(obj.functionGroup);
         const pulse = getFunctionGroupPulse(obj.functionGroup, pulseTimeMs);
