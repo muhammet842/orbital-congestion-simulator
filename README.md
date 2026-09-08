@@ -12,7 +12,7 @@ You can also see the telemetry data like velocity, inclination and owner countri
 
 It's also a real-time animation like where are morning or night onto Earth.
 
-You can rewind or fast forward the animation from the progress bat at the bottom.
+You can rewind or fast forward the animation from the progress bar at the bottom.
 
 ## Setup
 

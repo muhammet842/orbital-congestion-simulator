@@ -201,21 +201,6 @@ export function resolveObjectPhoto(obj: TrackedObject): ObjectPhoto | null {
   return LOCAL_FALLBACK;
 }
 
-function renderPhotoFigure(photo: ObjectPhoto, alt: string): string {
-  return `
-    <figure class="object-photo">
-      <img
-        class="object-photo__img"
-        src="${escapeAttr(photo.url)}"
-        alt="${escapeAttr(alt)}"
-        loading="lazy"
-        decoding="async"
-      />
-      <figcaption class="object-photo__credit">${escapeHtml(photo.credit)}</figcaption>
-    </figure>
-  `;
-}
-
 export async function loadObjectPhotoInto(
   container: HTMLElement,
   obj: TrackedObject,
@@ -231,7 +216,6 @@ export async function loadObjectPhotoInto(
   }
 
   container.hidden = false;
-  container.innerHTML = renderPhotoFigure(photo, obj.name);
 
   const img = container.querySelector<HTMLImageElement>('.object-photo__img');
   if (!img) return;
@@ -249,14 +233,5 @@ export async function loadObjectPhotoInto(
   });
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
-function escapeAttr(text: string): string {
-  return escapeHtml(text);
-}
+
